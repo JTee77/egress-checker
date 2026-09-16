@@ -38,6 +38,12 @@ macOS **Apple Silicon (arm64)** 桌面应用：诊断代理**出口质量**（�
 
 也可在应用「设置」页手动填写 host / port / secret / mixed-port，或开启 **Mock** 演示模式（无需真实 Clash）。
 
+## 警告（开发必读）
+
+- **开发时只用** `pnpm tauri dev`，并且**只开一个实例**。
+- **禁止**直接运行 `src-tauri/target/debug/egress-checker`（或双击该二进制）：没有 Vite 前端时会**白屏**。
+- 若出现崩溃 / 白屏：先退出所有 Egress Checker 窗口与进程，再只开一个终端运行 `pnpm tauri dev`。
+
 ## 在 Apple Silicon Mac 上开发运行
 
 依赖：

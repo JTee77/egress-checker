@@ -88,17 +88,17 @@ export async function checkReachability(
     "https://www.google.com/generate_204",
     "https://cp.cloudflare.com/generate_204",
   ];
-  const results = await Promise.all(
-    targets.map(async (url) => {
-      const t0 = performance.now();
-      const r = await probeText(url, {
-        mixedPort,
-        timeoutMs: PROBE_TIMEOUT_MS,
-        method: "GET",
-      });
-      return { url, ...r, ms: Math.round(performance.now() - t0) };
-    }),
-  );
+  // Sequential probes to avoid slamming the Rust spawn_blocking pool.
+  const results: { url: string; ok: boolean; status: number; text: string; ms: number }[] = [];
+  for (const url of targets) {
+    const t0 = performance.now();
+    const r = await probeText(url, {
+      mixedPort,
+      timeoutMs: PROBE_TIMEOUT_MS,
+      method: "GET",
+    });
+    results.push({ url, ...r, ms: Math.round(performance.now() - t0) });
+  }
   const ok = results.filter((r) => isReachableStatus(r.status, r.ok));
   if (ok.length === 0) {
     return {

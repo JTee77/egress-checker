@@ -36,6 +36,43 @@ export function HomePage({ connection }: { connection: ConnectionState }) {
       );
       setReport(r);
       setCards(r.cards);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const failCards: CheckCard[] = PLACEHOLDERS.map((c) => ({
+        ...c,
+        level: "fail",
+        summary: "本轮检测失败",
+        detail: msg,
+        tip: "请确认 Clash Verge Rev 已连接；若刚崩溃过，退出全部窗口后只开一个 pnpm tauri dev 再试。",
+      }));
+      setCards(failCards);
+      setReport({
+        ranAt: new Date().toISOString(),
+        cards: failCards,
+        exitIp: {
+          ip: null,
+          country: null,
+          countryCode: null,
+          org: null,
+          isp: null,
+          hosting: null,
+          ipTypeLabel: "--",
+        },
+        gemini: {
+          supported: false,
+          level: "unknown",
+          region: null,
+          status: "未完成",
+        },
+        chatgpt: {
+          supported: false,
+          level: "unknown",
+          region: null,
+          status: "未完成",
+        },
+        latencyMs: null,
+        note: `检测过程出错，界面未崩溃。详情：${msg}`,
+      });
     } finally {
       setRunning(false);
     }
