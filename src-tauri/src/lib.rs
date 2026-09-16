@@ -1,7 +1,8 @@
 mod mihomo;
 
 use mihomo::{
-    discover_controller, http_via_tcp, http_via_unix, proxy_fetch, DiscoverResult, UnixHttpResult,
+    discover_controller, http_via_tcp_async, http_via_unix, list_nodes_async, proxy_fetch_async,
+    DiscoverResult, ListNodesResult, UnixHttpResult,
 };
 use serde::{Deserialize, Serialize};
 
@@ -16,30 +17,46 @@ pub struct ControllerConfig {
     pub sock_path: Option<String>,
 }
 
+fn join_err(e: impl std::fmt::Display) -> String {
+    format!("task join: {e}")
+}
+
+fn catch_disk<T, F>(f: F) -> Result<T, String>
+where
+    F: FnOnce() -> Result<T, String> + std::panic::UnwindSafe,
+{
+    match std::panic::catch_unwind(f) {
+        Ok(r) => r,
+        Err(_) => Err("native panic caught (disk/unix path)".into()),
+    }
+}
+
 #[tauri::command]
 async fn discover_mihomo() -> Result<ControllerConfig, String> {
     tauri::async_runtime::spawn_blocking(|| {
-        let d: DiscoverResult = discover_controller();
-        ControllerConfig {
-            host: d.host,
-            port: d.port,
-            secret: d.secret,
-            mixed_port: d.mixed_port,
-            source: d.source,
-            sock_path: d.sock_path,
-        }
+        catch_disk(|| {
+            let d: DiscoverResult = discover_controller();
+            Ok(ControllerConfig {
+                host: d.host,
+                port: d.port,
+                secret: d.secret,
+                mixed_port: d.mixed_port,
+                source: d.source,
+                sock_path: d.sock_path,
+            })
+        })
     })
     .await
-    .map_err(|e| format!("task join: {e}"))
+    .map_err(join_err)?
 }
 
 #[tauri::command]
 async fn read_verge_config_raw() -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(|| {
-        mihomo::read_verge_config().map_err(|e| e.to_string())
+        catch_disk(|| mihomo::read_verge_config().map_err(|e| e.to_string()))
     })
     .await
-    .map_err(|e| format!("task join: {e}"))?
+    .map_err(join_err)?
 }
 
 #[derive(Debug, Deserialize)]
@@ -56,19 +73,36 @@ struct TcpHttpRequest {
 
 #[tauri::command]
 async fn mihomo_http(req: TcpHttpRequest) -> Result<UnixHttpResult, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        http_via_tcp(
-            &req.host,
-            req.port,
-            &req.method,
-            &req.path,
-            req.body.as_deref(),
-            &req.secret,
-            req.timeout_ms.unwrap_or(3000),
-        )
-    })
+    http_via_tcp_async(
+        &req.host,
+        req.port,
+        &req.method,
+        &req.path,
+        req.body.as_deref(),
+        &req.secret,
+        req.timeout_ms.unwrap_or(3000),
+    )
     .await
-    .map_err(|e| format!("task join: {e}"))?
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ListNodesRequest {
+    host: String,
+    port: u16,
+    secret: String,
+    timeout_ms: Option<u64>,
+}
+
+#[tauri::command]
+async fn mihomo_list_nodes(req: ListNodesRequest) -> Result<ListNodesResult, String> {
+    list_nodes_async(
+        &req.host,
+        req.port,
+        &req.secret,
+        req.timeout_ms.unwrap_or(18000),
+    )
+    .await
 }
 
 #[derive(Debug, Deserialize)]
@@ -85,18 +119,20 @@ struct UnixHttpRequest {
 #[tauri::command]
 async fn mihomo_unix_http(req: UnixHttpRequest) -> Result<UnixHttpResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        http_via_unix(
-            &req.method,
-            &req.path,
-            req.body.as_deref(),
-            &req.secret,
-            req.sock_path.as_deref(),
-            req.timeout_ms.unwrap_or(3000),
-        )
-        .map_err(|e| e.to_string())
+        catch_disk(|| {
+            http_via_unix(
+                &req.method,
+                &req.path,
+                req.body.as_deref(),
+                &req.secret,
+                req.sock_path.as_deref(),
+                req.timeout_ms.unwrap_or(3000),
+            )
+            .map_err(|e| e.to_string())
+        })
     })
     .await
-    .map_err(|e| format!("task join: {e}"))?
+    .map_err(join_err)?
 }
 
 #[derive(Debug, Deserialize)]
@@ -110,26 +146,23 @@ struct ProxyFetchRequest {
 
 #[tauri::command]
 async fn egress_proxy_fetch(req: ProxyFetchRequest) -> Result<UnixHttpResult, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        proxy_fetch(
-            &req.url,
-            req.mixed_port,
-            req.user_agent.as_deref(),
-            req.timeout_ms.unwrap_or(5000),
-        )
-    })
+    proxy_fetch_async(
+        &req.url,
+        req.mixed_port,
+        req.user_agent.as_deref(),
+        req.timeout_ms.unwrap_or(5000),
+    )
     .await
-    .map_err(|e| format!("task join: {e}"))?
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             discover_mihomo,
             read_verge_config_raw,
             mihomo_http,
+            mihomo_list_nodes,
             mihomo_unix_http,
             egress_proxy_fetch
         ])

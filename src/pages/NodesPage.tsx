@@ -116,7 +116,7 @@ export function NodesPage({
       {connection.proxiesError || connectedEmpty ? (
         <div className="note" style={{ marginBottom: 14 }}>
           {connection.proxiesError ??
-            "已连接但节点列表为空。请到设置检查 Secret / 刷新。"}
+            "已连接但节点列表为空。请先到首页或设置刷新连接。"}
           {connection.status === "unauthorized" ||
           connection.proxiesError?.includes("401") ||
           connection.proxiesError?.includes("未授权") ? (
@@ -168,8 +168,9 @@ export function NodesPage({
 
       {nodes.length === 0 && !connection.usingMock ? (
         <div className="note">
-          暂无节点可显示。请到设置检查 Secret / 刷新连接；仅在「Mock
-          演示模式」下会显示演示节点。
+          {connection.status === "unknown"
+            ? "请先到首页或设置刷新连接。"
+            : "暂无节点可显示。请先到首页或设置刷新连接；仅在「Mock 演示模式」下会显示演示节点。"}
         </div>
       ) : (
         <table className="data">

@@ -71,10 +71,27 @@ pnpm tauri dev
 | `pnpm dev` | 仅 Vite 前端（无原生 API） |
 | `pnpm build` | 前端 typecheck + 生产构建 |
 | `pnpm typecheck` | 仅 TypeScript 检查 |
+| `pnpm smoke:mac` / `bash scripts/smoke-mac.sh` | Mac 冒烟：Vite 就绪 + 进程存活 ≥30s + Rust `smoke_` 探针（Pit / CI 用） |
 | `pnpm tauri dev` | Tauri 开发模式（推荐） |
 | `pnpm tauri build` | 打包 Mac `.app` / `.dmg`（需在 Apple Silicon Mac 上） |
 
 > 在非 macOS（如 Linux CI）上，前端 `pnpm build` / `typecheck` 可正常跑通；原生 `tauri build` 面向 Mac 可能失败，属预期。
+
+
+## Pit / 代理冒烟（Apple Silicon）
+
+端用户离线时，由 Pit 在 Apple Silicon Mac 上验证「打开不崩」：
+
+```bash
+git fetch origin && git checkout feat/v1-scaffold && git pull
+pnpm install
+bash scripts/smoke-mac.sh
+# 或：pnpm smoke:mac
+```
+
+脚本会：清理本应用相关进程 → `cargo test smoke_` → 后台 `pnpm tauri dev` → 等 `localhost:1420` → 确认 `egress-checker` 进程存活 ≥30s。
+
+手动抽查（无需端用户）：`pnpm tauri dev` 启动后**不要**指望自动连 Mihomo；点首页「刷新连接」，再点「开始检测」。
 
 ## 功能概览（v1）
 

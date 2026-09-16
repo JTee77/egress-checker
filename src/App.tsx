@@ -25,7 +25,13 @@ function App() {
     <div className="app-shell">
       <Sidebar page={page} onNavigate={setPage} />
       <main className="main">
-        {page === "home" ? <HomePage connection={state} /> : null}
+        {page === "home" ? (
+          <HomePage
+            connection={state}
+            busy={busy}
+            onRefresh={() => refresh()}
+          />
+        ) : null}
         {page === "nodes" ? (
           <NodesPage connection={state} nodes={nodes} onSwitched={() => void refresh()} />
         ) : null}

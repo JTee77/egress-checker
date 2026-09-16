@@ -13,7 +13,15 @@ const PLACEHOLDERS: CheckCard[] = [
   { id: "latency", title: "延迟采样", level: "unknown", summary: "尚未检测" },
 ];
 
-export function HomePage({ connection }: { connection: ConnectionState }) {
+export function HomePage({
+  connection,
+  busy,
+  onRefresh,
+}: {
+  connection: ConnectionState;
+  busy?: boolean;
+  onRefresh?: () => Promise<unknown> | void;
+}) {
   const [cards, setCards] = useState<CheckCard[]>(PLACEHOLDERS);
   const [report, setReport] = useState<EgressReport | null>(null);
   const [running, setRunning] = useState(false);
@@ -85,9 +93,19 @@ export function HomePage({ connection }: { connection: ConnectionState }) {
           <h1>首页</h1>
           <p>看当前出口好不好用：连通、IP、换节点时的 AI 对照、延迟。不是替代你自己打开网站。</p>
         </div>
-        <button className="btn btn-primary" type="button" disabled={running} onClick={() => void run()}>
-          {running ? "检测中…" : "开始检测"}
-        </button>
+        <div className="toolbar" style={{ marginBottom: 0, gap: 8 }}>
+          <button
+            className="btn"
+            type="button"
+            disabled={!!busy || running}
+            onClick={() => void onRefresh?.()}
+          >
+            {busy ? "刷新中…" : "刷新连接"}
+          </button>
+          <button className="btn btn-primary" type="button" disabled={running} onClick={() => void run()}>
+            {running ? "检测中…" : "开始检测"}
+          </button>
+        </div>
       </div>
 
       <div className="status-pill" style={{ marginBottom: 16 }}>
@@ -112,7 +130,7 @@ export function HomePage({ connection }: { connection: ConnectionState }) {
         </div>
       ) : (
         <div className="note">
-          先开 Clash Verge Rev 的系统代理或 TUN，再点「开始检测」。AI 卡片用来换节点时对照，不是「必须测完才能上网」。
+          打开窗口不会自动连 Mihomo。请先点「刷新连接」，确认 Clash Verge Rev 的系统代理或 TUN 后再点「开始检测」。AI 卡片用来换节点时对照，不是「必须测完才能上网」。
         </div>
       )}
     </div>

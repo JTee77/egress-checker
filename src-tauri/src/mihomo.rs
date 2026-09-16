@@ -3,6 +3,7 @@
 
 use regex::Regex;
 use serde::Serialize;
+use serde_json::Value;
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
@@ -13,6 +14,9 @@ pub const VERGE_REL_CONFIG: &str =
 pub const DEFAULT_SOCK: &str = "/tmp/verge/verge-mihomo.sock";
 pub const DEFAULT_PORT: u16 = 9097;
 pub const DEFAULT_MIXED: u16 = 7897;
+
+/// Cap /proxies (and similar) IPC bodies so huge delay-history payloads cannot kill the webview.
+pub const MAX_BODY_BYTES: usize = 6 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,6 +35,38 @@ pub struct UnixHttpResult {
     pub status: u16,
     pub body: String,
 }
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SlimNode {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub node_type: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListNodesResult {
+    pub nodes: Vec<SlimNode>,
+    pub current_proxy: Option<String>,
+    pub status: u16,
+    pub error: Option<String>,
+    pub unauthorized: bool,
+}
+
+const IGNORE_PROXY_TYPES: &[&str] = &[
+    "Selector",
+    "URLTest",
+    "Fallback",
+    "LoadBalance",
+    "Relay",
+    "Direct",
+    "Reject",
+    "Compatible",
+    "Pass",
+];
+
+const JUNK_NAME_KEYWORDS: &[&str] = &["剩余", "到期", "官网"];
 
 pub fn verge_config_path() -> PathBuf {
     dirs::home_dir()
@@ -107,8 +143,25 @@ pub fn discover_controller() -> DiscoverResult {
     }
 }
 
-/// HTTP to Mihomo controller over TCP (preferred path from Tauri commands).
-pub fn http_via_tcp(
+async fn read_body_capped(res: reqwest::Response) -> Result<(u16, String), String> {
+    let status = res.status().as_u16();
+    let bytes = res
+        .bytes()
+        .await
+        .map_err(|e| format!("read body: {e}"))?;
+    if bytes.len() > MAX_BODY_BYTES {
+        return Err(format!(
+            "response body too large ({} bytes > {} max) — refusing to ship to webview",
+            bytes.len(),
+            MAX_BODY_BYTES
+        ));
+    }
+    let body = String::from_utf8_lossy(&bytes).into_owned();
+    Ok((status, body))
+}
+
+/// Async HTTP to Mihomo controller over TCP (preferred path from Tauri commands).
+pub async fn http_via_tcp_async(
     host: &str,
     port: u16,
     method: &str,
@@ -118,7 +171,7 @@ pub fn http_via_tcp(
     timeout_ms: u64,
 ) -> Result<UnixHttpResult, String> {
     let url = format!("http://{host}:{port}{path}");
-    let client = reqwest::blocking::Client::builder()
+    let client = reqwest::Client::builder()
         .timeout(Duration::from_millis(timeout_ms))
         .no_proxy()
         .build()
@@ -140,9 +193,8 @@ pub fn http_via_tcp(
         builder = builder.body(b.to_string());
     }
 
-    let res = builder.send().map_err(|e| format!("request: {e}"))?;
-    let status = res.status().as_u16();
-    let body = res.text().map_err(|e| format!("read body: {e}"))?;
+    let res = builder.send().await.map_err(|e| format!("request: {e}"))?;
+    let (status, body) = read_body_capped(res).await?;
     Ok(UnixHttpResult { status, body })
 }
 
@@ -189,6 +241,14 @@ pub fn http_via_unix(
     stream
         .read_to_end(&mut raw)
         .map_err(|e| format!("read: {e}"))?;
+
+    if raw.len() > MAX_BODY_BYTES {
+        return Err(format!(
+            "unix response too large ({} bytes > {} max)",
+            raw.len(),
+            MAX_BODY_BYTES
+        ));
+    }
 
     let text = String::from_utf8_lossy(&raw);
     let (header, body_part) = text
@@ -250,14 +310,14 @@ fn decode_chunked(input: &str) -> String {
     out
 }
 
-/// Fetch a URL optionally via local mixed-port HTTP proxy (for Gemini / IP probes).
-pub fn proxy_fetch(
+/// Async fetch a URL optionally via local mixed-port HTTP proxy.
+pub async fn proxy_fetch_async(
     url: &str,
     mixed_port: Option<u16>,
     user_agent: Option<&str>,
     timeout_ms: u64,
 ) -> Result<UnixHttpResult, String> {
-    let mut builder = reqwest::blocking::Client::builder()
+    let mut builder = reqwest::Client::builder()
         .timeout(Duration::from_millis(timeout_ms))
         .redirect(reqwest::redirect::Policy::limited(10))
         .danger_accept_invalid_certs(false);
@@ -275,8 +335,232 @@ pub fn proxy_fetch(
     if let Some(ua) = user_agent {
         req = req.header("User-Agent", ua);
     }
-    let res = req.send().map_err(|e| format!("request: {e}"))?;
-    let status = res.status().as_u16();
-    let body = res.text().unwrap_or_default();
+    let res = req.send().await.map_err(|e| format!("request: {e}"))?;
+    let (status, body) = read_body_capped(res).await?;
     Ok(UnixHttpResult { status, body })
+}
+
+fn is_junk_name(name: &str) -> bool {
+    if name.starts_with("PASS") || name.starts_with("REJECT") {
+        return true;
+    }
+    JUNK_NAME_KEYWORDS.iter().any(|k| name.contains(k))
+}
+
+fn ignore_type(t: &str) -> bool {
+    IGNORE_PROXY_TYPES.iter().any(|x| *x == t)
+}
+
+/// Parse /proxies JSON into a slim node list (no history arrays).
+pub fn slim_nodes_from_proxies_json(body: &str) -> Result<ListNodesResult, String> {
+    let root: Value = serde_json::from_str(body).map_err(|e| format!("json: {e}"))?;
+    let proxies = root
+        .get("proxies")
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| "missing proxies object".to_string())?;
+
+    let current_proxy = ["Proxy", "GLOBAL", "proxy"]
+        .iter()
+        .find_map(|g| {
+            proxies
+                .get(*g)
+                .and_then(|p| p.get("now"))
+                .and_then(|n| n.as_str())
+                .map(|s| s.to_string())
+        });
+
+    let mut nodes: Vec<SlimNode> = Vec::new();
+    for (name, p) in proxies {
+        let node_type = p
+            .get("type")
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_string();
+        if ignore_type(&node_type) || is_junk_name(name) {
+            continue;
+        }
+        nodes.push(SlimNode {
+            name: name.clone(),
+            node_type,
+        });
+    }
+
+    if nodes.is_empty() {
+        // Resolve leaf names from Selector / URLTest / Fallback `all` arrays.
+        let mut leaf_names = std::collections::BTreeSet::new();
+        let consider_all = |all: Option<&Value>, set: &mut std::collections::BTreeSet<String>| {
+            let Some(arr) = all.and_then(|v| v.as_array()) else {
+                return;
+            };
+            for item in arr {
+                let Some(name) = item.as_str() else { continue };
+                let Some(p) = proxies.get(name) else { continue };
+                let t = p.get("type").and_then(|x| x.as_str()).unwrap_or("");
+                if ignore_type(t) || is_junk_name(name) {
+                    continue;
+                }
+                set.insert(name.to_string());
+            }
+        };
+
+        for g in ["Proxy", "GLOBAL", "proxy"] {
+            if let Some(p) = proxies.get(g) {
+                consider_all(p.get("all"), &mut leaf_names);
+            }
+        }
+        for (_name, p) in proxies {
+            let t = p.get("type").and_then(|x| x.as_str()).unwrap_or("");
+            if matches!(t, "Selector" | "URLTest" | "Fallback") {
+                consider_all(p.get("all"), &mut leaf_names);
+            }
+        }
+
+        nodes = leaf_names
+            .into_iter()
+            .filter_map(|name| {
+                let p = proxies.get(&name)?;
+                let node_type = p
+                    .get("type")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                Some(SlimNode { name, node_type })
+            })
+            .collect();
+    }
+
+    Ok(ListNodesResult {
+        nodes,
+        current_proxy,
+        status: 200,
+        error: None,
+        unauthorized: false,
+    })
+}
+
+/// Fetch /proxies over TCP and return slim nodes (strips history; caps body).
+pub async fn list_nodes_async(
+    host: &str,
+    port: u16,
+    secret: &str,
+    timeout_ms: u64,
+) -> Result<ListNodesResult, String> {
+    let res = http_via_tcp_async(host, port, "GET", "/proxies", None, secret, timeout_ms).await?;
+    if res.status == 401 || res.status == 403 {
+        return Ok(ListNodesResult {
+            nodes: vec![],
+            current_proxy: None,
+            status: res.status,
+            error: Some("API 返回未授权（401/403），请到设置检查 Secret".into()),
+            unauthorized: true,
+        });
+    }
+    if !(200..300).contains(&res.status) {
+        return Ok(ListNodesResult {
+            nodes: vec![],
+            current_proxy: None,
+            status: res.status,
+            error: Some(format!("拉取 /proxies 失败（HTTP {}）", res.status)),
+            unauthorized: false,
+        });
+    }
+    let mut slim = slim_nodes_from_proxies_json(&res.body)?;
+    slim.status = res.status;
+    if slim.nodes.is_empty() {
+        slim.error = Some(
+            "已连接但未解析到可用节点，请到设置检查 Secret / 刷新，或确认订阅已加载".into(),
+        );
+    }
+    Ok(slim)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn smoke_http_via_tcp_invalid_port_no_panic() {
+        let result = std::panic::catch_unwind(|| {
+            tauri::async_runtime::block_on(http_via_tcp_async(
+                "127.0.0.1",
+                1,
+                "GET",
+                "/",
+                None,
+                "",
+                500,
+            ))
+        });
+        assert!(result.is_ok(), "http_via_tcp_async panicked");
+        let inner = result.unwrap();
+        assert!(inner.is_err(), "expected Err to closed port, got {inner:?}");
+    }
+
+    #[test]
+    fn smoke_proxy_fetch_invalid_port_no_panic() {
+        let result = std::panic::catch_unwind(|| {
+            tauri::async_runtime::block_on(proxy_fetch_async(
+                "https://www.gstatic.com/generate_204",
+                Some(1),
+                None,
+                800,
+            ))
+        });
+        assert!(result.is_ok(), "proxy_fetch_async panicked");
+        let inner = result.unwrap();
+        assert!(inner.is_err(), "expected Err via dead proxy, got {inner:?}");
+    }
+
+    #[test]
+    fn smoke_proxy_fetch_no_proxy_client_builds() {
+        // Ensures Client::builder + no_proxy path does not panic.
+        // May Err on network (sandbox / offline) — that is fine; must not panic.
+        let result = std::panic::catch_unwind(|| {
+            tauri::async_runtime::block_on(proxy_fetch_async(
+                "https://www.gstatic.com/generate_204",
+                None,
+                None,
+                3000,
+            ))
+        });
+        assert!(result.is_ok(), "proxy_fetch_async (no_proxy) panicked");
+        // Ok or Err both acceptable; panic is not.
+        let _ = result.unwrap();
+    }
+
+    #[test]
+    fn smoke_spawn_blocking_catch_unwind_maps_panic() {
+        let join = tauri::async_runtime::block_on(async {
+            tauri::async_runtime::spawn_blocking(|| {
+                std::panic::catch_unwind(|| {
+                    panic!("intentional smoke panic");
+                })
+                .map_err(|_| "caught panic".to_string())
+                .and_then(|()| Ok::<(), String>(()))
+            })
+            .await
+        });
+        assert!(join.is_ok());
+        let inner = join.unwrap();
+        assert!(inner.is_err());
+        assert!(inner.unwrap_err().contains("panic"));
+    }
+
+    #[test]
+    fn slim_nodes_strips_groups_and_history_shape() {
+        let body = r#"{
+          "proxies": {
+            "Proxy": {"type":"Selector","now":"hk-1","all":["hk-1","jp-1"]},
+            "hk-1": {"type":"Shadowsocks","history":[{"time":"t","delay":12}]},
+            "jp-1": {"type":"Vmess","history":[{"time":"t","delay":99}]},
+            "DIRECT": {"type":"Direct"}
+          }
+        }"#;
+        let slim = slim_nodes_from_proxies_json(body).unwrap();
+        assert_eq!(slim.current_proxy.as_deref(), Some("hk-1"));
+        let names: Vec<_> = slim.nodes.iter().map(|n| n.name.as_str()).collect();
+        assert!(names.contains(&"hk-1"));
+        assert!(names.contains(&"jp-1"));
+        assert!(!names.iter().any(|n| *n == "Proxy" || *n == "DIRECT"));
+    }
 }

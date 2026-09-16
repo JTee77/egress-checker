@@ -313,6 +313,40 @@ export type GetProxiesResult = {
   unauthorized: boolean;
 };
 
+async function getProxiesViaSlimCommand(
+  config: ControllerConfig,
+): Promise<GetProxiesResult | null> {
+  if (!isTauri()) return null;
+  try {
+    const res = await invoke<{
+      nodes: { name: string; type: string }[];
+      currentProxy: string | null;
+      status: number;
+      error: string | null;
+      unauthorized: boolean;
+    }>("mihomo_list_nodes", {
+      req: {
+        host: config.host,
+        port: config.port,
+        secret: config.secret,
+        timeoutMs: 18000,
+      },
+    });
+    const nodes: ProxyNode[] = (res.nodes ?? []).map((n) =>
+      toNode(n.name, { name: n.name, type: n.type }),
+    );
+    return {
+      nodes,
+      currentProxy: res.currentProxy ?? null,
+      usingMock: false,
+      error: res.error ?? (nodes.length === 0 ? "节点列表为空" : null),
+      unauthorized: !!res.unauthorized,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function getProxies(config: ControllerConfig): Promise<GetProxiesResult> {
   const empty = (
     error: string,
@@ -325,7 +359,11 @@ export async function getProxies(config: ControllerConfig): Promise<GetProxiesRe
     unauthorized,
   });
 
-  // Large proxy maps need a longer timeout than /version
+  // Prefer slim Rust command — strips history arrays and caps body size.
+  const slim = await getProxiesViaSlimCommand(config);
+  if (slim) return slim;
+
+  // Fallback: full /proxies via TCP/unix/browser (dev / non-Tauri).
   const res = await httpApi(config, "GET", "/proxies", undefined, 18000);
   if (!res) {
     return empty("无法拉取 /proxies（超时或网络失败），请到设置检查连接后刷新");

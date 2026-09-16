@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   defaultConfig,
   discoverAndProbe,
@@ -10,7 +10,6 @@ import {
 } from "../lib/mihomo";
 
 const MOCK_PREF_KEY = "egress-checker.forceMock";
-const BOOT_REFRESH_DELAY_MS = 2000;
 
 function readForceMock(): boolean {
   try {
@@ -134,20 +133,8 @@ export function useConnection() {
     [manual, forceMock],
   );
 
-  // Delayed auto-refresh so boot UI mounts before any invoke; StrictMode-safe.
-  useEffect(() => {
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      if (cancelled) return;
-      void refresh().catch(() => {
-        /* refresh never rethrows; belt-and-suspenders */
-      });
-    }, BOOT_REFRESH_DELAY_MS);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [refresh]);
+  // Intentionally no boot auto-refresh: opening the window must not invoke Mihomo HTTP.
+  // User / Pit clicks「刷新连接」on Home or Settings.
 
   const updateManual = (patch: Partial<ControllerConfig>) => {
     setManual((m) => ({ ...m, ...patch }));
