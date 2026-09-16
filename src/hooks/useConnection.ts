@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   defaultConfig,
   discoverAndProbe,
@@ -10,6 +10,7 @@ import {
 } from "../lib/mihomo";
 
 const MOCK_PREF_KEY = "egress-checker.forceMock";
+const BOOT_REFRESH_DELAY_MS = 2000;
 
 function readForceMock(): boolean {
   try {
@@ -32,6 +33,7 @@ export function useConnection() {
   const [nodes, setNodes] = useState<ProxyNode[]>([]);
   const [manual, setManual] = useState<Partial<ControllerConfig>>({});
   const [busy, setBusy] = useState(false);
+  const refreshGen = useRef(0);
 
   const setForceMock = (v: boolean) => {
     setForceMockState(v);
@@ -44,6 +46,7 @@ export function useConnection() {
 
   const refresh = useCallback(
     async (override?: Partial<ControllerConfig>, mockOverride?: boolean) => {
+      const gen = ++refreshGen.current;
       setBusy(true);
       try {
         const useMock = mockOverride ?? forceMock;
@@ -58,6 +61,7 @@ export function useConnection() {
             usingMock: true,
             proxiesError: null,
           };
+          if (gen !== refreshGen.current) return next;
           setState(next);
           setNodes(list);
           return next;
@@ -68,6 +72,8 @@ export function useConnection() {
           Object.keys(merged).length ? merged : undefined,
         );
 
+        if (gen !== refreshGen.current) return next;
+
         if (!next.config || next.status === "unreachable" || next.status === "unauthorized") {
           setState({ ...next, proxiesError: next.proxiesError ?? null });
           setNodes([]);
@@ -75,6 +81,8 @@ export function useConnection() {
         }
 
         const list = await getProxies(next.config);
+        if (gen !== refreshGen.current) return next;
+
         setNodes(list.nodes);
 
         if (list.unauthorized) {
@@ -101,15 +109,44 @@ export function useConnection() {
         };
         setState(mergedState);
         return mergedState;
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : String(err ?? "连接检测失败");
+        const next: ConnectionState = {
+          status: "unreachable",
+          message,
+          config: { ...defaultConfig(), ...manual, ...override },
+          currentProxy: null,
+          usingMock: false,
+          proxiesError: message,
+        };
+        if (gen === refreshGen.current) {
+          setState(next);
+          setNodes([]);
+        }
+        return next;
       } finally {
-        setBusy(false);
+        if (gen === refreshGen.current) {
+          setBusy(false);
+        }
       }
     },
     [manual, forceMock],
   );
 
+  // Delayed auto-refresh so boot UI mounts before any invoke; StrictMode-safe.
   useEffect(() => {
-    void refresh();
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
+      void refresh().catch(() => {
+        /* refresh never rethrows; belt-and-suspenders */
+      });
+    }, BOOT_REFRESH_DELAY_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [refresh]);
 
   const updateManual = (patch: Partial<ControllerConfig>) => {

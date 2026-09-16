@@ -41,8 +41,11 @@ macOS **Apple Silicon (arm64)** 桌面应用：诊断代理**出口质量**（�
 ## 警告（开发必读）
 
 - **开发时只用** `pnpm tauri dev`，并且**只开一个实例**。
-- **禁止**直接运行 `src-tauri/target/debug/egress-checker`（或双击该二进制）：没有 Vite 前端时会**白屏**。
-- 若出现崩溃 / 白屏：先退出所有 Egress Checker 窗口与进程，再只开一个终端运行 `pnpm tauri dev`。
+- **禁止**直接运行 `src-tauri/target/debug/egress-checker`（或双击 / 点 Dock 图标）：没有 Vite 前端时会**白屏**；也不要用 Dock 去「重开」上次的 debug 构建。
+- 若出现崩溃 / 白屏 / 进程残留：
+  1. 用 **活动监视器 (Activity Monitor)** 结束所有 `egress-checker`，或终端执行：`pkill -f egress-checker` 与 `pkill -f vite`
+  2. **不要**再点 Dock 上的 debug 图标
+  3. 只开**一个**终端，在项目目录运行一次 `pnpm tauri dev`
 
 ## 在 Apple Silicon Mac 上开发运行
 
