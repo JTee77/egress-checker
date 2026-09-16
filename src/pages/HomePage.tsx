@@ -5,11 +5,11 @@ import type { ConnectionState } from "../lib/mihomo";
 
 const PLACEHOLDERS: CheckCard[] = [
   { id: "reachability", title: "连通性", level: "unknown", summary: "尚未检测" },
-  { id: "dns-leak", title: "DNS / 泄露", level: "unknown", summary: "尚未检测" },
+  { id: "dns-leak", title: "DNS 粗检（启发式）", level: "unknown", summary: "尚未检测" },
   { id: "webrtc", title: "WebRTC", level: "unknown", summary: "尚未检测" },
   { id: "exit-ip", title: "出口 IP", level: "unknown", summary: "尚未检测" },
-  { id: "gemini", title: "Gemini 解锁", level: "unknown", summary: "尚未检测" },
-  { id: "chatgpt", title: "ChatGPT 解锁", level: "unknown", summary: "尚未检测" },
+  { id: "gemini", title: "Gemini（换节点对照）", level: "unknown", summary: "尚未检测" },
+  { id: "chatgpt", title: "ChatGPT（换节点对照）", level: "unknown", summary: "尚未检测" },
   { id: "latency", title: "延迟采样", level: "unknown", summary: "尚未检测" },
 ];
 
@@ -46,7 +46,7 @@ export function HomePage({ connection }: { connection: ConnectionState }) {
       <div className="page-header">
         <div>
           <h1>首页</h1>
-          <p>一键诊断当前系统出口质量（DNS / IP / AI 解锁 / 延迟）</p>
+          <p>看当前出口好不好用：连通、IP、换节点时的 AI 对照、延迟。不是替代你自己打开网站。</p>
         </div>
         <button className="btn btn-primary" type="button" disabled={running} onClick={() => void run()}>
           {running ? "检测中…" : "开始检测"}
@@ -75,7 +75,7 @@ export function HomePage({ connection }: { connection: ConnectionState }) {
         </div>
       ) : (
         <div className="note">
-          检测走 Mac 当前出站路径。请先在 Clash Verge Rev 开启系统代理或 TUN，再点击「开始检测」。
+          先开 Clash Verge Rev 的系统代理或 TUN，再点「开始检测」。AI 卡片用来换节点时对照，不是「必须测完才能上网」。
         </div>
       )}
     </div>

@@ -232,16 +232,18 @@ export async function checkDnsLeakApproach(
   }
 
   const webrtcNote =
-    "WebRTC 本地 IP 暴露检测在 Tauri WebView 中为 v1 部分实现：请在浏览器 chrome://webrtc-internals 或系统防火墙侧复核。建议关闭 WebRTC 或不必要的 STUN。";
+    "旁注：WebRTC 是否暴露本地 IP，本版只能粗谈，完整检测还在后续。";
 
   if (!exit.ip && !loc) {
     return {
       id: "dns-leak",
-      title: "DNS / 泄露",
+      title: "DNS 粗检（启发式）",
       level: "unknown",
-      summary: "无法完成 DNS 泄露启发式检测",
-      detail: webrtcNote,
-      tip: "可将 Wi-Fi DNS 设为 1.1.1.1 / 8.8.8.8 并确保走隧道（需自行在系统设置中修改）。",
+      summary: "本轮粗检没跑出来",
+      detail:
+        "本项不是 BrowserLeaks 那种「完整解析器列表」检测，只是对照出口国家与 Cloudflare 路径提示。\n真·系统 DNS 解析器列表会放到后续版本。\n\n" +
+        webrtcNote,
+      tip: "若你在意 DNS 是否仍走运营商，可暂时把 Wi-Fi DNS 设为 1.1.1.1 / 8.8.8.8，并确认流量走隧道（需你在系统设置里改）。",
     };
   }
 
@@ -251,13 +253,13 @@ export async function checkDnsLeakApproach(
 
   return {
     id: "dns-leak",
-    title: "DNS / 泄露",
+    title: "DNS 粗检（启发式）",
     level: mismatch ? "warn" : "pass",
     summary: mismatch
-      ? `出口 ${exitCc} 与 CF 路径 loc=${loc} 不一致（启发式）`
-      : `出口 ${exitCc ?? "?"} · CF loc=${loc ?? "?"} colo=${colo ?? "?"}`,
-    detail: `出口 IP 国家: ${exitCc ?? "--"}\nCloudflare trace loc: ${loc ?? "--"}\ncolo: ${colo ?? "--"}\n\n${webrtcNote}`,
-    tip: "这是实用启发式，非完整 DNS 查询镜像。真正 DNS 泄露需看解析器是否仍指向本地 ISP。",
+      ? `粗看不太一致：出口 ${exitCc}，Cloudflare 提示 ${loc}`
+      : `粗看大致一致：出口 ${exitCc ?? "?"}，Cloudflare 提示 ${loc ?? "?"}`,
+    detail: `测了什么：经当前出口访问 Cloudflare trace（loc / colo）。\n没测什么：系统真实 DNS 服务器列表、完整泄漏证明（后续版本）。\n\n出口 IP 国家: ${exitCc ?? "--"}\nCloudflare loc: ${loc ?? "--"}\ncolo: ${colo ?? "--"}\n\n${webrtcNote}`,
+    tip: "换节点时用来快速对照「路子像不像」；不要把它当成专业 DNS 泄漏报告。",
   };
 }
 
@@ -301,23 +303,73 @@ export async function probeGeminiUnlock(
     if (m3 && !["CHN", "HKG"].includes(m3[1])) detectedCountry = m3[1];
   }
 
+  const probed = [
+    "网页路径：gemini.google.com/app（看页面是否地区拦截、内容是否正常返回）",
+  ];
+  const notProbed = [
+    "Google 官方手机 App",
+    "Mac 桌面客户端（本版未单独检测）",
+  ];
+
   if (blocked) {
-    return { supported: false, region: "BLOCKED", status: "阻断(地区受限)" };
+    return {
+      supported: false,
+      level: "blocked",
+      region: "BLOCKED",
+      status: "网页：不可用（地区限制）",
+      lines: [
+        "网页：不可用",
+        "手机 App：未测",
+        "Mac 桌面版：本版未单独检测",
+      ],
+      probed,
+      notProbed,
+    };
   }
   if (out.length > 50000) {
-    if (detectedCountry) {
-      return {
-        supported: true,
-        region: detectedCountry,
-        status: `支持(${detectedCountry})`,
-      };
-    }
-    return { supported: true, region: "OK", status: "支持(可用)" };
+    const tag = detectedCountry ?? "可用";
+    return {
+      supported: true,
+      level: "full",
+      region: detectedCountry ?? "OK",
+      status: `网页：可用（${tag}）`,
+      lines: [
+        "网页：可用",
+        "手机 App：未测",
+        "Mac 桌面版：本版未单独检测",
+      ],
+      probed,
+      notProbed,
+    };
   }
   if (!r.ok && !out) {
-    return { supported: false, region: null, status: "超时" };
+    return {
+      supported: false,
+      level: "unknown",
+      region: null,
+      status: "网页：这次没测成（超时）",
+      lines: [
+        "网页：未测成",
+        "手机 App：未测",
+        "Mac 桌面版：本版未单独检测",
+      ],
+      probed,
+      notProbed,
+    };
   }
-  return { supported: false, region: null, status: "不可达" };
+  return {
+    supported: false,
+    level: "blocked",
+    region: null,
+    status: "网页：不可用或打不开",
+    lines: [
+      "网页：不可用",
+      "手机 App：未测",
+      "Mac 桌面版：本版未单独检测",
+    ],
+    probed,
+    notProbed,
+  };
 }
 
 
@@ -383,13 +435,29 @@ export async function probeChatgptUnlock(
     appOk = true;
   }
 
-  const locTag = loc ?? "未知";
+  const locTag = loc ?? "未知地区";
+  const probed = [
+    "网页相关：chatgpt.com/cdn-cgi/trace、OpenAI compliance 接口（必要时再看 chatgpt.com 首页）",
+    "手机 App 相关：ios.chat.openai.com（粗检，不等于你手机上的真实 App 体验）",
+  ];
+  const notProbed = [
+    "Mac 官方桌面版 ChatGPT（本版未单独检测）",
+    "你浏览器里已经登录后的完整网页体验",
+  ];
+
   if (!webOk && !appOk) {
     return {
       supported: false,
       level: "blocked",
       region: loc,
-      status: `阻断(${locTag})`,
+      status: `网页：不可用 · 手机 App：可能不行（${locTag}）`,
+      lines: [
+        "网页：不可用",
+        "手机 App：可能不行",
+        "Mac 桌面版：本版未单独检测",
+      ],
+      probed,
+      notProbed,
     };
   }
   if (webOk && !appOk) {
@@ -397,7 +465,14 @@ export async function probeChatgptUnlock(
       supported: true,
       level: "web_only",
       region: loc,
-      status: `仅网页(${locTag})`,
+      status: `网页：可用 · 手机 App：可能不行（${locTag}）`,
+      lines: [
+        "网页：可用",
+        "手机 App：可能不行",
+        "Mac 桌面版：本版未单独检测",
+      ],
+      probed,
+      notProbed,
     };
   }
   if (!webOk && appOk) {
@@ -405,14 +480,28 @@ export async function probeChatgptUnlock(
       supported: true,
       level: "app_only",
       region: loc,
-      status: `仅APP(${locTag})`,
+      status: `网页：不可用 · 手机 App：可用（粗检，${locTag}）`,
+      lines: [
+        "网页：不可用",
+        "手机 App：可用（粗检）",
+        "Mac 桌面版：本版未单独检测",
+      ],
+      probed,
+      notProbed,
     };
   }
   return {
     supported: true,
     level: "full",
     region: loc,
-    status: `全支持(${locTag})`,
+    status: `网页：可用 · 手机 App：可用（粗检，${locTag}）`,
+    lines: [
+      "网页：可用",
+      "手机 App：可用（粗检）",
+      "Mac 桌面版：本版未单独检测",
+    ],
+    probed,
+    notProbed,
   };
 }
 
@@ -423,19 +512,36 @@ function unlockCard(
 ): CheckCard {
   let level: CheckLevel = "fail";
   if (result.supported) {
-    level =
-      result.level === "full" || result.status.includes("支持")
-        ? "pass"
-        : "warn";
+    level = "pass";
     if (result.level === "web_only" || result.level === "app_only") level = "warn";
     if (result.level === "full") level = "pass";
+  } else if (result.level === "unknown") {
+    level = "unknown";
   }
+
+  const lines = (result.lines ?? []).join("\n");
+  const probed = (result.probed ?? [])
+    .map((s) => `· ${s}`)
+    .join("\n");
+  const notProbed = (result.notProbed ?? [])
+    .map((s) => `· ${s}`)
+    .join("\n");
+
+  const detailParts = [
+    lines ? `结果对照：\n${lines}` : "",
+    probed ? `测了什么：\n${probed}` : "",
+    notProbed ? `没测什么：\n${notProbed}` : "",
+    result.region ? `出口提示地区：${result.region}` : "",
+    "这些检查方便你换节点时一次对照，不能替代你自己打开网站或 App 实际试一下。",
+  ].filter(Boolean);
+
   return {
     id,
     title,
     level,
     summary: result.status,
-    detail: `region=${result.region ?? "--"} level=${result.level ?? "--"}`,
+    detail: detailParts.join("\n\n"),
+    tip: "如果你主要用 Mac 桌面版，本卡桌面项会写「未单独检测」——以你打开官方客户端的实际体验为准。",
   };
 }
 
@@ -483,8 +589,8 @@ export async function runEgressDiagnostics(
   const mixedPort = options?.mixedPort ?? null;
   const note =
     mixedPort != null && mixedPort > 0
-      ? `检测优先经 mixed-port（${mixedPort}）发出；请确保 Clash Verge Rev 已连接。`
-      : "未配置 mixed-port 时部分探针走浏览器出站；建议在设置中填写 mixed-port，并开启系统代理或 TUN。";
+      ? `探针优先经 mixed-port（${mixedPort}）发出。结果用来换节点时对照线路，不是替代你自己打开 chatgpt.com / Gemini。请确保 Clash Verge Rev 已连接。`
+      : "未配置 mixed-port 时部分探针可能走窗口直连。建议在设置里填写 mixed-port，并开启系统代理或 TUN。结果用于换节点对照，不是「必须测完才能上网」。";
 
   const push = (c: CheckCard) => {
     onCard?.(c);
@@ -497,9 +603,9 @@ export async function runEgressDiagnostics(
   const dns = push(await checkDnsLeakApproach(exit, mixedPort));
   const rtc = push(webrtcCard());
   const gemini = await probeGeminiUnlock(mixedPort);
-  const gemCard = push(unlockCard("gemini", "Gemini 解锁", gemini));
+  const gemCard = push(unlockCard("gemini", "Gemini（换节点对照）", gemini));
   const chatgpt = await probeChatgptUnlock(mixedPort);
-  const gptCard = push(unlockCard("chatgpt", "ChatGPT 解锁", chatgpt));
+  const gptCard = push(unlockCard("chatgpt", "ChatGPT（换节点对照）", chatgpt));
   const { ms, card: latCard } = await sampleLatency(mixedPort);
   push(latCard);
 

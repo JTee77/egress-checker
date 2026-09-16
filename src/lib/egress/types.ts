@@ -21,9 +21,17 @@ export interface ExitIpInfo {
 
 export interface UnlockResult {
   supported: boolean;
+  /** Internal machine level: full | web_only | app_only | blocked | unknown */
   level?: string;
   region: string | null;
+  /** Short headline for the card summary (plain Chinese, no jargon) */
   status: string;
+  /** One-line breakdowns shown in detail */
+  lines?: string[];
+  /** What we probed */
+  probed?: string[];
+  /** What we explicitly did not probe */
+  notProbed?: string[];
 }
 
 export interface EgressReport {
