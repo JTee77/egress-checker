@@ -34,7 +34,14 @@ macOS **Apple Silicon (arm64)** 桌面应用：诊断代理**出口质量**（�
 
 `~/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/config.yaml`
 
-并在需要时回退 Unix socket：`/tmp/verge/verge-mihomo.sock`
+### Unix 套接字 vs external-controller TCP
+
+Clash Verge Rev 常在本地暴露 Unix 套接字 `/tmp/verge/verge-mihomo.sock`，而 **external-controller TCP**（如 `127.0.0.1:9097`）可能未开启。本应用拉取节点时会：
+
+1. 先短暂尝试 TCP `host:port`
+2. TCP 失败（连接拒绝 / 非 2xx，401/403 除外）则自动回退到上述 Unix 套接字
+
+因此即使 TCP 端口 Connection refused，只要套接字存在且 secret 正确，仍可列出真实节点。mixed-port（如 `7897`）与控制器通道无关，仍用于经代理的出口探针。
 
 也可在应用「设置」页手动填写 host / port / secret / mixed-port，或开启 **Mock** 演示模式（无需真实 Clash）。
 
@@ -71,7 +78,8 @@ pnpm tauri dev
 | `pnpm dev` | 仅 Vite 前端（无原生 API） |
 | `pnpm build` | 前端 typecheck + 生产构建 |
 | `pnpm typecheck` | 仅 TypeScript 检查 |
-| `pnpm smoke:mac` / `bash scripts/smoke-mac.sh` | Mac 冒烟：Vite 就绪 + 进程存活 ≥30s + Rust `smoke_` 探针（Pit / CI 用） |
+| `pnpm smoke:mac` / `bash scripts/smoke-mac.sh` | Mac 冒烟：Vite 就绪 + 进程存活 ≥30s + Rust `smoke_` 探针 + Mihomo Unix API（可 SKIP）（Pit / CI 用） |
+| `bash scripts/smoke-mihomo-api.sh` | 仅测 Unix `/proxies`（sock 缺失时 SKIP，不失败） |
 | `pnpm tauri dev` | Tauri 开发模式（推荐） |
 | `pnpm tauri build` | 打包 Mac `.app` / `.dmg`（需在 Apple Silicon Mac 上） |
 
@@ -89,9 +97,21 @@ bash scripts/smoke-mac.sh
 # 或：pnpm smoke:mac
 ```
 
-脚本会：清理本应用相关进程 → `cargo test smoke_` → 后台 `pnpm tauri dev` → 等 `localhost:1420` → 确认 `egress-checker` 进程存活 ≥30s。
+脚本会：清理本应用相关进程 → `cargo test smoke_` → `smoke-mihomo-api.sh`（sock 可用则 curl Unix `/proxies`）→ 后台 `pnpm tauri dev` → 等 `localhost:1420` → 确认 `egress-checker` 进程存活 ≥30s。
 
-手动抽查（无需端用户）：`pnpm tauri dev` 启动后**不要**指望自动连 Mihomo；点首页「刷新连接」，再点「开始检测」。
+手动抽查节点（无需 GUI 点击）：
+
+```bash
+# secret 来自 env 或 Verge config.yaml
+export MIHOMO_SECRET='…'   # 可选
+bash scripts/smoke-mihomo-api.sh
+# 或直接：
+curl --unix-socket /tmp/verge/verge-mihomo.sock \
+  -H "Authorization: Bearer $MIHOMO_SECRET" \
+  http://localhost/proxies
+```
+
+应用内：`pnpm tauri dev` 后点首页「刷新连接」；若 TCP 死掉应显示「已连接 Unix 套接字 …」并列出真实节点（不会静默 Mock）。
 
 ## 功能概览（v1）
 

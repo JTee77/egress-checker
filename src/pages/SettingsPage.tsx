@@ -147,15 +147,22 @@ export function SettingsPage({
           <br />
           ~/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/config.yaml
           <br />
-          Unix socket：/tmp/verge/verge-mihomo.sock
+          检测到的 Unix 套接字：{cfg?.sockPath ?? "（未检测到）"}
+          <br />
+          默认路径：/tmp/verge/verge-mihomo.sock
           <br />
           来源：{cfg?.source ?? "—"} · mixed-port：{cfg?.mixedPort ?? "—"}
+        </p>
+        <p className="muted" style={{ margin: "8px 0 0", fontSize: 12 }}>
+          若 TCP 端口连不上会自动尝试 Verge 默认套接字；也可在 Verge 打开
+          external-controller 监听 127.0.0.1:端口。
         </p>
       </div>
 
       <div className="note">
         请在 Clash Verge Rev 中开启 <strong>external-controller</strong> 并设置{" "}
-        <strong>secret</strong>，否则无法拉取节点 / 测延迟。本应用不提供任何代理节点。
+        <strong>secret</strong>，否则无法拉取节点 / 测延迟。若未开启 TCP
+        控制器，本应用会回退到 Unix 套接字。本应用不提供任何代理节点。
       </div>
     </div>
   );

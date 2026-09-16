@@ -52,6 +52,8 @@ pub struct ListNodesResult {
     pub status: u16,
     pub error: Option<String>,
     pub unauthorized: bool,
+    /// Which transport produced this result: "tcp" | "unix"
+    pub transport: Option<String>,
 }
 
 const IGNORE_PROXY_TYPES: &[&str] = &[
@@ -435,43 +437,107 @@ pub fn slim_nodes_from_proxies_json(body: &str) -> Result<ListNodesResult, Strin
         status: 200,
         error: None,
         unauthorized: false,
+        transport: None,
     })
 }
 
-/// Fetch /proxies over TCP and return slim nodes (strips history; caps body).
+/// Fetch /proxies: try TCP briefly, then Unix socket fallback.
+/// Prefer unix when TCP is dead (Clash Verge Rev often exposes only the sock).
 pub async fn list_nodes_async(
     host: &str,
     port: u16,
     secret: &str,
     timeout_ms: u64,
+    sock_path: Option<&str>,
 ) -> Result<ListNodesResult, String> {
-    let res = http_via_tcp_async(host, port, "GET", "/proxies", None, secret, timeout_ms).await?;
-    if res.status == 401 || res.status == 403 {
-        return Ok(ListNodesResult {
+    let tcp_timeout = timeout_ms.min(2000).max(400);
+    let tcp_attempt =
+        http_via_tcp_async(host, port, "GET", "/proxies", None, secret, tcp_timeout).await;
+
+    match tcp_attempt {
+        Ok(res) if res.status == 401 || res.status == 403 => {
+            return Ok(ListNodesResult {
+                nodes: vec![],
+                current_proxy: None,
+                status: res.status,
+                error: Some("API 返回未授权（401/403），请到设置检查 Secret".into()),
+                unauthorized: true,
+                transport: Some("tcp".into()),
+            });
+        }
+        Ok(res) if (200..300).contains(&res.status) => {
+            let mut slim = slim_nodes_from_proxies_json(&res.body)?;
+            slim.status = res.status;
+            slim.transport = Some("tcp".into());
+            if slim.nodes.is_empty() {
+                slim.error = Some(
+                    "已连接但未解析到可用节点，请到设置检查 Secret / 刷新，或确认订阅已加载"
+                        .into(),
+                );
+            }
+            return Ok(slim);
+        }
+        Ok(_) | Err(_) => {
+            // Fall through to unix: connect failure or non-2xx (except 401/403 above).
+        }
+    }
+
+    let sock = sock_path
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| DEFAULT_SOCK.to_string());
+    let secret_owned = secret.to_string();
+    let sock_for_err = sock.clone();
+    let unix_timeout = timeout_ms.max(tcp_timeout);
+
+    let unix_attempt = tauri::async_runtime::spawn_blocking(move || {
+        http_via_unix(
+            "GET",
+            "/proxies",
+            None,
+            &secret_owned,
+            Some(sock.as_str()),
+            unix_timeout,
+        )
+    })
+    .await
+    .map_err(|e| format!("unix task join: {e}"))?;
+
+    match unix_attempt {
+        Ok(res) if res.status == 401 || res.status == 403 => Ok(ListNodesResult {
             nodes: vec![],
             current_proxy: None,
             status: res.status,
             error: Some("API 返回未授权（401/403），请到设置检查 Secret".into()),
             unauthorized: true,
-        });
-    }
-    if !(200..300).contains(&res.status) {
-        return Ok(ListNodesResult {
+            transport: Some("unix".into()),
+        }),
+        Ok(res) if (200..300).contains(&res.status) => {
+            let mut slim = slim_nodes_from_proxies_json(&res.body)?;
+            slim.status = res.status;
+            slim.transport = Some("unix".into());
+            if slim.nodes.is_empty() {
+                slim.error = Some(
+                    "已连接但未解析到可用节点，请到设置检查 Secret / 刷新，或确认订阅已加载"
+                        .into(),
+                );
+            }
+            Ok(slim)
+        }
+        Ok(res) => Ok(ListNodesResult {
             nodes: vec![],
             current_proxy: None,
             status: res.status,
-            error: Some(format!("拉取 /proxies 失败（HTTP {}）", res.status)),
+            error: Some(format!(
+                "TCP 与 Unix（{sock_for_err}）均失败：Unix HTTP {}",
+                res.status
+            )),
             unauthorized: false,
-        });
+            transport: Some("unix".into()),
+        }),
+        Err(e) => Err(format!(
+            "TCP {host}:{port} 不可用，Unix {sock_for_err} 也失败：{e}"
+        )),
     }
-    let mut slim = slim_nodes_from_proxies_json(&res.body)?;
-    slim.status = res.status;
-    if slim.nodes.is_empty() {
-        slim.error = Some(
-            "已连接但未解析到可用节点，请到设置检查 Secret / 刷新，或确认订阅已加载".into(),
-        );
-    }
-    Ok(slim)
 }
 
 #[cfg(test)]
@@ -562,5 +628,26 @@ mod tests {
         assert!(names.contains(&"hk-1"));
         assert!(names.contains(&"jp-1"));
         assert!(!names.iter().any(|n| *n == "Proxy" || *n == "DIRECT"));
+    }
+
+    #[test]
+    fn smoke_list_nodes_dead_tcp_missing_sock_no_panic() {
+        let missing = "/tmp/egress-checker-no-such-mihomo.sock";
+        let _ = std::fs::remove_file(missing);
+        let result = std::panic::catch_unwind(|| {
+            tauri::async_runtime::block_on(list_nodes_async(
+                "127.0.0.1",
+                1,
+                "",
+                800,
+                Some(missing),
+            ))
+        });
+        assert!(result.is_ok(), "list_nodes_async panicked");
+        let inner = result.unwrap();
+        assert!(
+            inner.is_err(),
+            "expected Err when TCP dead and sock missing, got {inner:?}"
+        );
     }
 }

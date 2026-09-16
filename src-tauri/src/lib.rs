@@ -92,6 +92,7 @@ struct ListNodesRequest {
     port: u16,
     secret: String,
     timeout_ms: Option<u64>,
+    sock_path: Option<String>,
 }
 
 #[tauri::command]
@@ -101,6 +102,7 @@ async fn mihomo_list_nodes(req: ListNodesRequest) -> Result<ListNodesResult, Str
         req.port,
         &req.secret,
         req.timeout_ms.unwrap_or(18000),
+        req.sock_path.as_deref(),
     )
     .await
 }

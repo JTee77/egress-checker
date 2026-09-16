@@ -45,6 +45,15 @@ fi
   cargo test --manifest-path Cargo.toml smoke_ -- --nocapture
 ) || fail "cargo test smoke_ failed"
 
+# 2b) Mihomo Unix API (soft: SKIP if sock missing / Clash down)
+echo "-- smoke-mihomo-api (soft) --"
+if bash "$ROOT/scripts/smoke-mihomo-api.sh"; then
+  pass "mihomo-api section ok or skipped"
+else
+  # Unauthorized / bad JSON should fail the smoke when Clash is up
+  fail "smoke-mihomo-api.sh failed (sock present but /proxies check failed)"
+fi
+
 # 3) Start pnpm tauri dev in background
 echo "-- start pnpm tauri dev --"
 : >"$LOG"

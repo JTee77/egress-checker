@@ -263,18 +263,11 @@ export async function discoverAndProbe(
     };
   }
 
-  const res = await httpApi(config, "GET", "/version", undefined, 2000);
-  if (!res) {
-    return {
-      status: "unreachable",
-      message: "无法连接 Mihomo API，请检查 Clash Verge Rev 是否运行及端口",
-      config,
-      currentProxy: null,
-      usingMock: false,
-      proxiesError: null,
-    };
-  }
-  if (res.status === 401 || res.status === 403) {
+  const sockLabel = config.sockPath ?? "/tmp/verge/verge-mihomo.sock";
+
+  // Prefer brief TCP probe; on failure try Unix (Verge often has sock only).
+  const viaTcp = await rustHttp(config, "GET", "/version", undefined, 1500);
+  if (viaTcp && (viaTcp.status === 401 || viaTcp.status === 403)) {
     return {
       status: "unauthorized",
       message: "Secret 不正确或未配置",
@@ -284,10 +277,67 @@ export async function discoverAndProbe(
       proxiesError: "API 返回未授权（401/403），请到设置检查 Secret",
     };
   }
-  if (!is2xx(res.status)) {
+  if (viaTcp && is2xx(viaTcp.status)) {
+    return {
+      status: "connected",
+      message: `已连接 ${config.host}:${config.port}（${config.source}）`,
+      config,
+      currentProxy: null,
+      usingMock: false,
+      proxiesError: null,
+    };
+  }
+
+  const viaSock = await unixHttp(config, "GET", "/version", undefined, 2000);
+  if (viaSock && (viaSock.status === 401 || viaSock.status === 403)) {
+    return {
+      status: "unauthorized",
+      message: "Secret 不正确或未配置",
+      config,
+      currentProxy: null,
+      usingMock: false,
+      proxiesError: "API 返回未授权（401/403），请到设置检查 Secret",
+    };
+  }
+  if (viaSock && is2xx(viaSock.status)) {
+    return {
+      status: "connected",
+      message: `已连接 Unix 套接字 ${sockLabel}（${config.source}）`,
+      config,
+      currentProxy: null,
+      usingMock: false,
+      proxiesError: null,
+    };
+  }
+
+  // Dev / non-Tauri browser fallback
+  const viaBrowser = await browserFetch(config, "GET", "/version", undefined, 2000);
+  if (viaBrowser && (viaBrowser.status === 401 || viaBrowser.status === 403)) {
+    return {
+      status: "unauthorized",
+      message: "Secret 不正确或未配置",
+      config,
+      currentProxy: null,
+      usingMock: false,
+      proxiesError: "API 返回未授权（401/403），请到设置检查 Secret",
+    };
+  }
+  if (viaBrowser && is2xx(viaBrowser.status)) {
+    return {
+      status: "connected",
+      message: `已连接 ${config.host}:${config.port}（${config.source}）`,
+      config,
+      currentProxy: null,
+      usingMock: false,
+      proxiesError: null,
+    };
+  }
+
+  if (viaSock || viaTcp || viaBrowser) {
+    const status = (viaSock ?? viaTcp ?? viaBrowser)!.status;
     return {
       status: "unreachable",
-      message: `API 返回 HTTP ${res.status}`,
+      message: `API 返回 HTTP ${status}`,
       config,
       currentProxy: null,
       usingMock: false,
@@ -296,8 +346,9 @@ export async function discoverAndProbe(
   }
 
   return {
-    status: "connected",
-    message: `已连接 ${config.host}:${config.port}（${config.source}）`,
+    status: "unreachable",
+    message:
+      "无法连接 Mihomo API（TCP 与 Unix 均失败），请检查 Clash Verge Rev 是否运行",
     config,
     currentProxy: null,
     usingMock: false,
@@ -324,12 +375,14 @@ async function getProxiesViaSlimCommand(
       status: number;
       error: string | null;
       unauthorized: boolean;
+      transport?: string | null;
     }>("mihomo_list_nodes", {
       req: {
         host: config.host,
         port: config.port,
         secret: config.secret,
         timeoutMs: 18000,
+        sockPath: config.sockPath ?? "/tmp/verge/verge-mihomo.sock",
       },
     });
     const nodes: ProxyNode[] = (res.nodes ?? []).map((n) =>
