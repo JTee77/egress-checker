@@ -3,6 +3,7 @@
  * Prefer Tauri Rust HTTP (reqwest) to 127.0.0.1 to avoid WebView CORS;
  * fall back to unix socket invoke, then browser fetch (dev only).
  * Never log secret values.
+ * Never auto-fallback to mock nodes — Mock is Settings toggle only.
  */
 
 import { invoke } from "@tauri-apps/api/core";
@@ -15,7 +16,7 @@ import {
   type ProxyNode,
 } from "./types";
 import { detectRegion } from "./regions";
-import { mockNodes, mockProxiesRaw } from "./mock";
+import { mockProxiesRaw } from "./mock";
 
 const isTauri = () =>
   typeof window !== "undefined" &&
@@ -42,6 +43,10 @@ export function defaultConfig(): ControllerConfig {
 }
 
 type HttpResult = { status: number; json: unknown; raw: string };
+
+function is2xx(status: number): boolean {
+  return status >= 200 && status < 300;
+}
 
 async function rustHttp(
   config: ControllerConfig,
@@ -145,6 +150,10 @@ async function browserFetch(
   }
 }
 
+/**
+ * Prefer first successful 2xx across TCP → unix socket → browser.
+ * Do not return a failed TCP response as final if unix/browser might work.
+ */
 async function httpApi(
   config: ControllerConfig,
   method: string,
@@ -155,12 +164,30 @@ async function httpApi(
   const bodyStr = body !== undefined ? JSON.stringify(body) : undefined;
 
   const viaRust = await rustHttp(config, method, path, bodyStr, timeoutMs);
-  if (viaRust) return viaRust;
+  if (viaRust && is2xx(viaRust.status)) return viaRust;
 
   const viaSock = await unixHttp(config, method, path, bodyStr, timeoutMs);
-  if (viaSock) return viaSock;
+  if (viaSock && is2xx(viaSock.status)) return viaSock;
 
-  return browserFetch(config, method, path, body, timeoutMs);
+  const viaBrowser = await browserFetch(config, method, path, body, timeoutMs);
+  if (viaBrowser && is2xx(viaBrowser.status)) return viaBrowser;
+
+  // No 2xx: prefer any non-null response (sock > tcp > browser) so callers see 401 etc.
+  return viaSock ?? viaRust ?? viaBrowser;
+}
+
+function isJunkName(name: string): boolean {
+  if (name.startsWith("PASS") || name.startsWith("REJECT")) return true;
+  return JUNK_NAME_KEYWORDS.some((k) => name.includes(k));
+}
+
+function toNode(name: string, p: ProxyInfo): ProxyNode {
+  return {
+    name,
+    type: p.type,
+    region: detectRegion(name),
+    raw: p,
+  };
 }
 
 export function filterNodes(
@@ -171,15 +198,46 @@ export function filterNodes(
   const nodes: ProxyNode[] = [];
   for (const [name, p] of Object.entries(proxies)) {
     if (IGNORE_PROXY_TYPES.has(p.type)) continue;
-    if (name.startsWith("PASS") || name.startsWith("REJECT")) continue;
-    if (JUNK_NAME_KEYWORDS.some((k) => name.includes(k))) continue;
-    nodes.push({
-      name,
-      type: p.type,
-      region: detectRegion(name),
-      raw: p,
-    });
+    if (isJunkName(name)) continue;
+    nodes.push(toNode(name, p));
   }
+  return { nodes, currentProxy };
+}
+
+/**
+ * When flat filter yields empty, resolve leaf names from Selector `all` arrays
+ * that exist as keys in the proxies map (common Clash profile shape).
+ */
+export function resolveNodesFromGroups(
+  proxies: Record<string, ProxyInfo>,
+): { nodes: ProxyNode[]; currentProxy: string | null } {
+  const currentProxy =
+    proxies.Proxy?.now ?? proxies.GLOBAL?.now ?? proxies.proxy?.now ?? null;
+
+  const leafNames = new Set<string>();
+  const preferGroups = ["Proxy", "GLOBAL", "proxy"];
+
+  const considerAll = (all: string[] | undefined) => {
+    if (!all) return;
+    for (const name of all) {
+      const p = proxies[name];
+      if (!p) continue;
+      if (IGNORE_PROXY_TYPES.has(p.type)) continue;
+      if (isJunkName(name)) continue;
+      leafNames.add(name);
+    }
+  };
+
+  for (const g of preferGroups) {
+    considerAll(proxies[g]?.all);
+  }
+  for (const [, p] of Object.entries(proxies)) {
+    if (p.type === "Selector" || p.type === "URLTest" || p.type === "Fallback") {
+      considerAll(p.all);
+    }
+  }
+
+  const nodes = [...leafNames].map((name) => toNode(name, proxies[name]));
   return { nodes, currentProxy };
 }
 
@@ -208,11 +266,12 @@ export async function discoverAndProbe(
   const res = await httpApi(config, "GET", "/version", undefined, 2000);
   if (!res) {
     return {
-      status: "mock",
-      message: "无法连接 Mihomo API，已启用演示数据（Mock）",
+      status: "unreachable",
+      message: "无法连接 Mihomo API，请检查 Clash Verge Rev 是否运行及端口",
       config,
-      currentProxy: mockNodes()[0]?.name ?? null,
-      usingMock: true,
+      currentProxy: null,
+      usingMock: false,
+      proxiesError: null,
     };
   }
   if (res.status === 401 || res.status === 403) {
@@ -222,45 +281,90 @@ export async function discoverAndProbe(
       config,
       currentProxy: null,
       usingMock: false,
+      proxiesError: "API 返回未授权（401/403），请到设置检查 Secret",
     };
   }
-  if (res.status !== 200) {
+  if (!is2xx(res.status)) {
     return {
       status: "unreachable",
       message: `API 返回 HTTP ${res.status}`,
       config,
       currentProxy: null,
       usingMock: false,
+      proxiesError: null,
     };
   }
 
-  const proxiesRes = await getProxies(config);
   return {
     status: "connected",
     message: `已连接 ${config.host}:${config.port}（${config.source}）`,
     config,
-    currentProxy: proxiesRes.currentProxy,
+    currentProxy: null,
     usingMock: false,
+    proxiesError: null,
   };
 }
 
-export async function getProxies(config: ControllerConfig): Promise<{
+export type GetProxiesResult = {
   nodes: ProxyNode[];
   currentProxy: string | null;
-  usingMock: boolean;
-}> {
-  const res = await httpApi(config, "GET", "/proxies");
-  if (!res || res.status !== 200 || !res.json) {
-    return {
-      nodes: mockNodes(),
-      currentProxy: mockNodes()[0]?.name ?? null,
-      usingMock: true,
-    };
+  usingMock: false;
+  error: string | null;
+  unauthorized: boolean;
+};
+
+export async function getProxies(config: ControllerConfig): Promise<GetProxiesResult> {
+  const empty = (
+    error: string,
+    unauthorized = false,
+  ): GetProxiesResult => ({
+    nodes: [],
+    currentProxy: null,
+    usingMock: false,
+    error,
+    unauthorized,
+  });
+
+  // Large proxy maps need a longer timeout than /version
+  const res = await httpApi(config, "GET", "/proxies", undefined, 18000);
+  if (!res) {
+    return empty("无法拉取 /proxies（超时或网络失败），请到设置检查连接后刷新");
   }
+  if (res.status === 401 || res.status === 403) {
+    return empty(
+      "拉取节点未授权（401/403），请到设置检查 Secret / 刷新",
+      true,
+    );
+  }
+  if (!is2xx(res.status) || !res.json) {
+    return empty(
+      `拉取 /proxies 失败（HTTP ${res.status}），请到设置检查 Secret / 刷新`,
+    );
+  }
+
   const obj = res.json as { proxies?: Record<string, ProxyInfo> };
   const proxies = obj.proxies ?? {};
-  const filtered = filterNodes(proxies);
-  return { ...filtered, usingMock: false };
+  let filtered = filterNodes(proxies);
+  if (filtered.nodes.length === 0) {
+    filtered = resolveNodesFromGroups(proxies);
+  }
+  if (filtered.nodes.length === 0) {
+    return {
+      nodes: [],
+      currentProxy: filtered.currentProxy,
+      usingMock: false,
+      error:
+        "已连接但未解析到可用节点，请到设置检查 Secret / 刷新，或确认订阅已加载",
+      unauthorized: false,
+    };
+  }
+  return {
+    nodes: filtered.nodes,
+    currentProxy: filtered.currentProxy,
+    usingMock: false,
+    error: null,
+    unauthorized: false,
+  };
 }
 
 export async function probeDelay(
@@ -284,12 +388,12 @@ export async function switchProxy(
 ): Promise<boolean> {
   const enc = encodeURIComponent(group);
   const res = await httpApi(config, "PUT", `/proxies/${enc}`, { name });
-  return !!res && res.status >= 200 && res.status < 300;
+  return !!res && is2xx(res.status);
 }
 
 export async function closeConnections(config: ControllerConfig): Promise<boolean> {
   const res = await httpApi(config, "DELETE", "/connections");
-  return !!res && res.status >= 200 && res.status < 300;
+  return !!res && is2xx(res.status);
 }
 
 export async function getVersion(config: ControllerConfig): Promise<string | null> {

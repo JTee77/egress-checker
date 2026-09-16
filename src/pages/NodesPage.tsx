@@ -38,6 +38,11 @@ export function NodesPage({
       .join(" · ");
   }, [nodes]);
 
+  const connectedEmpty =
+    !connection.usingMock &&
+    connection.status === "connected" &&
+    nodes.length === 0;
+
   const start = async () => {
     if (!plan.implemented) return;
     setRunning(true);
@@ -108,6 +113,21 @@ export function NodesPage({
         </div>
       </div>
 
+      {connection.proxiesError || connectedEmpty ? (
+        <div className="note" style={{ marginBottom: 14 }}>
+          {connection.proxiesError ??
+            "已连接但节点列表为空。请到设置检查 Secret / 刷新。"}
+          {connection.status === "unauthorized" ||
+          connection.proxiesError?.includes("401") ||
+          connection.proxiesError?.includes("未授权") ? (
+            <div style={{ marginTop: 6 }}>
+              当前为未授权状态：请确认 Clash Verge Rev 的 external-controller
+              Secret 与本应用设置一致。
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="toolbar">
         {NODE_TEST_PLANS.map((p) => (
           <button
@@ -146,43 +166,50 @@ export function NodesPage({
         </div>
       ) : null}
 
-      <table className="data">
-        <thead>
-          <tr>
-            <th>节点</th>
-            <th>地区</th>
-            <th>协议</th>
-            <th>平均延迟</th>
-            <th>抖动</th>
-            <th>丢包</th>
-            <th>存活</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(results.length ? results : nodes.map(placeholderRow)).map((r) => (
-            <tr key={r.name}>
-              <td>{r.name}</td>
-              <td>{r.region}</td>
-              <td>{r.proto}</td>
-              <td>{results.length ? `${r.avgDelay} ms` : "—"}</td>
-              <td>{results.length ? `${r.jitter} ms` : "—"}</td>
-              <td>{results.length ? `${r.lossRate}%` : "—"}</td>
-              <td>{results.length ? (r.alive ? "是" : "否") : "—"}</td>
-              <td>
-                <button
-                  className="btn"
-                  type="button"
-                  disabled={switching === r.name}
-                  onClick={() => void doSwitch(r.name)}
-                >
-                  {switching === r.name ? "切换中…" : "切换"}
-                </button>
-              </td>
+      {nodes.length === 0 && !connection.usingMock ? (
+        <div className="note">
+          暂无节点可显示。请到设置检查 Secret / 刷新连接；仅在「Mock
+          演示模式」下会显示演示节点。
+        </div>
+      ) : (
+        <table className="data">
+          <thead>
+            <tr>
+              <th>节点</th>
+              <th>地区</th>
+              <th>协议</th>
+              <th>平均延迟</th>
+              <th>抖动</th>
+              <th>丢包</th>
+              <th>存活</th>
+              <th>操作</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {(results.length ? results : nodes.map(placeholderRow)).map((r) => (
+              <tr key={r.name}>
+                <td>{r.name}</td>
+                <td>{r.region}</td>
+                <td>{r.proto}</td>
+                <td>{results.length ? `${r.avgDelay} ms` : "—"}</td>
+                <td>{results.length ? `${r.jitter} ms` : "—"}</td>
+                <td>{results.length ? `${r.lossRate}%` : "—"}</td>
+                <td>{results.length ? (r.alive ? "是" : "否") : "—"}</td>
+                <td>
+                  <button
+                    className="btn"
+                    type="button"
+                    disabled={switching === r.name}
+                    onClick={() => void doSwitch(r.name)}
+                  >
+                    {switching === r.name ? "切换中…" : "切换"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

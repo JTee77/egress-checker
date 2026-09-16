@@ -38,6 +38,8 @@ export interface ConnectionState {
   config: ControllerConfig | null;
   currentProxy: string | null;
   usingMock: boolean;
+  /** Proxies fetch / filter error when connected but nodes empty or failed */
+  proxiesError?: string | null;
 }
 
 export interface DelayResult {
@@ -90,6 +92,8 @@ export const IGNORE_PROXY_TYPES = new Set([
   "Selector",
   "URLTest",
   "Fallback",
+  "LoadBalance",
+  "Relay",
   "Direct",
   "Reject",
   "Compatible",

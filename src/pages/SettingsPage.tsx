@@ -65,6 +65,16 @@ export function SettingsPage({
         {connection.message}
       </div>
 
+      {connection.proxiesError && !forceMock ? (
+        <div className="note" style={{ marginBottom: 14 }}>
+          节点列表：{connection.proxiesError}
+          <div className="muted" style={{ marginTop: 6 }}>
+            请确认 Secret 正确后点击「保存并测试连接」。演示节点仅在开启上方 Mock
+            演示模式时出现。
+          </div>
+        </div>
+      ) : null}
+
       <div className="form-grid card" style={{ padding: 16, marginBottom: 14 }}>
         <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <input

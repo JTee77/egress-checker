@@ -27,6 +27,7 @@ export function useConnection() {
     config: defaultConfig(),
     currentProxy: null,
     usingMock: false,
+    proxiesError: null,
   });
   const [nodes, setNodes] = useState<ProxyNode[]>([]);
   const [manual, setManual] = useState<Partial<ControllerConfig>>({});
@@ -55,6 +56,7 @@ export function useConnection() {
             config: cfg,
             currentProxy: list[0]?.name ?? null,
             usingMock: true,
+            proxiesError: null,
           };
           setState(next);
           setNodes(list);
@@ -65,25 +67,40 @@ export function useConnection() {
         const next = await discoverAndProbe(
           Object.keys(merged).length ? merged : undefined,
         );
-        setState(next);
-        if (next.config) {
-          const list = await getProxies(next.config);
-          setNodes(list.nodes);
-          setState({
-            ...next,
-            usingMock: next.usingMock || list.usingMock,
-            currentProxy: list.currentProxy ?? next.currentProxy,
-            message:
-              list.usingMock && !next.usingMock
-                ? `${next.message}（节点列表回退演示数据）`
-                : next.message,
-            status:
-              list.usingMock && next.status !== "connected"
-                ? "mock"
-                : next.status,
-          });
+
+        if (!next.config || next.status === "unreachable" || next.status === "unauthorized") {
+          setState({ ...next, proxiesError: next.proxiesError ?? null });
+          setNodes([]);
+          return next;
         }
-        return next;
+
+        const list = await getProxies(next.config);
+        setNodes(list.nodes);
+
+        if (list.unauthorized) {
+          const unauthorized: ConnectionState = {
+            ...next,
+            status: "unauthorized",
+            message: "Secret 不正确或未配置",
+            usingMock: false,
+            currentProxy: null,
+            proxiesError: list.error,
+          };
+          setState(unauthorized);
+          return unauthorized;
+        }
+
+        const mergedState: ConnectionState = {
+          ...next,
+          usingMock: false,
+          currentProxy: list.currentProxy ?? next.currentProxy,
+          proxiesError: list.error,
+          message: list.error
+            ? `${next.message} — ${list.error}`
+            : next.message,
+        };
+        setState(mergedState);
+        return mergedState;
       } finally {
         setBusy(false);
       }

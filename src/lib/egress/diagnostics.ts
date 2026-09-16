@@ -1,7 +1,7 @@
 /**
  * Universal egress diagnostics.
- * Uses the Mac's current system egress (fetch follows system / TUN proxy when Verge is on).
- * Port of probe_* spirit from reference/clash_speedtest.py — no mixed-port curl required in v1 UI path.
+ * Prefer Rust mixed-port proxy fetch (same path as Gemini/IP) so probes follow
+ * Clash Verge Rev even when the Tauri WebView does not use system proxy/TUN.
  */
 
 import type {
@@ -16,7 +16,9 @@ import { fetchTextViaProxy } from "./fetchVia";
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
 
-async function fetchText(
+const PROBE_TIMEOUT_MS = 9000;
+
+async function fetchTextBrowser(
   url: string,
   init: RequestInit & { timeoutMs?: number } = {},
 ): Promise<{ ok: boolean; status: number; text: string }> {
@@ -34,7 +36,54 @@ async function fetchText(
   }
 }
 
-export async function checkReachability(): Promise<CheckCard> {
+/** Prefer mixed-port via Rust; fall back to browser fetch if mixedPort missing or proxy fetch fails. */
+async function probeText(
+  url: string,
+  opts: {
+    mixedPort?: number | null;
+    timeoutMs?: number;
+    userAgent?: string;
+    method?: string;
+  } = {},
+): Promise<{ ok: boolean; status: number; text: string }> {
+  const timeoutMs = opts.timeoutMs ?? PROBE_TIMEOUT_MS;
+  const mixedPort = opts.mixedPort ?? null;
+
+  if (mixedPort != null && mixedPort > 0) {
+    const viaProxy = await fetchTextViaProxy(url, {
+      mixedPort,
+      timeoutMs,
+      userAgent: opts.userAgent,
+    });
+    const success =
+      viaProxy.status === 204 ||
+      viaProxy.status === 200 ||
+      (viaProxy.status >= 200 && viaProxy.status < 400) ||
+      viaProxy.ok;
+    if (success || viaProxy.status !== 0) {
+      return {
+        ok: success,
+        status: viaProxy.status,
+        text: viaProxy.text,
+      };
+    }
+  }
+
+  // Secondary: browser fetch (may not follow system proxy in Tauri WebView)
+  return fetchTextBrowser(url, {
+    method: opts.method ?? "GET",
+    timeoutMs,
+    headers: opts.userAgent ? { "User-Agent": opts.userAgent } : undefined,
+  });
+}
+
+function isReachableStatus(status: number, ok: boolean): boolean {
+  return status === 204 || status === 200 || (ok && status >= 200 && status < 400);
+}
+
+export async function checkReachability(
+  mixedPort?: number | null,
+): Promise<CheckCard> {
   const targets = [
     "https://www.google.com/generate_204",
     "https://cp.cloudflare.com/generate_204",
@@ -42,11 +91,15 @@ export async function checkReachability(): Promise<CheckCard> {
   const results = await Promise.all(
     targets.map(async (url) => {
       const t0 = performance.now();
-      const r = await fetchText(url, { method: "GET", timeoutMs: 4000 });
+      const r = await probeText(url, {
+        mixedPort,
+        timeoutMs: PROBE_TIMEOUT_MS,
+        method: "GET",
+      });
       return { url, ...r, ms: Math.round(performance.now() - t0) };
     }),
   );
-  const ok = results.filter((r) => r.status === 204 || r.status === 200 || r.ok);
+  const ok = results.filter((r) => isReachableStatus(r.status, r.ok));
   if (ok.length === 0) {
     return {
       id: "reachability",
@@ -54,7 +107,7 @@ export async function checkReachability(): Promise<CheckCard> {
       level: "fail",
       summary: "无法访问境外 HTTPS 探测点",
       detail: results.map((r) => `${r.url} → HTTP ${r.status || "超时"}`).join("\n"),
-      tip: "请确认 Clash Verge Rev 已连接，且系统代理 / TUN 已开启。",
+      tip: "请确认 Clash Verge Rev 已连接，且系统代理 / TUN 已开启；并检查设置中的 mixed-port。",
     };
   }
   const level: CheckLevel = ok.length === results.length ? "pass" : "warn";
@@ -160,10 +213,14 @@ export function exitIpCard(info: ExitIpInfo): CheckCard {
  * compare exit country vs public resolver hint pages is limited in browser;
  * we report exit geo + note that WebRTC local IP leak is v1 partial.
  */
-export async function checkDnsLeakApproach(exit: ExitIpInfo): Promise<CheckCard> {
-  // Try Cloudflare trace for colo / loc as a resolver-path hint through current egress
-  const cf = await fetchText("https://www.cloudflare.com/cdn-cgi/trace", {
-    timeoutMs: 4000,
+export async function checkDnsLeakApproach(
+  exit: ExitIpInfo,
+  mixedPort?: number | null,
+): Promise<CheckCard> {
+  // Cloudflare trace through current egress (prefer mixed-port)
+  const cf = await probeText("https://www.cloudflare.com/cdn-cgi/trace", {
+    mixedPort,
+    timeoutMs: PROBE_TIMEOUT_MS,
   });
   let loc: string | null = null;
   let colo: string | null = null;
@@ -382,12 +439,18 @@ function unlockCard(
   };
 }
 
-export async function sampleLatency(): Promise<{ ms: number | null; card: CheckCard }> {
+export async function sampleLatency(
+  mixedPort?: number | null,
+): Promise<{ ms: number | null; card: CheckCard }> {
   const url = "https://www.gstatic.com/generate_204";
   const t0 = performance.now();
-  const r = await fetchText(url, { timeoutMs: 4000 });
-  const ms = r.status ? Math.round(performance.now() - t0) : null;
-  if (ms == null) {
+  const r = await probeText(url, {
+    mixedPort,
+    timeoutMs: PROBE_TIMEOUT_MS,
+  });
+  const reachable = isReachableStatus(r.status, r.ok);
+  const ms = reachable || r.status ? Math.round(performance.now() - t0) : null;
+  if (ms == null || !reachable) {
     return {
       ms: null,
       card: {
@@ -395,6 +458,8 @@ export async function sampleLatency(): Promise<{ ms: number | null; card: CheckC
         title: "延迟采样",
         level: "fail",
         summary: "采样失败",
+        detail: `目标: ${url} → HTTP ${r.status || "超时"}`,
+        tip: "请确认 mixed-port 与系统代理 / TUN 可用。",
       },
     };
   }
@@ -417,23 +482,25 @@ export async function runEgressDiagnostics(
 ): Promise<EgressReport> {
   const mixedPort = options?.mixedPort ?? null;
   const note =
-    "检测优先走系统出站；在 Tauri 下部分探针可通过 Rust + mixed-port 发出。请确保 Clash Verge Rev 的系统代理或 TUN 已开启。";
+    mixedPort != null && mixedPort > 0
+      ? `检测优先经 mixed-port（${mixedPort}）发出；请确保 Clash Verge Rev 已连接。`
+      : "未配置 mixed-port 时部分探针走浏览器出站；建议在设置中填写 mixed-port，并开启系统代理或 TUN。";
 
   const push = (c: CheckCard) => {
     onCard?.(c);
     return c;
   };
 
-  const reach = push(await checkReachability());
+  const reach = push(await checkReachability(mixedPort));
   const exit = await fetchExitIp(mixedPort);
   const exitCard = push(exitIpCard(exit));
-  const dns = push(await checkDnsLeakApproach(exit));
+  const dns = push(await checkDnsLeakApproach(exit, mixedPort));
   const rtc = push(webrtcCard());
   const gemini = await probeGeminiUnlock(mixedPort);
   const gemCard = push(unlockCard("gemini", "Gemini 解锁", gemini));
   const chatgpt = await probeChatgptUnlock(mixedPort);
   const gptCard = push(unlockCard("chatgpt", "ChatGPT 解锁", chatgpt));
-  const { ms, card: latCard } = await sampleLatency();
+  const { ms, card: latCard } = await sampleLatency(mixedPort);
   push(latCard);
 
   return {
