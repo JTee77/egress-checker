@@ -201,7 +201,7 @@ export function exitIpCard(info: ExitIpInfo): CheckCard {
     title: "出口 IP",
     level,
     summary: `${info.ip} · ${info.countryCode ?? "?"} · ${info.ipTypeLabel}`,
-    detail: `组织: ${info.org ?? "--"}\nISP: ${info.isp ?? "--"}\n国家: ${info.country ?? "--"}`,
+    detail: `组织 ${info.org ?? "--"} · ISP ${info.isp ?? "--"} · 国家 ${info.country ?? "--"}`,
     tip: info.hosting
       ? "机房 IP 可能导致部分 AI / 流媒体风控；可尝试住宅/家宽节点。"
       : undefined,
@@ -243,7 +243,7 @@ export async function checkDnsLeakApproach(
       detail:
         "本项不是 BrowserLeaks 那种「完整解析器列表」检测，只是对照出口国家与 Cloudflare 路径提示。\n真·系统 DNS 解析器列表会放到后续版本。\n\n" +
         webrtcNote,
-      tip: "若你在意 DNS 是否仍走运营商，可暂时把 Wi-Fi DNS 设为 1.1.1.1 / 8.8.8.8，并确认流量走隧道（需你在系统设置里改）。",
+      tip: "若在意运营商 DNS：可暂把 Wi-Fi DNS 设为 1.1.1.1 / 8.8.8.8，并确认流量走隧道。",
     };
   }
 
@@ -258,7 +258,7 @@ export async function checkDnsLeakApproach(
     summary: mismatch
       ? `粗看不太一致：出口 ${exitCc}，Cloudflare 提示 ${loc}`
       : `粗看大致一致：出口 ${exitCc ?? "?"}，Cloudflare 提示 ${loc ?? "?"}`,
-    detail: `测了什么：经当前出口访问 Cloudflare trace（loc / colo）。\n没测什么：系统真实 DNS 服务器列表、完整泄漏证明（后续版本）。\n\n出口 IP 国家: ${exitCc ?? "--"}\nCloudflare loc: ${loc ?? "--"}\ncolo: ${colo ?? "--"}\n\n${webrtcNote}`,
+    detail: `测了什么：Cloudflare trace（loc/colo）。没测：系统 DNS 列表、完整泄漏证明。\n出口国家 ${exitCc ?? "--"} · loc ${loc ?? "--"} · colo ${colo ?? "--"}\n${webrtcNote}`,
     tip: "换节点时用来快速对照「路子像不像」；不要把它当成专业 DNS 泄漏报告。",
   };
 }
@@ -270,8 +270,8 @@ export function webrtcCard(): CheckCard {
     level: "warn",
     summary: "浏览器环境限制 — v1 占位",
     detail:
-      "Tauri / 嵌入式 WebView 对 RTCPeerConnection 与本地 ICE 候选收集存在浏览器环境限制，完整 WebRTC 泄露扫描将在后续版本加强。本卡片保留架构位，请勿将「未知」误读为「无泄露」。",
-    tip: "临时建议：在客户端或系统侧禁用 WebRTC，或仅允许代理路径。可在浏览器 chrome://webrtc-internals 复核。",
+      "嵌入式 WebView 限制 RTCPeerConnection / ICE 候选收集；完整泄露扫描后续加强。勿把「未知」当成「无泄露」。",
+    tip: "可临时禁用 WebRTC 或仅走代理；浏览器可到 chrome://webrtc-internals 复核。",
   };
 }
 
@@ -519,20 +519,16 @@ function unlockCard(
     level = "unknown";
   }
 
-  const lines = (result.lines ?? []).join("\n");
-  const probed = (result.probed ?? [])
-    .map((s) => `· ${s}`)
-    .join("\n");
-  const notProbed = (result.notProbed ?? [])
-    .map((s) => `· ${s}`)
-    .join("\n");
+  const lines = (result.lines ?? []).join("；");
+  const probed = (result.probed ?? []).join("；");
+  const notProbed = (result.notProbed ?? []).join("；");
 
   const detailParts = [
-    lines ? `结果对照：\n${lines}` : "",
-    probed ? `测了什么：\n${probed}` : "",
-    notProbed ? `没测什么：\n${notProbed}` : "",
+    lines ? `结果对照：${lines}` : "",
+    probed ? `测了什么：${probed}` : "",
+    notProbed ? `没测什么：${notProbed}` : "",
     result.region ? `出口提示地区：${result.region}` : "",
-    "这些检查方便你换节点时一次对照，不能替代你自己打开网站或 App 实际试一下。",
+    "换节点时一次对照用，不能替代你自己打开网站或 App。",
   ].filter(Boolean);
 
   return {
@@ -540,8 +536,8 @@ function unlockCard(
     title,
     level,
     summary: result.status,
-    detail: detailParts.join("\n\n"),
-    tip: "如果你主要用 Mac 桌面版，本卡桌面项会写「未单独检测」——以你打开官方客户端的实际体验为准。",
+    detail: detailParts.join("\n"),
+    tip: "主要用 Mac 桌面版时，桌面项会写「未单独检测」——以官方客户端实际体验为准。",
   };
 }
 
