@@ -1,5 +1,7 @@
+mod dns;
 mod mihomo;
 
+use dns::DnsResolversResult;
 use mihomo::{
     discover_controller, http_via_tcp_async, http_via_unix, list_nodes_async, proxy_fetch_async,
     DiscoverResult, ListNodesResult, UnixHttpResult,
@@ -157,6 +159,17 @@ async fn egress_proxy_fetch(req: ProxyFetchRequest) -> Result<UnixHttpResult, St
     .await
 }
 
+
+#[tauri::command]
+async fn egress_list_dns_resolvers() -> Result<DnsResolversResult, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        catch_disk(|| Ok(dns::list_dns_resolvers_blocking()))
+    })
+    .await
+    .map_err(join_err)?
+}
+
+
 /// Append a line to ~/Library/Logs/EgressChecker/app.log (macOS). Best-effort.
 fn append_app_log(msg: &str) {
     use std::io::Write;
@@ -306,7 +319,8 @@ pub fn run() {
             mihomo_http,
             mihomo_list_nodes,
             mihomo_unix_http,
-            egress_proxy_fetch
+            egress_proxy_fetch,
+            egress_list_dns_resolvers
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

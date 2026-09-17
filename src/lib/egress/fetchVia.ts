@@ -47,3 +47,42 @@ export async function fetchTextViaProxy(
     clearTimeout(timer);
   }
 }
+
+export type DnsResolversPayload = {
+  resolvers: string[];
+  source: string;
+  rawHint?: string;
+  error?: string;
+};
+
+/** macOS: invoke Rust `scutil --dns` listing. Non-Tauri → empty + error. */
+export async function listDnsResolvers(): Promise<DnsResolversPayload> {
+  if (!isTauri()) {
+    return {
+      resolvers: [],
+      source: "browser",
+      error: "非 Tauri 环境，无法读取系统 DNS（需 macOS 上的 scutil）。",
+    };
+  }
+  try {
+    const res = await invoke<{
+      resolvers: string[];
+      source: string;
+      rawHint?: string;
+      error?: string;
+    }>("egress_list_dns_resolvers");
+    return {
+      resolvers: res.resolvers ?? [],
+      source: res.source ?? "scutil",
+      rawHint: res.rawHint,
+      error: res.error,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return {
+      resolvers: [],
+      source: "invoke-error",
+      error: `调用 egress_list_dns_resolvers 失败: ${msg}`,
+    };
+  }
+}

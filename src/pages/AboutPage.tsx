@@ -4,7 +4,7 @@ export function AboutPage() {
       <div className="page-header">
         <div>
           <h1>关于</h1>
-          <p>Egress Checker v0.1.0</p>
+          <p>Egress Checker v0.2.0</p>
         </div>
       </div>
 
@@ -26,6 +26,12 @@ export function AboutPage() {
       <h2>流量提示</h2>
       <p className="muted">
         「快速延迟」几乎不消耗流量。未来的深度 / 优选测速会下载测速文件并切换节点，请注意流量与费用。
+      </p>
+
+      
+      <h2>v0.2 说明</h2>
+      <p className="muted">
+        v0.2 起开始做更贴近真实环境的 DNS（macOS scutil 解析器列表）、IPv6 直连/代理对照、以及 WebView 内 WebRTC STUN 候选收集。仍有 WebView / 超时边界，结果用于换节点对照，不是完整泄漏鉴定报告。
       </p>
 
       <h2>许可证</h2>

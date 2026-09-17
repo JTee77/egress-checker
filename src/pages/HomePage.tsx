@@ -5,7 +5,8 @@ import type { ConnectionState } from "../lib/mihomo";
 
 const PLACEHOLDERS: CheckCard[] = [
   { id: "reachability", title: "连通性", level: "unknown", summary: "尚未检测" },
-  { id: "dns-leak", title: "DNS 粗检（启发式）", level: "unknown", summary: "尚未检测" },
+  { id: "dns-leak", title: "DNS 解析器", level: "unknown", summary: "尚未检测" },
+  { id: "ipv6-leak", title: "IPv6 泄漏", level: "unknown", summary: "尚未检测" },
   { id: "webrtc", title: "WebRTC", level: "unknown", summary: "尚未检测" },
   { id: "exit-ip", title: "出口 IP", level: "unknown", summary: "尚未检测" },
   { id: "gemini", title: "Gemini（换节点对照）", level: "unknown", summary: "尚未检测" },
