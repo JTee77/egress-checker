@@ -68,6 +68,14 @@ export function AboutPage() {
           <strong>裸奔粗检</strong>：境外探测「mixed-port vs 真直连」；代理失败且直连仍通 → 可能裸奔。
           不测：TUN 内核状态、系统代理开关、各 App 是否各自走代理。
         </li>
+        <li>
+          <strong>流媒体抽检</strong>：Netflix 标题页 / Disney+ 首页 / YouTube Premium 页经 mixed-port 的粗可达与地区线索。
+          不测：会员权益、片库、画质、账号可用性；未覆盖全部平台。
+        </li>
+        <li>
+          <strong>商店抽检</strong>：Apple App Store / Google Play 网页店面粗可达与地区路径线索。
+          不测：下载、支付、上架审核。
+        </li>
       </ul>
 
       <h2>流量提示</h2>
