@@ -1,0 +1,28 @@
+[package]
+name = "egress-checker"
+version = "0.1.0"
+description = "Egress Checker — macOS Apple Silicon proxy egress diagnostics"
+authors = ["JTee77"]
+edition = "2021"
+
+[lib]
+name = "egress_checker_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+dirs = "6"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

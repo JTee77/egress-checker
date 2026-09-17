@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/tauri.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Egress Checker</title>
+    <style>
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        background: #0f1419;
+        color: #e7ecf3;
+      }
+      #boot-error {
+        display: none;
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+        max-width: 520px;
+        margin: 64px auto;
+        padding: 24px;
+        line-height: 1.6;
+        color: #e7ecf3;
+        background: #0f1419;
+      }
+      #boot-error h1 { font-size: 20px; color: #ffb454; margin: 0 0 12px; }
+      #boot-error code { background: #1c2430; padding: 2px 6px; border-radius: 4px; }
+      #boot-error pre {
+        white-space: pre-wrap;
+        font-size: 12px;
+        opacity: 0.75;
+        margin-top: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="boot-error" aria-live="polite">
+      <h1>页面没有正常加载</h1>
+      <p>如果一直是白屏或空白，多半是 Vite 前端没起来，或已经退出。</p>
+      <p>请不要直接运行 <code>target/debug/egress-checker</code>（会留下无前端的空壳）。</p>
+      <p>正确做法：关掉所有本应用窗口后，只开一个终端运行 <code>pnpm tauri dev</code>。</p>
+      <p>若标题变成「Vite 已退出」，请关窗后重新执行上述命令。</p>
+    </div>
+    <script>
+      setTimeout(function () {
+        var root = document.getElementById("root");
+        var err = document.getElementById("boot-error");
+        if (root && err && root.childNodes.length === 0) {
+          err.style.display = "block";
+        }
+      }, 1500);
+    </script>
+    <script type="module">
+      import("/src/main.tsx").catch(function (err) {
+        var errEl = document.getElementById("boot-error");
+        if (!errEl) return;
+        errEl.style.display = "block";
+        var detail = document.createElement("pre");
+        detail.textContent =
+          "模块加载失败：" +
+          (err && err.message ? err.message : String(err));
+        errEl.appendChild(detail);
+      });
+    </script>
+  </body>
+</html>
