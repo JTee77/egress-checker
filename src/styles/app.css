@@ -252,7 +252,7 @@ select {
   padding-bottom: 8px;
 }
 
-/* 首页：4 列 → 两行装下 8 卡全文 */
+/* 首页：4 列密集布局 → 约三行装下 9 卡全文（详情可见） */
 .card-grid-home {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;

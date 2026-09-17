@@ -12,6 +12,7 @@ const PLACEHOLDERS: CheckCard[] = [
   { id: "gemini", title: "Gemini（换节点对照）", level: "unknown", summary: "尚未检测" },
   { id: "chatgpt", title: "ChatGPT（换节点对照）", level: "unknown", summary: "尚未检测" },
   { id: "latency", title: "延迟采样", level: "unknown", summary: "尚未检测" },
+  { id: "bandwidth", title: "抽样带宽", level: "unknown", summary: "尚未检测" },
 ];
 
 export function HomePage({

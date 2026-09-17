@@ -417,6 +417,134 @@ pub async fn proxy_fetch_async(
     Ok(UnixHttpResult { status, body })
 }
 
+/// Timed GET/POST via optional mixed-port; counts bytes and drops the body (for bandwidth samples).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimedTransferResult {
+    pub ok: bool,
+    pub status: u16,
+    pub bytes: u64,
+    pub elapsed_ms: u64,
+    pub error: Option<String>,
+}
+
+const MAX_TIMED_BODY_BYTES: usize = 8 * 1024 * 1024;
+
+pub async fn proxy_timed_transfer_async(
+    url: &str,
+    mixed_port: Option<u16>,
+    method: &str,
+    upload_bytes: Option<u64>,
+    timeout_ms: u64,
+) -> Result<TimedTransferResult, String> {
+    use std::time::Instant;
+
+    let mut builder = reqwest::Client::builder()
+        .timeout(Duration::from_millis(timeout_ms))
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .danger_accept_invalid_certs(false);
+
+    if let Some(port) = mixed_port {
+        let proxy_url = format!("http://127.0.0.1:{port}");
+        let proxy = reqwest::Proxy::all(&proxy_url).map_err(|e| format!("proxy: {e}"))?;
+        builder = builder.proxy(proxy);
+    } else {
+        builder = builder.no_proxy();
+    }
+
+    let client = builder.build().map_err(|e| format!("client: {e}"))?;
+    let method_u = method.to_uppercase();
+    let upload_len = upload_bytes.unwrap_or(0).min(MAX_TIMED_BODY_BYTES as u64) as usize;
+
+    let t0 = Instant::now();
+    let send_result = match method_u.as_str() {
+        "POST" => {
+            let body = vec![0u8; upload_len];
+            client
+                .post(url)
+                .header("Content-Type", "application/octet-stream")
+                .body(body)
+                .send()
+                .await
+        }
+        "GET" | "" => client.get(url).send().await,
+        other => {
+            return Ok(TimedTransferResult {
+                ok: false,
+                status: 0,
+                bytes: 0,
+                elapsed_ms: 0,
+                error: Some(format!("unsupported method: {other}")),
+            });
+        }
+    };
+
+    let res = match send_result {
+        Ok(r) => r,
+        Err(e) => {
+            let elapsed_ms = t0.elapsed().as_millis() as u64;
+            return Ok(TimedTransferResult {
+                ok: false,
+                status: 0,
+                bytes: 0,
+                elapsed_ms,
+                error: Some(format!("request: {e}")),
+            });
+        }
+    };
+
+    let status = res.status().as_u16();
+    let bytes_result = res.bytes().await;
+    let elapsed_ms = t0.elapsed().as_millis() as u64;
+
+    match bytes_result {
+        Ok(bytes) => {
+            if bytes.len() > MAX_TIMED_BODY_BYTES {
+                return Ok(TimedTransferResult {
+                    ok: false,
+                    status,
+                    bytes: bytes.len() as u64,
+                    elapsed_ms,
+                    error: Some(format!(
+                        "response too large ({} > {} max)",
+                        bytes.len(),
+                        MAX_TIMED_BODY_BYTES
+                    )),
+                });
+            }
+            let n = if method_u == "POST" {
+                // Upload sample: count what we sent (response may be tiny / empty).
+                upload_len as u64
+            } else {
+                bytes.len() as u64
+            };
+            let ok = (200..400).contains(&status) && (method_u != "GET" || n > 0);
+            Ok(TimedTransferResult {
+                ok,
+                status,
+                bytes: n,
+                elapsed_ms,
+                error: if ok {
+                    None
+                } else {
+                    Some(format!("HTTP {status}"))
+                },
+            })
+        }
+        Err(e) => Ok(TimedTransferResult {
+            ok: false,
+            status,
+            bytes: if method_u == "POST" {
+                upload_len as u64
+            } else {
+                0
+            },
+            elapsed_ms,
+            error: Some(format!("read body: {e}")),
+        }),
+    }
+}
+
 fn is_junk_name(name: &str) -> bool {
     if name.starts_with("PASS") || name.starts_with("REJECT") {
         return true;
@@ -680,6 +808,22 @@ mod tests {
         assert!(result.is_ok(), "proxy_fetch_async panicked");
         let inner = result.unwrap();
         assert!(inner.is_err(), "expected Err via dead proxy, got {inner:?}");
+    }
+
+    #[test]
+    fn smoke_proxy_timed_transfer_dead_proxy_no_panic() {
+        let result = std::panic::catch_unwind(|| {
+            tauri::async_runtime::block_on(proxy_timed_transfer_async(
+                "https://speed.cloudflare.com/__down?bytes=1024",
+                Some(1),
+                "GET",
+                None,
+                800,
+            ))
+        });
+        assert!(result.is_ok(), "proxy_timed_transfer_async panicked");
+        let inner = result.unwrap().expect("Result::Ok");
+        assert!(!inner.ok, "dead proxy should not report ok: {inner:?}");
     }
 
     #[test]

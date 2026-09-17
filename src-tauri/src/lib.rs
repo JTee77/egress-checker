@@ -4,7 +4,8 @@ mod mihomo;
 use dns::DnsResolversResult;
 use mihomo::{
     discover_controller, http_via_tcp_async, http_via_unix, list_nodes_async, proxy_fetch_async,
-    DiscoverResult, ListNodesResult, UnixHttpResult,
+    proxy_timed_transfer_async, DiscoverResult, ListNodesResult, TimedTransferResult,
+    UnixHttpResult,
 };
 use serde::{Deserialize, Serialize};
 
@@ -159,6 +160,29 @@ async fn egress_proxy_fetch(req: ProxyFetchRequest) -> Result<UnixHttpResult, St
     .await
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TimedTransferRequest {
+    url: String,
+    mixed_port: Option<u16>,
+    method: Option<String>,
+    upload_bytes: Option<u64>,
+    timeout_ms: Option<u64>,
+}
+
+#[tauri::command]
+async fn egress_proxy_timed_transfer(
+    req: TimedTransferRequest,
+) -> Result<TimedTransferResult, String> {
+    proxy_timed_transfer_async(
+        &req.url,
+        req.mixed_port,
+        req.method.as_deref().unwrap_or("GET"),
+        req.upload_bytes,
+        req.timeout_ms.unwrap_or(12000),
+    )
+    .await
+}
 
 #[tauri::command]
 async fn egress_list_dns_resolvers() -> Result<DnsResolversResult, String> {
@@ -320,6 +344,7 @@ pub fn run() {
             mihomo_list_nodes,
             mihomo_unix_http,
             egress_proxy_fetch,
+            egress_proxy_timed_transfer,
             egress_list_dns_resolvers
         ])
         .run(tauri::generate_context!())

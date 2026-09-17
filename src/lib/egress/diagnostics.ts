@@ -11,7 +11,7 @@ import type {
   ExitIpInfo,
   UnlockResult,
 } from "./types";
-import { fetchTextViaProxy, listDnsResolvers } from "./fetchVia";
+import { fetchTextViaProxy, listDnsResolvers, timedTransferViaProxy } from "./fetchVia";
 
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
@@ -935,6 +935,97 @@ export async function sampleLatency(
   };
 }
 
+/** A4: sample up/down Mbps through current egress (mixed-port preferred). */
+const BW_DOWN_URL = "https://speed.cloudflare.com/__down?bytes=1048576";
+const BW_DOWN_EXPECT = 1048576;
+const BW_UP_URL = "https://speed.cloudflare.com/__up";
+const BW_UP_BYTES = 512 * 1024;
+const BW_TIMEOUT_MS = 12000;
+
+function bytesToMbps(bytes: number, elapsedMs: number): number | null {
+  if (bytes <= 0 || elapsedMs <= 0) return null;
+  return (bytes * 8) / (elapsedMs / 1000) / 1_000_000;
+}
+
+function fmtMbps(v: number | null): string {
+  if (v == null || !Number.isFinite(v)) return "--";
+  if (v >= 100) return v.toFixed(0);
+  if (v >= 10) return v.toFixed(1);
+  return v.toFixed(2);
+}
+
+export async function sampleBandwidth(
+  mixedPort?: number | null,
+): Promise<CheckCard> {
+  const down = await timedTransferViaProxy({
+    url: BW_DOWN_URL,
+    mixedPort: mixedPort ?? null,
+    method: "GET",
+    timeoutMs: BW_TIMEOUT_MS,
+  });
+  const up = await timedTransferViaProxy({
+    url: BW_UP_URL,
+    mixedPort: mixedPort ?? null,
+    method: "POST",
+    uploadBytes: BW_UP_BYTES,
+    timeoutMs: BW_TIMEOUT_MS,
+  });
+
+  const downMbps = down.ok ? bytesToMbps(down.bytes, down.elapsedMs) : null;
+  const upMbps = up.ok ? bytesToMbps(up.bytes, up.elapsedMs) : null;
+
+  const downErr =
+    down.error ||
+    (!down.ok ? (down.status ? `HTTP ${down.status}` : "超时或不可达") : null);
+  const upErr =
+    up.error ||
+    (!up.ok ? (up.status ? `HTTP ${up.status}` : "超时或不可达") : null);
+
+  const summaryParts: string[] = [];
+  if (downMbps != null) summaryParts.push(`↓ ${fmtMbps(downMbps)} Mbps`);
+  else summaryParts.push(`↓ 失败`);
+  if (upMbps != null) summaryParts.push(`↑ ${fmtMbps(upMbps)} Mbps`);
+  else summaryParts.push(`↑ 失败`);
+
+  let level: CheckLevel;
+  if (downMbps != null && upMbps != null) level = "pass";
+  else if (downMbps != null || upMbps != null) level = "warn";
+  else level = "fail";
+
+  const portNote =
+    mixedPort != null && mixedPort > 0
+      ? `经 mixed-port(${mixedPort})`
+      : "未配置 mixed-port（可能走直连）";
+
+  const detail = [
+    `下载：GET ${BW_DOWN_URL}`,
+    `  期望约 ${BW_DOWN_EXPECT} B · 实际 ${down.bytes} B · ${down.elapsedMs} ms · via ${down.via}` +
+      (downMbps != null ? ` · ${fmtMbps(downMbps)} Mbps` : "") +
+      (downErr ? ` · ${downErr}` : ""),
+    `上传：POST ${BW_UP_URL}（Content-Type: application/octet-stream，${BW_UP_BYTES} B 零填充）`,
+    `  发送 ${up.bytes} B · ${up.elapsedMs} ms · via ${up.via}` +
+      (upMbps != null ? ` · ${fmtMbps(upMbps)} Mbps` : "") +
+      (upErr ? ` · ${upErr}` : ""),
+    `路径：${portNote}；超时 ${BW_TIMEOUT_MS} ms。`,
+    "说明：抽样带宽 ≠ 全网测速 / 不等于节点面板延迟。",
+    "端点：Cloudflare Speed（__down / __up）。未用 httpbin（会回显 body，干扰上行计量）。",
+  ].join("\n");
+
+  const summary =
+    level === "fail"
+      ? `抽样失败（↓ ${downErr ?? "失败"} · ↑ ${upErr ?? "失败"}）`
+      : summaryParts.join(" · ");
+
+  return {
+    id: "bandwidth",
+    title: "抽样带宽",
+    level,
+    summary,
+    detail,
+    tip: "结果随节点与负载波动较大，仅适合换节点时粗对比；勿当作全网测速或面板延迟。",
+  };
+}
+
 export async function runEgressDiagnostics(
   onCard?: (card: CheckCard) => void,
   options?: { mixedPort?: number | null },
@@ -962,10 +1053,11 @@ export async function runEgressDiagnostics(
   const gptCard = push(unlockCard("chatgpt", "ChatGPT（换节点对照）", chatgpt));
   const { ms, card: latCard } = await sampleLatency(mixedPort);
   push(latCard);
+  const bwCard = push(await sampleBandwidth(mixedPort));
 
   return {
     ranAt: new Date().toISOString(),
-    cards: [reach, dns, ipv6, rtc, exitCard, gemCard, gptCard, latCard],
+    cards: [reach, dns, ipv6, rtc, exitCard, gemCard, gptCard, latCard, bwCard],
     exitIp: exit,
     gemini,
     chatgpt,
