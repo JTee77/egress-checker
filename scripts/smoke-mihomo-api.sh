@@ -73,7 +73,7 @@ if [[ "$HTTP_CODE" != "200" ]]; then
   fail "expected HTTP 200 from /proxies via unix, got $HTTP_CODE"
 fi
 
-python3 - "$OUT" <<'PY' || fail "proxies JSON invalid or empty"
+python3 - "$OUT" <<PY || fail "proxies JSON invalid / demo-like / no leaves"
 import json, sys
 path = sys.argv[1]
 with open(path, encoding="utf-8") as f:
@@ -82,8 +82,38 @@ prox = d.get("proxies")
 if not isinstance(prox, dict) or len(prox) == 0:
     print("FAIL: proxies object empty or missing", file=sys.stderr)
     sys.exit(1)
-print(f"proxy_keys={len(prox)} sample={list(prox)[:8]}")
+DEMO = {
+    "🇭🇰 香港 01 | Hysteria2",
+    "🇯🇵 东京 Premium",
+    "🇸🇬 Singapore IEPL",
+    "🇺🇸 洛杉矶 家宽",
+    "🇹🇼 台北 游戏专线",
+    "🇩🇪 Frankfurt",
+}
+IGNORE = {"Selector", "URLTest", "Fallback", "Direct", "Reject", "Compatible", "Pass", "LoadBalance", "Relay"}
+JUNK = ("剩余", "到期", "官网")
+hits = [n for n in prox if n in DEMO]
+if hits:
+    print(f"FAIL: demo mock names present: {hits}", file=sys.stderr)
+    sys.exit(1)
+leaves = []
+for name, p in prox.items():
+    if not isinstance(p, dict):
+        continue
+    t = p.get("type") or ""
+    if t in IGNORE:
+        continue
+    if name.startswith("PASS") or name.startswith("REJECT"):
+        continue
+    if any(k in name for k in JUNK):
+        continue
+    leaves.append(name)
+if len(leaves) < 1:
+    print("FAIL: leaf node count is 0 after filter", file=sys.stderr)
+    sys.exit(1)
+print(f"proxy_keys={len(prox)} leaf_nodes={len(leaves)} sample_leaves={leaves[:8]}")
 PY
 
-pass "unix /proxies HTTP 200 with non-empty proxies"
+pass "unix /proxies HTTP 200; leaf_nodes>0; no demo mock names"
+
 exit 0

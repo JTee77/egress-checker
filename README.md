@@ -97,7 +97,7 @@ bash scripts/smoke-mac.sh
 # 或：pnpm smoke:mac
 ```
 
-脚本会：清理本应用相关进程 → `cargo test smoke_` → `smoke-mihomo-api.sh`（sock 可用则 curl Unix `/proxies`）→ 后台 `pnpm tauri dev` → 等 `localhost:1420` → 确认 `egress-checker` 进程存活 ≥30s。
+脚本会：清理本应用相关进程 → `cargo test smoke_` → `smoke-mihomo-api.sh`（sock 可用则 curl Unix `/proxies`）→ 后台 `pnpm tauri dev` → 等 `127.0.0.1:1420` → 确认 `egress-checker` 进程存活 ≥30s。
 
 手动抽查节点（无需 GUI 点击）：
 

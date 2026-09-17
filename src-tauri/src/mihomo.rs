@@ -650,4 +650,76 @@ mod tests {
             "expected Err when TCP dead and sock missing, got {inner:?}"
         );
     }
+
+    /// TCP dead + live Unix sock → leaf nodes > 0, transport unix, no app demo names.
+    #[test]
+    fn smoke_list_nodes_dead_tcp_live_sock_real_leaves() {
+        use std::io::{Read, Write};
+        use std::os::unix::net::UnixListener;
+        use std::sync::mpsc;
+        use std::thread;
+        use std::time::Duration;
+
+        let sock = format!(
+            "/tmp/egress-checker-list-nodes-smoke-{}.sock",
+            std::process::id()
+        );
+        let _ = std::fs::remove_file(&sock);
+
+        let body = concat!(
+            r#"{"proxies":{"Proxy":{"type":"Selector","now":"香港 HK-2-AT","all":["香港 HK-2-AT","日本 TY-4-HY2"]},"GLOBAL":{"type":"Selector","now":"香港 HK-2-AT","all":["香港 HK-2-AT","日本 TY-4-HY2"]},"香港 HK-2-AT":{"type":"Hysteria2","history":[{"time":"t","delay":40}]},"日本 TY-4-HY2":{"type":"Hysteria2","history":[{"time":"t","delay":55}]},"DIRECT":{"type":"Direct"}}}"#
+        );
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+
+        let listener = UnixListener::bind(&sock).expect("bind unix smoke sock");
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let sock_path = sock.clone();
+        let server = thread::spawn(move || {
+            ready_tx.send(()).ok();
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf);
+                let _ = stream.write_all(resp.as_bytes());
+            }
+            let _ = std::fs::remove_file(&sock_path);
+        });
+        ready_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("server ready");
+
+        let result = std::panic::catch_unwind(|| {
+            tauri::async_runtime::block_on(list_nodes_async(
+                "127.0.0.1",
+                1,
+                "test-secret",
+                2000,
+                Some(&sock),
+            ))
+        });
+        let _ = server.join();
+        let _ = std::fs::remove_file(&sock);
+
+        assert!(result.is_ok(), "list_nodes_async panicked");
+        let inner = result.unwrap().expect("list_nodes should Ok via unix");
+        assert_eq!(inner.transport.as_deref(), Some("unix"));
+        assert!(
+            inner.nodes.len() >= 2,
+            "expected real leaves via unix, got {:?}",
+            inner.nodes
+        );
+        let names: Vec<_> = inner.nodes.iter().map(|n| n.name.as_str()).collect();
+        assert!(names.contains(&"香港 HK-2-AT"));
+        assert!(names.contains(&"日本 TY-4-HY2"));
+        assert!(
+            !names.iter().any(|n| n.contains("香港 01 | Hysteria2")
+                || n.contains("东京 Premium")
+                || n.contains("Singapore IEPL")),
+            "demo mock names must not appear: {names:?}"
+        );
+        assert!(!inner.unauthorized);
+    }
 }
