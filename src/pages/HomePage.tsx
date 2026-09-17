@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { CheckCardView } from "../components/CheckCardView";
 import { runEgressDiagnostics, type CheckCard, type EgressReport } from "../lib/egress";
-import type { ConnectionState } from "../lib/mihomo";
+import {
+  CLIENT_OPTIONS,
+  type ClientId,
+  type ConnectionState,
+} from "../lib/mihomo";
 
 const PLACEHOLDERS: CheckCard[] = [
   { id: "reachability", title: "连通性", level: "unknown", summary: "尚未检测" },
@@ -20,15 +24,31 @@ const PLACEHOLDERS: CheckCard[] = [
 export function HomePage({
   connection,
   busy,
+  clientId,
+  onClientIdChange,
   onRefresh,
+  onNavigateToSettings,
 }: {
   connection: ConnectionState;
   busy?: boolean;
+  clientId: ClientId | null;
+  onClientIdChange: (id: ClientId) => void;
   onRefresh?: () => Promise<unknown> | void;
+  onNavigateToSettings?: () => void;
 }) {
   const [cards, setCards] = useState<CheckCard[]>(PLACEHOLDERS);
   const [report, setReport] = useState<EgressReport | null>(null);
   const [running, setRunning] = useState(false);
+
+  const clientUnset = !clientId;
+
+  const onSelectClient = (raw: string) => {
+    if (raw !== "verge" && raw !== "mihomo" && raw !== "manual") return;
+    onClientIdChange(raw);
+    if (raw === "manual") {
+      onNavigateToSettings?.();
+    }
+  };
 
   const run = async () => {
     setRunning(true);
@@ -95,6 +115,32 @@ export function HomePage({
 
   return (
     <div className="home-page">
+      <div className="client-picker">
+        <label className="client-picker-label" htmlFor="home-client-select">
+          客户端
+        </label>
+        <select
+          id="home-client-select"
+          className="client-picker-select"
+          value={clientId ?? ""}
+          onChange={(e) => onSelectClient(e.target.value)}
+        >
+          <option value="" disabled>
+            请选择客户端…
+          </option>
+          {CLIENT_OPTIONS.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <span className="client-picker-hint muted">
+          {clientUnset
+            ? "先选客户端再刷新连接"
+            : CLIENT_OPTIONS.find((o) => o.id === clientId)?.hint}
+        </span>
+      </div>
+
       <div className="home-chrome">
         <div className="home-chrome-left">
           <h1>首页</h1>
@@ -109,7 +155,8 @@ export function HomePage({
           <button
             className="btn btn-sm"
             type="button"
-            disabled={!!busy || running}
+            disabled={!!busy || running || clientUnset}
+            title={clientUnset ? "请先选择客户端" : undefined}
             onClick={() => void onRefresh?.()}
           >
             {busy ? "刷新中…" : "刷新连接"}
@@ -122,7 +169,11 @@ export function HomePage({
 
       {!report ? (
         <div className="note note-compact">
-          <span className="note-line">先「刷新连接」，再「开始检测」。AI 卡片只作换节点对照。</span>
+          <span className="note-line">
+            {clientUnset
+              ? "请先选择客户端，再「刷新连接」，然后「开始检测」。"
+              : "先「刷新连接」，再「开始检测」。AI 卡片只作换节点对照。"}
+          </span>
         </div>
       ) : (
         <div className="home-done-meta muted" title={report.note}>

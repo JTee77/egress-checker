@@ -164,6 +164,45 @@ select {
   line-height: 1.35;
 }
 
+
+.client-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  min-height: 28px;
+  flex-wrap: wrap;
+}
+
+.client-picker-label {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.client-picker-select {
+  flex: 0 1 240px;
+  max-width: 100%;
+  min-width: 160px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.client-picker-hint {
+  flex: 1 1 140px;
+  font-size: 11px;
+  line-height: 1.3;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .home-chrome {
   display: flex;
   align-items: center;

@@ -15,6 +15,8 @@ function App() {
     busy,
     manual,
     forceMock,
+    clientId,
+    setClientId,
     updateManual,
     resetManual,
     refresh,
@@ -29,7 +31,10 @@ function App() {
           <HomePage
             connection={state}
             busy={busy}
+            clientId={clientId}
+            onClientIdChange={setClientId}
             onRefresh={() => refresh()}
+            onNavigateToSettings={() => setPage("settings")}
           />
         ) : null}
         {page === "nodes" ? (
@@ -41,6 +46,7 @@ function App() {
             manual={manual}
             busy={busy}
             forceMock={forceMock}
+            clientId={clientId}
             onChangeManual={updateManual}
             onResetManual={resetManual}
             onForceMockChange={(v) => {

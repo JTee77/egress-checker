@@ -1,9 +1,12 @@
 import { useCallback, useRef, useState } from "react";
 import {
+  CLIENT_STORAGE_KEY,
   defaultConfig,
   discoverAndProbe,
   getProxies,
+  isClientId,
   mockNodes,
+  type ClientId,
   type ConnectionState,
   type ControllerConfig,
   type ProxyNode,
@@ -21,6 +24,14 @@ function readForceMock(): boolean {
 
 export function useConnection() {
   const [forceMock, setForceMockState] = useState<boolean>(readForceMock);
+  const [clientId, setClientIdState] = useState<ClientId | null>(() => {
+    try {
+      const v = localStorage.getItem(CLIENT_STORAGE_KEY);
+      return isClientId(v) ? v : null;
+    } catch {
+      return null;
+    }
+  });
   const [state, setState] = useState<ConnectionState>({
     status: "unknown",
     message: "尚未检测连接",
@@ -38,6 +49,16 @@ export function useConnection() {
     setForceMockState(v);
     try {
       localStorage.setItem(MOCK_PREF_KEY, v ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const setClientId = (id: ClientId | null) => {
+    setClientIdState(id);
+    try {
+      if (id) localStorage.setItem(CLIENT_STORAGE_KEY, id);
+      else localStorage.removeItem(CLIENT_STORAGE_KEY);
     } catch {
       /* ignore */
     }
@@ -66,9 +87,26 @@ export function useConnection() {
           return next;
         }
 
+        if (!clientId) {
+          const next: ConnectionState = {
+            status: "unknown",
+            message: "请先选择客户端",
+            config: { ...defaultConfig(), ...manual, ...override },
+            currentProxy: null,
+            usingMock: false,
+            proxiesError: null,
+          };
+          if (gen === refreshGen.current) {
+            setState(next);
+            setNodes([]);
+          }
+          return next;
+        }
+
         const merged = { ...manual, ...override };
         const next = await discoverAndProbe(
           Object.keys(merged).length ? merged : undefined,
+          clientId,
         );
 
         if (gen !== refreshGen.current) return next;
@@ -130,7 +168,7 @@ export function useConnection() {
         }
       }
     },
-    [manual, forceMock],
+    [manual, forceMock, clientId],
   );
 
   // Intentionally no boot auto-refresh: opening the window must not invoke Mihomo HTTP.
@@ -151,6 +189,8 @@ export function useConnection() {
     manual,
     forceMock,
     setForceMock,
+    clientId,
+    setClientId,
     updateManual,
     resetManual,
     refresh,

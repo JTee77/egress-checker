@@ -1,11 +1,17 @@
 import { useState } from "react";
-import type { ConnectionState, ControllerConfig } from "../lib/mihomo";
+import {
+  clientLabel,
+  type ClientId,
+  type ConnectionState,
+  type ControllerConfig,
+} from "../lib/mihomo";
 
 export function SettingsPage({
   connection,
   manual,
   busy,
   forceMock,
+  clientId,
   onChangeManual,
   onResetManual,
   onForceMockChange,
@@ -15,6 +21,7 @@ export function SettingsPage({
   manual: Partial<ControllerConfig>;
   busy: boolean;
   forceMock: boolean;
+  clientId: ClientId | null;
   onChangeManual: (patch: Partial<ControllerConfig>) => void;
   onResetManual: () => void;
   onForceMockChange: (v: boolean) => void;
@@ -56,6 +63,17 @@ export function SettingsPage({
           <h1>设置</h1>
           <p>连接 Mihomo / Clash Meta 兼容客户端（默认 Clash Verge Rev）</p>
         </div>
+      </div>
+
+      <div className="note note-compact" style={{ marginBottom: 12 }}>
+        当前首页客户端预设：<strong>{clientLabel(clientId)}</strong>
+        {clientId === "mihomo"
+          ? "（默认 127.0.0.1:9090 · mixed 7890，以下字段可覆盖）"
+          : clientId === "manual"
+            ? "（仅使用下方手动参数，不会自动探测）"
+            : clientId === "verge"
+              ? "（Verge 自动探测；以下字段可覆盖）"
+              : " — 请先回首页选择客户端"}
       </div>
 
       <div className="status-pill" style={{ marginBottom: 16 }}>
