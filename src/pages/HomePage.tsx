@@ -115,24 +115,26 @@ export function HomePage({
         {connection.message}
       </div>
 
+      {report ? (
+        <div className="note note-compact" title={report.note}>
+          <span className="note-line">
+            检测完成 · {new Date(report.ranAt).toLocaleString()}
+            <span className="muted"> — 点卡片「展开详情」看说明</span>
+          </span>
+        </div>
+      ) : (
+        <div className="note note-compact">
+          <span className="note-line">
+            先「刷新连接」，再「开始检测」。AI 卡片只作换节点对照。
+          </span>
+        </div>
+      )}
+
       <div className="card-grid">
         {cards.map((c) => (
           <CheckCardView key={c.id} card={c} />
         ))}
       </div>
-
-      {report ? (
-        <div className="note">
-          {report.note}
-          <div className="muted" style={{ marginTop: 6 }}>
-            完成时间：{new Date(report.ranAt).toLocaleString()}
-          </div>
-        </div>
-      ) : (
-        <div className="note">
-          打开窗口不会自动连 Mihomo。请先点「刷新连接」，确认 Clash Verge Rev 的系统代理或 TUN 后再点「开始检测」。AI 卡片用来换节点时对照，不是「必须测完才能上网」。
-        </div>
-      )}
     </div>
   );
 }
