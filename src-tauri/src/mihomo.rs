@@ -225,8 +225,9 @@ pub fn http_via_unix(
         format!("Authorization: Bearer {secret}\r\n")
     };
 
+    // Accept-Encoding: identity — raw UnixStream does not auto-decode gzip like curl.
     let req = format!(
-        "{method} {path} HTTP/1.1\r\nHost: localhost\r\n{auth}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        "{method} {path} HTTP/1.1\r\nHost: localhost\r\n{auth}Content-Type: application/json\r\nAccept-Encoding: identity\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body_bytes.len()
     );
 
@@ -252,12 +253,16 @@ pub fn http_via_unix(
         ));
     }
 
-    let text = String::from_utf8_lossy(&raw);
-    let (header, body_part) = text
-        .split_once("\r\n\r\n")
-        .or_else(|| text.split_once("\n\n"))
-        .unwrap_or((text.as_ref(), ""));
+    parse_http_response_bytes(&raw)
+}
 
+/// Split HTTP response on bytes (headers/body), decode chunked by byte length, UTF-8 body.
+fn parse_http_response_bytes(raw: &[u8]) -> Result<UnixHttpResult, String> {
+    let (header_bytes, body_bytes) = split_headers_body(raw).ok_or_else(|| {
+        "unix response missing header/body separator".to_string()
+    })?;
+
+    let header = String::from_utf8_lossy(header_bytes);
     let status = header
         .lines()
         .next()
@@ -265,11 +270,41 @@ pub fn http_via_unix(
         .and_then(|s| s.parse::<u16>().ok())
         .unwrap_or(0);
 
-    let body_out = if header.to_ascii_lowercase().contains("transfer-encoding: chunked") {
-        decode_chunked(body_part)
+    let header_lower = header.to_ascii_lowercase();
+    if header_lower
+        .lines()
+        .any(|l| l.trim().starts_with("content-encoding:") && l.contains("gzip"))
+    {
+        return Err(format!(
+            "unix response Content-Encoding: gzip (raw socket cannot decode); \
+             request used Accept-Encoding: identity — body {} bytes",
+            body_bytes.len()
+        ));
+    }
+
+    let decoded = if header_lower
+        .lines()
+        .any(|l| l.trim().starts_with("transfer-encoding:") && l.contains("chunked"))
+    {
+        decode_chunked_bytes(body_bytes)?
     } else {
-        body_part.to_string()
+        body_bytes.to_vec()
     };
+
+    if decoded.len() > MAX_BODY_BYTES {
+        return Err(format!(
+            "unix decoded body too large ({} bytes > {} max)",
+            decoded.len(),
+            MAX_BODY_BYTES
+        ));
+    }
+
+    let body_out = String::from_utf8(decoded).map_err(|e| {
+        format!(
+            "unix response body is not valid UTF-8 after decode: {e} (raw {} bytes)",
+            body_bytes.len()
+        )
+    })?;
 
     Ok(UnixHttpResult {
         status,
@@ -277,39 +312,79 @@ pub fn http_via_unix(
     })
 }
 
-fn decode_chunked(input: &str) -> String {
-    let mut out = String::new();
+fn split_headers_body(raw: &[u8]) -> Option<(&[u8], &[u8])> {
+    if let Some(pos) = find_bytes(raw, b"\r\n\r\n") {
+        return Some((&raw[..pos], &raw[pos + 4..]));
+    }
+    if let Some(pos) = find_bytes(raw, b"\n\n") {
+        return Some((&raw[..pos], &raw[pos + 2..]));
+    }
+    None
+}
+
+fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|w| w == needle)
+}
+
+/// Decode HTTP/1.1 chunked transfer encoding using **byte** lengths (not chars).
+/// Multi-byte UTF-8 (e.g. Chinese node names) must not be counted as one unit per char.
+pub fn decode_chunked_bytes(input: &[u8]) -> Result<Vec<u8>, String> {
+    let mut out = Vec::new();
     let mut rest = input;
     while !rest.is_empty() {
-        let Some((size_line, after)) = rest.split_once('\n') else {
-            out.push_str(rest);
+        let Some(nl) = rest.iter().position(|&b| b == b'\n') else {
+            out.extend_from_slice(rest);
             break;
         };
-        let size_hex = size_line.trim().trim_end_matches('\r');
-        let size = usize::from_str_radix(size_hex, 16).unwrap_or(0);
+        let size_line = &rest[..nl];
+        let size_hex = trim_ascii_ws_and_cr(size_line);
+        // Ignore chunk extensions after `;`
+        let size_hex = size_hex
+            .split(|&b| b == b';')
+            .next()
+            .unwrap_or(size_hex);
+        let size_str = std::str::from_utf8(size_hex).map_err(|_| {
+            format!("chunk size line is not ASCII hex: {size_hex:?}")
+        })?;
+        let size = usize::from_str_radix(size_str.trim(), 16).map_err(|e| {
+            format!("invalid chunk size '{size_str}': {e}")
+        })?;
+        rest = &rest[nl + 1..];
         if size == 0 {
             break;
         }
-        let chars: Vec<char> = after.chars().collect();
-        if chars.len() < size {
-            out.extend(chars.iter());
-            break;
+        if rest.len() < size {
+            return Err(format!(
+                "chunked body truncated: need {size} bytes, have {}",
+                rest.len()
+            ));
         }
-        out.extend(chars.iter().take(size));
-        let mut idx = size;
-        if idx < chars.len() && chars[idx] == '\r' {
-            idx += 1;
+        out.extend_from_slice(&rest[..size]);
+        rest = &rest[size..];
+        // Trailing CRLF after chunk data
+        if rest.starts_with(b"\r\n") {
+            rest = &rest[2..];
+        } else if rest.starts_with(b"\n") {
+            rest = &rest[1..];
+        } else if !rest.is_empty() {
+            return Err("chunk missing CRLF trailer".into());
         }
-        if idx < chars.len() && chars[idx] == '\n' {
-            idx += 1;
-        }
-        rest = after
-            .char_indices()
-            .nth(idx)
-            .map(|(i, _)| &after[i..])
-            .unwrap_or("");
     }
-    out
+    Ok(out)
+}
+
+fn trim_ascii_ws_and_cr(s: &[u8]) -> &[u8] {
+    let mut start = 0;
+    let mut end = s.len();
+    while start < end && (s[start] == b' ' || s[start] == b'\t' || s[start] == b'\r') {
+        start += 1;
+    }
+    while end > start && (s[end - 1] == b' ' || s[end - 1] == b'\t' || s[end - 1] == b'\r') {
+        end -= 1;
+    }
+    &s[start..end]
 }
 
 /// Async fetch a URL optionally via local mixed-port HTTP proxy.
@@ -466,16 +541,32 @@ pub async fn list_nodes_async(
             });
         }
         Ok(res) if (200..300).contains(&res.status) => {
-            let mut slim = slim_nodes_from_proxies_json(&res.body)?;
-            slim.status = res.status;
-            slim.transport = Some("tcp".into());
-            if slim.nodes.is_empty() {
-                slim.error = Some(
-                    "已连接但未解析到可用节点，请到设置检查 Secret / 刷新，或确认订阅已加载"
-                        .into(),
-                );
+            match slim_nodes_from_proxies_json(&res.body) {
+                Ok(mut slim) => {
+                    slim.status = res.status;
+                    slim.transport = Some("tcp".into());
+                    if slim.nodes.is_empty() {
+                        slim.error = Some(
+                            "已连接但未解析到可用节点，请到设置检查 Secret / 刷新，或确认订阅已加载"
+                                .into(),
+                        );
+                    }
+                    return Ok(slim);
+                }
+                Err(e) => {
+                    return Ok(ListNodesResult {
+                        nodes: vec![],
+                        current_proxy: None,
+                        status: res.status,
+                        error: Some(format!(
+                            "解析 /proxies JSON 失败（TCP）: {e}；body {} 字节",
+                            res.body.len()
+                        )),
+                        unauthorized: false,
+                        transport: Some("tcp".into()),
+                    });
+                }
             }
-            return Ok(slim);
         }
         Ok(_) | Err(_) => {
             // Fall through to unix: connect failure or non-2xx (except 401/403 above).
@@ -512,16 +603,30 @@ pub async fn list_nodes_async(
             transport: Some("unix".into()),
         }),
         Ok(res) if (200..300).contains(&res.status) => {
-            let mut slim = slim_nodes_from_proxies_json(&res.body)?;
-            slim.status = res.status;
-            slim.transport = Some("unix".into());
-            if slim.nodes.is_empty() {
-                slim.error = Some(
-                    "已连接但未解析到可用节点，请到设置检查 Secret / 刷新，或确认订阅已加载"
-                        .into(),
-                );
+            match slim_nodes_from_proxies_json(&res.body) {
+                Ok(mut slim) => {
+                    slim.status = res.status;
+                    slim.transport = Some("unix".into());
+                    if slim.nodes.is_empty() {
+                        slim.error = Some(
+                            "已连接但未解析到可用节点，请到设置检查 Secret / 刷新，或确认订阅已加载"
+                                .into(),
+                        );
+                    }
+                    Ok(slim)
+                }
+                Err(e) => Ok(ListNodesResult {
+                    nodes: vec![],
+                    current_proxy: None,
+                    status: res.status,
+                    error: Some(format!(
+                        "解析 /proxies JSON 失败（Unix）: {e}；body {} 字节",
+                        res.body.len()
+                    )),
+                    unauthorized: false,
+                    transport: Some("unix".into()),
+                }),
             }
-            Ok(slim)
         }
         Ok(res) => Ok(ListNodesResult {
             nodes: vec![],
@@ -720,6 +825,226 @@ mod tests {
                 || n.contains("Singapore IEPL")),
             "demo mock names must not appear: {names:?}"
         );
+        
         assert!(!inner.unauthorized);
+    }
+
+    #[test]
+    fn decode_chunked_bytes_roundtrips_multibyte_utf8_chinese_names() {
+        // Chunk sizes are in bytes. Chinese chars are 3 bytes each in UTF-8.
+        // Old char-based decoder would slice mid-codepoint / corrupt JSON.
+        let json = r#"{"proxies":{"香港 HK-2-AT":{"type":"Hysteria2"},"日本 TY-4-HY2":{"type":"Vmess"}}}"#;
+        let json_bytes = json.as_bytes();
+        assert!(json_bytes.len() > 40, "fixture should be multi-chunk sized");
+
+        // Force a split that is NOT on a char boundary to prove byte lengths matter.
+        let mid_bad = {
+            let mut i = 0;
+            while i < json_bytes.len() {
+                let c = json[i..].chars().next().unwrap();
+                let len = c.len_utf8();
+                if len > 1 {
+                    break;
+                }
+                i += len;
+            }
+            let c = json[i..].chars().next().unwrap();
+            assert!(c.len_utf8() > 1);
+            i + 1 // inside the multi-byte char
+        };
+        let (a, b) = json_bytes.split_at(mid_bad);
+        assert!(!json.is_char_boundary(mid_bad));
+
+        let mut chunked = Vec::new();
+        chunked.extend_from_slice(format!("{:x}\r\n", a.len()).as_bytes());
+        chunked.extend_from_slice(a);
+        chunked.extend_from_slice(b"\r\n");
+        chunked.extend_from_slice(format!("{:x}\r\n", b.len()).as_bytes());
+        chunked.extend_from_slice(b);
+        chunked.extend_from_slice(b"\r\n");
+        chunked.extend_from_slice(b"0\r\n\r\n");
+
+        let decoded = decode_chunked_bytes(&chunked).expect("decode_chunked_bytes");
+        let decoded_str = String::from_utf8(decoded).expect("utf8");
+        assert_eq!(decoded_str, json);
+
+        let slim = slim_nodes_from_proxies_json(&decoded_str).unwrap();
+        let names: Vec<_> = slim.nodes.iter().map(|n| n.name.as_str()).collect();
+        assert!(names.contains(&"香港 HK-2-AT"));
+        assert!(names.contains(&"日本 TY-4-HY2"));
+    }
+
+    #[test]
+    fn parse_http_response_chunked_preserves_chinese_json() {
+        let json = r#"{"proxies":{"香港节点":{"type":"Shadowsocks"},"DIRECT":{"type":"Direct"}}}"#;
+        let json_b = json.as_bytes();
+        let mid = json_b.len() / 2;
+        // Prefer split inside a multi-byte char if possible
+        let split_at = (0..json_b.len())
+            .find(|&i| !json.is_char_boundary(i) && i > 10)
+            .unwrap_or(mid);
+        let (a, b) = json_b.split_at(split_at);
+
+        let mut body = Vec::new();
+        body.extend_from_slice(format!("{:X}\r\n", a.len()).as_bytes());
+        body.extend_from_slice(a);
+        body.extend_from_slice(b"\r\n");
+        body.extend_from_slice(format!("{:X}\r\n", b.len()).as_bytes());
+        body.extend_from_slice(b);
+        body.extend_from_slice(b"\r\n0\r\n\r\n");
+
+        let mut raw = Vec::new();
+        raw.extend_from_slice(
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n",
+        );
+        raw.extend_from_slice(&body);
+
+        let res = parse_http_response_bytes(&raw).expect("parse");
+        assert_eq!(res.status, 200);
+        assert_eq!(res.body, json);
+        let slim = slim_nodes_from_proxies_json(&res.body).unwrap();
+        assert!(slim.nodes.iter().any(|n| n.name == "香港节点"));
+    }
+
+    /// TCP dead + live Unix sock returning **chunked** body with Chinese names.
+    #[test]
+    fn smoke_list_nodes_unix_chunked_chinese_names() {
+        use std::io::{Read, Write};
+        use std::os::unix::net::UnixListener;
+        use std::sync::mpsc;
+        use std::thread;
+        use std::time::Duration;
+
+        let sock = format!(
+            "/tmp/egress-checker-list-nodes-chunked-{}.sock",
+            std::process::id()
+        );
+        let _ = std::fs::remove_file(&sock);
+
+        let json = concat!(
+            r#"{"proxies":{"Proxy":{"type":"Selector","now":"香港 HK-2-AT","all":["香港 HK-2-AT","日本 TY-4-HY2"]},"香港 HK-2-AT":{"type":"Hysteria2"},"日本 TY-4-HY2":{"type":"Hysteria2"},"DIRECT":{"type":"Direct"}}}"#
+        );
+        let json_b = json.as_bytes();
+        // Split inside multi-byte UTF-8 so char-based decode would corrupt.
+        let split_at = (0..json_b.len())
+            .find(|&i| !json.is_char_boundary(i))
+            .expect("fixture must contain multi-byte UTF-8");
+        let (a, b) = json_b.split_at(split_at);
+        let mut chunked_body = Vec::new();
+        chunked_body.extend_from_slice(format!("{:x}\r\n", a.len()).as_bytes());
+        chunked_body.extend_from_slice(a);
+        chunked_body.extend_from_slice(b"\r\n");
+        chunked_body.extend_from_slice(format!("{:x}\r\n", b.len()).as_bytes());
+        chunked_body.extend_from_slice(b);
+        chunked_body.extend_from_slice(b"\r\n0\r\n\r\n");
+
+        let mut resp = Vec::new();
+        resp.extend_from_slice(
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n",
+        );
+        resp.extend_from_slice(&chunked_body);
+
+        let listener = UnixListener::bind(&sock).expect("bind");
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let sock_path = sock.clone();
+        let server = thread::spawn(move || {
+            ready_tx.send(()).ok();
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 8192];
+                let n = stream.read(&mut buf).unwrap_or(0);
+                let req = String::from_utf8_lossy(&buf[..n]);
+                assert!(
+                    req.to_ascii_lowercase().contains("accept-encoding: identity"),
+                    "unix request must ask for identity encoding, got:\n{req}"
+                );
+                let _ = stream.write_all(&resp);
+            }
+            let _ = std::fs::remove_file(&sock_path);
+        });
+        ready_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("server ready");
+
+        let result = std::panic::catch_unwind(|| {
+            tauri::async_runtime::block_on(list_nodes_async(
+                "127.0.0.1",
+                1,
+                "test-secret",
+                2000,
+                Some(&sock),
+            ))
+        });
+        let _ = server.join();
+        let _ = std::fs::remove_file(&sock);
+
+        assert!(result.is_ok(), "list_nodes_async panicked");
+        let inner = result.unwrap().expect("list_nodes should Ok via unix chunked");
+        assert_eq!(inner.transport.as_deref(), Some("unix"));
+        assert!(
+            inner.error.is_none(),
+            "expected successful parse, got error {:?}",
+            inner.error
+        );
+        let names: Vec<_> = inner.nodes.iter().map(|n| n.name.as_str()).collect();
+        assert!(names.contains(&"香港 HK-2-AT"), "{names:?}");
+        assert!(names.contains(&"日本 TY-4-HY2"), "{names:?}");
+    }
+
+    #[test]
+    fn slim_parse_fail_returns_ok_with_error_via_list_nodes_unix() {
+        use std::io::{Read, Write};
+        use std::os::unix::net::UnixListener;
+        use std::sync::mpsc;
+        use std::thread;
+        use std::time::Duration;
+
+        let sock = format!(
+            "/tmp/egress-checker-list-nodes-badjson-{}.sock",
+            std::process::id()
+        );
+        let _ = std::fs::remove_file(&sock);
+
+        // Valid HTTP but invalid JSON body — should Ok with error, not Err.
+        let body = "{not-json";
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+
+        let listener = UnixListener::bind(&sock).expect("bind");
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let sock_path = sock.clone();
+        let server = thread::spawn(move || {
+            ready_tx.send(()).ok();
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf);
+                let _ = stream.write_all(resp.as_bytes());
+            }
+            let _ = std::fs::remove_file(&sock_path);
+        });
+        ready_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("server ready");
+
+        let result = tauri::async_runtime::block_on(list_nodes_async(
+            "127.0.0.1",
+            1,
+            "",
+            2000,
+            Some(&sock),
+        ));
+        let _ = server.join();
+        let _ = std::fs::remove_file(&sock);
+
+        let inner = result.expect("should Ok with parse error detail, not Err");
+        assert_eq!(inner.status, 200);
+        assert!(inner.nodes.is_empty());
+        let err = inner.error.expect("error detail");
+        assert!(
+            err.contains("解析 /proxies JSON 失败"),
+            "unexpected error: {err}"
+        );
     }
 }

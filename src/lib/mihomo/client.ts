@@ -395,8 +395,17 @@ async function getProxiesViaSlimCommand(
       error: res.error ?? (nodes.length === 0 ? "节点列表为空" : null),
       unauthorized: !!res.unauthorized,
     };
-  } catch {
-    return null;
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e ?? "");
+    return {
+      nodes: [],
+      currentProxy: null,
+      usingMock: false,
+      error: detail
+        ? `mihomo_list_nodes 失败: ${detail}`
+        : "mihomo_list_nodes 调用失败",
+      unauthorized: false,
+    };
   }
 }
 
@@ -428,6 +437,11 @@ export async function getProxies(config: ControllerConfig): Promise<GetProxiesRe
     );
   }
   if (!is2xx(res.status) || !res.json) {
+    if (is2xx(res.status) && !res.json) {
+      return empty(
+        `拉取 /proxies 失败（HTTP ${res.status}）：响应不是合法 JSON（可能解压/分块失败），raw ${res.raw.length} 字节`,
+      );
+    }
     return empty(
       `拉取 /proxies 失败（HTTP ${res.status}），请到设置检查 Secret / 刷新`,
     );
