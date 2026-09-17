@@ -510,3 +510,82 @@ export async function getVersion(config: ControllerConfig): Promise<string | nul
 
 /** Expose mock raw for tests / debug */
 export { mockProxiesRaw };
+
+/** Best-effort /rules summary for split-routing sample (not a full audit). */
+export type RulesSummary = {
+  total: number;
+  directCount: number;
+  rejectCount: number;
+  otherCount: number;
+  cnHintCount: number;
+  samples: string[];
+  error: string | null;
+};
+
+export async function getRulesSummary(
+  config: ControllerConfig,
+): Promise<RulesSummary> {
+  const empty = (error: string): RulesSummary => ({
+    total: 0,
+    directCount: 0,
+    rejectCount: 0,
+    otherCount: 0,
+    cnHintCount: 0,
+    samples: [],
+    error,
+  });
+
+  const res = await httpApi(config, "GET", "/rules", undefined, 8000);
+  if (!res) return empty("无法读取 /rules（超时或未连接）");
+  if (res.status === 401 || res.status === 403) {
+    return empty("读取 /rules 未授权（401/403）");
+  }
+  if (!is2xx(res.status) || !res.json) {
+    return empty(`读取 /rules 失败（HTTP ${res.status}）`);
+  }
+
+  const obj = res.json as {
+    rules?: { type?: string; payload?: string; proxy?: string }[];
+  };
+  const rules = obj.rules ?? [];
+  let directCount = 0;
+  let rejectCount = 0;
+  let otherCount = 0;
+  let cnHintCount = 0;
+  const samples: string[] = [];
+
+  for (const r of rules) {
+    const proxy = (r.proxy ?? "").toUpperCase();
+    const typ = r.type ?? "?";
+    const payload = r.payload ?? "";
+    if (proxy === "DIRECT") directCount += 1;
+    else if (proxy === "REJECT" || proxy === "REJECT-DROP") rejectCount += 1;
+    else otherCount += 1;
+
+    const blob = `${typ} ${payload} ${proxy}`.toUpperCase();
+    if (
+      blob.includes("CN") ||
+      blob.includes("CHINA") ||
+      payload.includes("baidu") ||
+      payload.includes("qq.com") ||
+      payload.includes("geolocation")
+    ) {
+      cnHintCount += 1;
+      if (samples.length < 6) {
+        samples.push(`${typ}(${payload || "-"}) → ${r.proxy ?? "?"}`);
+      }
+    } else if (samples.length < 3 && proxy === "DIRECT") {
+      samples.push(`${typ}(${payload || "-"}) → DIRECT`);
+    }
+  }
+
+  return {
+    total: rules.length,
+    directCount,
+    rejectCount,
+    otherCount,
+    cnHintCount,
+    samples,
+    error: null,
+  };
+}

@@ -13,6 +13,8 @@ const PLACEHOLDERS: CheckCard[] = [
   { id: "chatgpt", title: "ChatGPT（换节点对照）", level: "unknown", summary: "尚未检测" },
   { id: "latency", title: "延迟采样", level: "unknown", summary: "尚未检测" },
   { id: "bandwidth", title: "抽样带宽", level: "unknown", summary: "尚未检测" },
+  { id: "split-routing", title: "分流抽检", level: "unknown", summary: "尚未检测" },
+  { id: "bare-egress", title: "裸奔粗检", level: "unknown", summary: "尚未检测" },
 ];
 
 export function HomePage({
@@ -42,7 +44,10 @@ export function HomePage({
             return next;
           });
         },
-        { mixedPort: connection.config?.mixedPort ?? null },
+        {
+          mixedPort: connection.config?.mixedPort ?? null,
+          mihomoConfig: connection.config ?? null,
+        },
       );
       setReport(r);
       setCards(r.cards);

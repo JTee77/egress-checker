@@ -252,7 +252,7 @@ select {
   padding-bottom: 8px;
 }
 
-/* 首页：4 列密集布局 → 约三行装下 9 卡全文（详情可见） */
+/* 首页：4 列密集布局 → 约三行装下多卡全文；11 卡时可纵向滚动（详情可见，不折叠） */
 .card-grid-home {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
@@ -515,4 +515,21 @@ table.data tr:last-child td {
 .about-block ul {
   padding-left: 18px;
   color: var(--text-muted);
+}
+
+.about-check-notes {
+  padding-left: 1.2em;
+  margin: 8px 0 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.about-check-notes li {
+  margin-bottom: 8px;
+}
+.about-check-notes strong {
+  color: var(--text);
+}
+.about-check-notes code {
+  font-size: 12px;
 }
