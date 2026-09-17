@@ -1248,11 +1248,11 @@ export async function checkBareEgress(
 }
 
 /** A4: sample up/down Mbps through current egress (mixed-port preferred). */
-const BW_DOWN_URL = "https://speed.cloudflare.com/__down?bytes=1048576";
-const BW_DOWN_EXPECT = 1048576;
+const BW_DOWN_URL = "https://speed.cloudflare.com/__down?bytes=524288";
+const BW_DOWN_EXPECT = 524288;
 const BW_UP_URL = "https://speed.cloudflare.com/__up";
 const BW_UP_BYTES = 512 * 1024;
-const BW_TIMEOUT_MS = 12000;
+const BW_TIMEOUT_MS = 20000;
 
 function bytesToMbps(bytes: number, elapsedMs: number): number | null {
   if (bytes <= 0 || elapsedMs <= 0) return null;
@@ -1283,24 +1283,36 @@ export async function sampleBandwidth(
     timeoutMs: BW_TIMEOUT_MS,
   });
 
-  const downMbps = down.ok ? bytesToMbps(down.bytes, down.elapsedMs) : null;
+  const downMbps =
+    down.bytes > 0 && down.elapsedMs > 0
+      ? bytesToMbps(down.bytes, down.elapsedMs)
+      : null;
   const upMbps = up.ok ? bytesToMbps(up.bytes, up.elapsedMs) : null;
+  const downPartial =
+    !!down.error && down.bytes > 0 && downMbps != null;
 
   const downErr =
     down.error ||
-    (!down.ok ? (down.status ? `HTTP ${down.status}` : "超时或不可达") : null);
+    (!down.ok && !downPartial
+      ? down.status
+        ? `HTTP ${down.status}`
+        : "超时或不可达"
+      : null);
   const upErr =
     up.error ||
     (!up.ok ? (up.status ? `HTTP ${up.status}` : "超时或不可达") : null);
 
   const summaryParts: string[] = [];
-  if (downMbps != null) summaryParts.push(`↓ ${fmtMbps(downMbps)} Mbps`);
+  if (downMbps != null)
+    summaryParts.push(
+      `↓ ${fmtMbps(downMbps)} Mbps${downPartial ? "（部分）" : ""}`,
+    );
   else summaryParts.push(`↓ 失败`);
   if (upMbps != null) summaryParts.push(`↑ ${fmtMbps(upMbps)} Mbps`);
   else summaryParts.push(`↑ 失败`);
 
   let level: CheckLevel;
-  if (downMbps != null && upMbps != null) level = "pass";
+  if (downMbps != null && upMbps != null && !downPartial && down.ok) level = "pass";
   else if (downMbps != null || upMbps != null) level = "warn";
   else level = "fail";
 
@@ -1320,7 +1332,7 @@ export async function sampleBandwidth(
       (upErr ? ` · ${upErr}` : ""),
     `路径：${portNote}；超时 ${BW_TIMEOUT_MS} ms。`,
     "说明：抽样带宽 ≠ 全网测速 / 不等于节点面板延迟。",
-    "端点：Cloudflare Speed（__down / __up）。未用 httpbin（会回显 body，干扰上行计量）。",
+    "端点：Cloudflare Speed（__down 512KiB / __up 512KiB）。请求 Accept-Encoding: identity，按字节流计数（避免经代理 gzip 解码失败）。未用 httpbin。",
   ].join("\n");
 
   const summary =

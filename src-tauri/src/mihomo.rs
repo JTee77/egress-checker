@@ -437,12 +437,16 @@ pub async fn proxy_timed_transfer_async(
     upload_bytes: Option<u64>,
     timeout_ms: u64,
 ) -> Result<TimedTransferResult, String> {
+    use futures_util::StreamExt;
     use std::time::Instant;
 
+    // Bandwidth samples must not auto-decompress: gzip/br decode failures through
+    // mixed-port often surface as "error decoding response body" with 0 bytes.
     let mut builder = reqwest::Client::builder()
         .timeout(Duration::from_millis(timeout_ms))
         .redirect(reqwest::redirect::Policy::limited(5))
-        .danger_accept_invalid_certs(false);
+        .danger_accept_invalid_certs(false)
+        .gzip(false);
 
     if let Some(port) = mixed_port {
         let proxy_url = format!("http://127.0.0.1:{port}");
@@ -463,11 +467,19 @@ pub async fn proxy_timed_transfer_async(
             client
                 .post(url)
                 .header("Content-Type", "application/octet-stream")
+                .header("Accept-Encoding", "identity")
                 .body(body)
                 .send()
                 .await
         }
-        "GET" | "" => client.get(url).send().await,
+        "GET" | "" => {
+            client
+                .get(url)
+                .header("Accept-Encoding", "identity")
+                .header("Cache-Control", "no-cache")
+                .send()
+                .await
+        }
         other => {
             return Ok(TimedTransferResult {
                 ok: false,
@@ -494,55 +506,75 @@ pub async fn proxy_timed_transfer_async(
     };
 
     let status = res.status().as_u16();
-    let bytes_result = res.bytes().await;
+    // Stream + count: discard payload; partial bytes still usable if timeout mid-read.
+    let mut stream = res.bytes_stream();
+    let mut n: u64 = 0;
+    let mut read_err: Option<String> = None;
+    while let Some(chunk) = stream.next().await {
+        match chunk {
+            Ok(bytes) => {
+                n = n.saturating_add(bytes.len() as u64);
+                if n > MAX_TIMED_BODY_BYTES as u64 {
+                    read_err = Some(format!(
+                        "response too large ({} > {} max)",
+                        n, MAX_TIMED_BODY_BYTES
+                    ));
+                    break;
+                }
+            }
+            Err(e) => {
+                read_err = Some(format!("read body: {e}"));
+                break;
+            }
+        }
+    }
     let elapsed_ms = t0.elapsed().as_millis() as u64;
 
-    match bytes_result {
-        Ok(bytes) => {
-            if bytes.len() > MAX_TIMED_BODY_BYTES {
-                return Ok(TimedTransferResult {
-                    ok: false,
-                    status,
-                    bytes: bytes.len() as u64,
-                    elapsed_ms,
-                    error: Some(format!(
-                        "response too large ({} > {} max)",
-                        bytes.len(),
-                        MAX_TIMED_BODY_BYTES
-                    )),
-                });
-            }
-            let n = if method_u == "POST" {
-                // Upload sample: count what we sent (response may be tiny / empty).
-                upload_len as u64
-            } else {
-                bytes.len() as u64
-            };
-            let ok = (200..400).contains(&status) && (method_u != "GET" || n > 0);
-            Ok(TimedTransferResult {
-                ok,
-                status,
-                bytes: n,
-                elapsed_ms,
-                error: if ok {
-                    None
-                } else {
-                    Some(format!("HTTP {status}"))
-                },
-            })
-        }
-        Err(e) => Ok(TimedTransferResult {
-            ok: false,
+    if method_u == "POST" {
+        // Upload sample: count what we sent (response may be tiny / empty).
+        let ok = (200..400).contains(&status) && read_err.is_none();
+        return Ok(TimedTransferResult {
+            ok,
             status,
-            bytes: if method_u == "POST" {
-                upload_len as u64
-            } else {
-                0
-            },
+            bytes: upload_len as u64,
             elapsed_ms,
-            error: Some(format!("read body: {e}")),
-        }),
+            error: if ok {
+                None
+            } else {
+                Some(read_err.unwrap_or_else(|| format!("HTTP {status}")))
+            },
+        });
     }
+
+    // GET download: prefer full body; accept partial if we got meaningful bytes before timeout.
+    let ok_full = (200..400).contains(&status) && read_err.is_none() && n > 0;
+    let ok_partial = (200..400).contains(&status) && n >= 64 * 1024;
+    let ok = ok_full || ok_partial;
+    let error = if ok_full {
+        None
+    } else if ok_partial {
+        Some(format!(
+            "部分下载 {} B（{}）仍按已收字节估算",
+            n,
+            read_err.unwrap_or_else(|| "未完整读完".into())
+        ))
+    } else {
+        Some(read_err.unwrap_or_else(|| {
+            if n == 0 {
+                format!("HTTP {status} · 0 B")
+            } else {
+                format!("HTTP {status}")
+            }
+        }))
+    };
+
+    Ok(TimedTransferResult {
+        ok,
+        status,
+        bytes: n,
+        elapsed_ms,
+        error,
+    })
 }
 
 fn is_junk_name(name: &str) -> bool {
