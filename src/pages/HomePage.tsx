@@ -87,11 +87,11 @@ export function HomePage({
   };
 
   return (
-    <div>
-      <div className="page-header">
+    <div className="home-page">
+      <div className="page-header page-header-dense">
         <div>
           <h1>首页</h1>
-          <p>看当前出口好不好用：连通、IP、换节点时的 AI 对照、延迟。不是替代你自己打开网站。</p>
+          <p>连通 · 出口 IP · AI 对照 · 延迟（换节点时一眼对照，不替代你自己打开网站）</p>
         </div>
         <div className="toolbar" style={{ marginBottom: 0, gap: 8 }}>
           <button
@@ -108,29 +108,24 @@ export function HomePage({
         </div>
       </div>
 
-      <div className="status-pill" style={{ marginBottom: 16 }}>
+      <div className="status-pill status-pill-dense" title={connection.message}>
         <span
           className={`dot ${connection.status === "connected" ? "connected" : connection.usingMock ? "mock" : connection.status}`}
         />
-        {connection.message}
+        <span className="status-pill-text">{connection.message}</span>
       </div>
 
       {report ? (
         <div className="note note-compact" title={report.note}>
-          <span className="note-line">
-            检测完成 · {new Date(report.ranAt).toLocaleString()}
-            <span className="muted"> — 点卡片「展开详情」看说明</span>
-          </span>
+          <span className="note-line">检测完成 · {new Date(report.ranAt).toLocaleString()}</span>
         </div>
       ) : (
         <div className="note note-compact">
-          <span className="note-line">
-            先「刷新连接」，再「开始检测」。AI 卡片只作换节点对照。
-          </span>
+          <span className="note-line">先「刷新连接」，再「开始检测」。AI 卡片只作换节点对照。</span>
         </div>
       )}
 
-      <div className="card-grid">
+      <div className="card-grid card-grid-home">
         {cards.map((c) => (
           <CheckCardView key={c.id} card={c} />
         ))}
