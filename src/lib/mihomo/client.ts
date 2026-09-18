@@ -17,6 +17,13 @@ import {
 } from "./types";
 import { detectRegion } from "./regions";
 import { mockProxiesRaw } from "./mock";
+import {
+  type ClientId,
+  clientLabel,
+  clientPreset,
+  clientUnreachableHint,
+  vergeLikeDefault,
+} from "./clients";
 
 const isTauri = () =>
   typeof window !== "undefined" &&
@@ -31,15 +38,21 @@ async function discoverViaRust(): Promise<ControllerConfig | null> {
   }
 }
 
+async function discoverViaRustForClient(
+  clientId: ClientId,
+): Promise<ControllerConfig | null> {
+  if (!isTauri()) return null;
+  try {
+    return await invoke<ControllerConfig>("discover_mihomo_for_client", {
+      clientId,
+    });
+  } catch {
+    return null;
+  }
+}
+
 export function defaultConfig(): ControllerConfig {
-  return {
-    host: "127.0.0.1",
-    port: 9097,
-    secret: "",
-    mixedPort: 7897,
-    source: "manual-default",
-    sockPath: "/tmp/verge/verge-mihomo.sock",
-  };
+  return vergeLikeDefault();
 }
 
 type HttpResult = { status: number; json: unknown; raw: string };
@@ -243,66 +256,180 @@ export function resolveNodesFromGroups(
 
 export async function discoverAndProbe(
   manual?: Partial<ControllerConfig>,
+  clientId: ClientId = "verge",
 ): Promise<ConnectionState> {
-  let config = defaultConfig();
-  const discovered = await discoverViaRust();
-  if (discovered) {
-    config = { ...config, ...discovered };
+  const label = clientLabel(clientId);
+  const preset = clientPreset(clientId);
+  let config: ControllerConfig = { ...defaultConfig(), ...preset };
+
+  // Auto-discover per selected client — never silently use Verge sock for others.
+  if (clientId === "verge") {
+    const discovered = await discoverViaRust();
+    if (discovered) {
+      config = { ...config, ...discovered };
+    }
+  } else {
+    const discovered = await discoverViaRustForClient(clientId);
+    if (discovered) {
+      config = { ...config, ...discovered };
+    }
+    // Hard-clear any Verge sock that presets/defaults might have left behind.
+    if (clientId !== "mihomo_party") {
+      config = { ...config, sockPath: null };
+    } else if (
+      config.sockPath &&
+      config.sockPath.includes("verge-mihomo")
+    ) {
+      config = {
+        ...config,
+        sockPath: "/tmp/mihomo-party.sock",
+      };
+    }
   }
+
+  // Optional advanced override from Settings (never required for main path).
   if (manual && Object.keys(manual).length > 0) {
-    const isManual =
-      manual.source === "manual" ||
-      manual.host !== undefined ||
-      manual.port !== undefined ||
-      manual.secret !== undefined ||
-      manual.mixedPort !== undefined;
-    config = {
-      ...config,
-      ...manual,
-      source: isManual && manual.source !== "auto" ? (manual.source ?? "manual") : config.source,
-    };
+    const src = manual.source;
+    // Ignore "auto" reset sentinel — discovery already ran.
+    if (src !== "auto") {
+      config = mergeManual(config, manual);
+    }
+    // After merge, still never keep Verge sock for non-Verge unless user set sockPath.
+    if (clientId !== "verge" && !manual.sockPath) {
+      if (clientId === "mihomo_party") {
+        const party = "/tmp/mihomo-party.sock";
+        config = {
+          ...config,
+          sockPath: config.sockPath?.includes("verge") ? party : (config.sockPath ?? party),
+        };
+      } else {
+        config = { ...config, sockPath: null };
+      }
+    }
   }
 
-  const sockLabel = config.sockPath ?? "/tmp/verge/verge-mihomo.sock";
-
-  // Prefer brief TCP probe; on failure try Unix (Verge often has sock only).
-  const viaTcp = await rustHttp(config, "GET", "/version", undefined, 1500);
-  if (viaTcp && (viaTcp.status === 401 || viaTcp.status === 403)) {
+  // mihomo_party: prefer unix sock first when present
+  if (clientId === "mihomo_party") {
+    const partySock = config.sockPath || "/tmp/mihomo-party.sock";
+    config = { ...config, sockPath: partySock };
+    const sockFirst = await probeWithConfig(config, clientId, { preferSock: true });
+    if (sockFirst.status === "connected" || sockFirst.status === "unauthorized") {
+      return sockFirst;
+    }
+    // Then TCP if any
+    const tcp = await probeWithConfig({ ...config }, clientId, { preferSock: false });
+    if (tcp.status === "connected" || tcp.status === "unauthorized") {
+      return tcp;
+    }
     return {
-      status: "unauthorized",
-      message: "Secret 不正确或未配置",
-      config,
-      currentProxy: null,
-      usingMock: false,
-      proxiesError: "API 返回未授权（401/403），请到设置检查 Secret",
-    };
-  }
-  if (viaTcp && is2xx(viaTcp.status)) {
-    return {
-      status: "connected",
-      message: `已连接 ${config.host}:${config.port}（${config.source}）`,
-      config,
-      currentProxy: null,
-      usingMock: false,
-      proxiesError: null,
+      ...sockFirst,
+      message: clientUnreachableHint(clientId),
+      proxiesError: "请确认 Mihomo Party 已打开并已连接节点",
     };
   }
 
-  const viaSock = await unixHttp(config, "GET", "/version", undefined, 2000);
+  const result = await probeWithConfig(config, clientId);
+  if (result.status === "connected" || result.status === "unauthorized") {
+    return result;
+  }
+
+  // Nyanpasu debug builds may listen on 9872 instead of default 17650.
+  if (clientId === "nyanpasu" && config.port !== 9872 && !manual?.port) {
+    const alt = await probeWithConfig(
+      { ...config, port: 9872, source: `${config.source}+port-9872` },
+      clientId,
+    );
+    if (alt.status === "connected" || alt.status === "unauthorized") {
+      return alt;
+    }
+  }
+
+  return {
+    ...result,
+    message: clientUnreachableHint(clientId),
+    proxiesError: `请确认【${label}】已打开并已连接节点`,
+  };
+}
+
+function mergeManual(
+  config: ControllerConfig,
+  manual: Partial<ControllerConfig>,
+): ControllerConfig {
+  const isManual =
+    manual.source === "manual" ||
+    manual.host !== undefined ||
+    manual.port !== undefined ||
+    manual.secret !== undefined ||
+    manual.mixedPort !== undefined;
+  return {
+    ...config,
+    ...manual,
+    source:
+      isManual && manual.source !== "auto"
+        ? (manual.source ?? "manual")
+        : config.source,
+  };
+}
+
+async function probeWithConfig(
+  config: ControllerConfig,
+  clientId?: ClientId,
+  opts?: { preferSock?: boolean },
+): Promise<ConnectionState> {
+  const trySock = !!config.sockPath;
+  const label = clientId ? clientLabel(clientId) : "客户端";
+  const preferSock = opts?.preferSock === true && trySock;
+
+  const runTcp = async () => rustHttp(config, "GET", "/version", undefined, 1500);
+  const runSock = async () =>
+    trySock ? unixHttp(config, "GET", "/version", undefined, 2000) : null;
+
+  let viaTcp: HttpResult | null = null;
+  let viaSock: HttpResult | null = null;
+
+  if (preferSock) {
+    viaSock = await runSock();
+    if (viaSock && (viaSock.status === 401 || viaSock.status === 403)) {
+      return unauthorizedState(config);
+    }
+    if (viaSock && is2xx(viaSock.status)) {
+      return {
+        status: "connected",
+        message: `已连上 ${label}`,
+        config,
+        currentProxy: null,
+        usingMock: false,
+        proxiesError: null,
+      };
+    }
+    viaTcp = await runTcp();
+  } else {
+    viaTcp = await runTcp();
+    if (viaTcp && (viaTcp.status === 401 || viaTcp.status === 403)) {
+      return unauthorizedState(config);
+    }
+    if (viaTcp && is2xx(viaTcp.status)) {
+      return {
+        status: "connected",
+        message: `已连上 ${label}`,
+        config,
+        currentProxy: null,
+        usingMock: false,
+        proxiesError: null,
+      };
+    }
+    if (trySock) {
+      viaSock = await runSock();
+    }
+  }
+
   if (viaSock && (viaSock.status === 401 || viaSock.status === 403)) {
-    return {
-      status: "unauthorized",
-      message: "Secret 不正确或未配置",
-      config,
-      currentProxy: null,
-      usingMock: false,
-      proxiesError: "API 返回未授权（401/403），请到设置检查 Secret",
-    };
+    return unauthorizedState(config);
   }
   if (viaSock && is2xx(viaSock.status)) {
     return {
       status: "connected",
-      message: `已连接 Unix 套接字 ${sockLabel}（${config.source}）`,
+      message: `已连上 ${label}`,
       config,
       currentProxy: null,
       usingMock: false,
@@ -313,19 +440,12 @@ export async function discoverAndProbe(
   // Dev / non-Tauri browser fallback
   const viaBrowser = await browserFetch(config, "GET", "/version", undefined, 2000);
   if (viaBrowser && (viaBrowser.status === 401 || viaBrowser.status === 403)) {
-    return {
-      status: "unauthorized",
-      message: "Secret 不正确或未配置",
-      config,
-      currentProxy: null,
-      usingMock: false,
-      proxiesError: "API 返回未授权（401/403），请到设置检查 Secret",
-    };
+    return unauthorizedState(config);
   }
   if (viaBrowser && is2xx(viaBrowser.status)) {
     return {
       status: "connected",
-      message: `已连接 ${config.host}:${config.port}（${config.source}）`,
+      message: `已连上 ${label}`,
       config,
       currentProxy: null,
       usingMock: false,
@@ -337,7 +457,9 @@ export async function discoverAndProbe(
     const status = (viaSock ?? viaTcp ?? viaBrowser)!.status;
     return {
       status: "unreachable",
-      message: `API 返回 HTTP ${status}`,
+      message: clientId
+        ? clientUnreachableHint(clientId)
+        : `连接失败（HTTP ${status}）`,
       config,
       currentProxy: null,
       usingMock: false,
@@ -347,12 +469,24 @@ export async function discoverAndProbe(
 
   return {
     status: "unreachable",
-    message:
-      "无法连接 Mihomo API（TCP 与 Unix 均失败），请检查 Clash Verge Rev 是否运行",
+    message: clientId
+      ? clientUnreachableHint(clientId)
+      : "请先打开并连上你的代理软件，再点刷新",
     config,
     currentProxy: null,
     usingMock: false,
     proxiesError: null,
+  };
+}
+
+function unauthorizedState(config: ControllerConfig): ConnectionState {
+  return {
+    status: "unauthorized",
+    message: "连接被拒绝，请到设置（高级）核对密钥后重试",
+    config,
+    currentProxy: null,
+    usingMock: false,
+    proxiesError: "密钥不正确或未配置（高级设置）",
   };
 }
 
@@ -382,7 +516,7 @@ async function getProxiesViaSlimCommand(
         port: config.port,
         secret: config.secret,
         timeoutMs: 18000,
-        sockPath: config.sockPath ?? "/tmp/verge/verge-mihomo.sock",
+        sockPath: config.sockPath ?? null,
       },
     });
     const nodes: ProxyNode[] = (res.nodes ?? []).map((n) =>
@@ -459,7 +593,7 @@ export async function getProxies(config: ControllerConfig): Promise<GetProxiesRe
       currentProxy: filtered.currentProxy,
       usingMock: false,
       error:
-        "已连接但未解析到可用节点，请到设置检查 Secret / 刷新，或确认订阅已加载",
+        "已连上软件，但还没有可用节点，请确认该软件里订阅已加载",
       unauthorized: false,
     };
   }
@@ -510,3 +644,82 @@ export async function getVersion(config: ControllerConfig): Promise<string | nul
 
 /** Expose mock raw for tests / debug */
 export { mockProxiesRaw };
+
+/** Best-effort /rules summary for split-routing sample (not a full audit). */
+export type RulesSummary = {
+  total: number;
+  directCount: number;
+  rejectCount: number;
+  otherCount: number;
+  cnHintCount: number;
+  samples: string[];
+  error: string | null;
+};
+
+export async function getRulesSummary(
+  config: ControllerConfig,
+): Promise<RulesSummary> {
+  const empty = (error: string): RulesSummary => ({
+    total: 0,
+    directCount: 0,
+    rejectCount: 0,
+    otherCount: 0,
+    cnHintCount: 0,
+    samples: [],
+    error,
+  });
+
+  const res = await httpApi(config, "GET", "/rules", undefined, 8000);
+  if (!res) return empty("无法读取 /rules（超时或未连接）");
+  if (res.status === 401 || res.status === 403) {
+    return empty("读取 /rules 未授权（401/403）");
+  }
+  if (!is2xx(res.status) || !res.json) {
+    return empty(`读取 /rules 失败（HTTP ${res.status}）`);
+  }
+
+  const obj = res.json as {
+    rules?: { type?: string; payload?: string; proxy?: string }[];
+  };
+  const rules = obj.rules ?? [];
+  let directCount = 0;
+  let rejectCount = 0;
+  let otherCount = 0;
+  let cnHintCount = 0;
+  const samples: string[] = [];
+
+  for (const r of rules) {
+    const proxy = (r.proxy ?? "").toUpperCase();
+    const typ = r.type ?? "?";
+    const payload = r.payload ?? "";
+    if (proxy === "DIRECT") directCount += 1;
+    else if (proxy === "REJECT" || proxy === "REJECT-DROP") rejectCount += 1;
+    else otherCount += 1;
+
+    const blob = `${typ} ${payload} ${proxy}`.toUpperCase();
+    if (
+      blob.includes("CN") ||
+      blob.includes("CHINA") ||
+      payload.includes("baidu") ||
+      payload.includes("qq.com") ||
+      payload.includes("geolocation")
+    ) {
+      cnHintCount += 1;
+      if (samples.length < 6) {
+        samples.push(`${typ}(${payload || "-"}) → ${r.proxy ?? "?"}`);
+      }
+    } else if (samples.length < 3 && proxy === "DIRECT") {
+      samples.push(`${typ}(${payload || "-"}) → DIRECT`);
+    }
+  }
+
+  return {
+    total: rules.length,
+    directCount,
+    rejectCount,
+    otherCount,
+    cnHintCount,
+    samples,
+    error: null,
+  };
+}

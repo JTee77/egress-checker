@@ -47,3 +47,177 @@ export async function fetchTextViaProxy(
     clearTimeout(timer);
   }
 }
+
+export type DnsResolversPayload = {
+  resolvers: string[];
+  source: string;
+  rawHint?: string;
+  error?: string;
+};
+
+/** macOS: invoke Rust `scutil --dns` listing. Non-Tauri → empty + error. */
+export async function listDnsResolvers(): Promise<DnsResolversPayload> {
+  if (!isTauri()) {
+    return {
+      resolvers: [],
+      source: "browser",
+      error: "非 Tauri 环境，无法读取系统 DNS（需 macOS 上的 scutil）。",
+    };
+  }
+  try {
+    const res = await invoke<{
+      resolvers: string[];
+      source: string;
+      rawHint?: string;
+      error?: string;
+    }>("egress_list_dns_resolvers");
+    return {
+      resolvers: res.resolvers ?? [],
+      source: res.source ?? "scutil",
+      rawHint: res.rawHint,
+      error: res.error,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return {
+      resolvers: [],
+      source: "invoke-error",
+      error: `调用 egress_list_dns_resolvers 失败: ${msg}`,
+    };
+  }
+}
+
+export type TimedTransferResult = {
+  ok: boolean;
+  status: number;
+  bytes: number;
+  elapsedMs: number;
+  error?: string;
+  via: "rust" | "browser";
+};
+
+/**
+ * Timed GET/POST through mixed-port (Rust preferred). Body is discarded on the
+ * Rust side so Mbps reflects proxy path, not IPC of multi-MB payloads.
+ */
+export async function timedTransferViaProxy(opts: {
+  url: string;
+  mixedPort?: number | null;
+  method?: "GET" | "POST";
+  uploadBytes?: number;
+  timeoutMs?: number;
+}): Promise<TimedTransferResult> {
+  const method = opts.method ?? "GET";
+  const timeoutMs = opts.timeoutMs ?? 12000;
+  const uploadBytes = opts.uploadBytes ?? 0;
+
+  if (isTauri()) {
+    try {
+      const res = await invoke<{
+        ok: boolean;
+        status: number;
+        bytes: number;
+        elapsedMs: number;
+        error?: string | null;
+      }>("egress_proxy_timed_transfer", {
+        req: {
+          url: opts.url,
+          mixedPort: opts.mixedPort ?? null,
+          method,
+          uploadBytes: method === "POST" ? uploadBytes : null,
+          timeoutMs,
+        },
+      });
+      return {
+        ok: !!res.ok,
+        status: res.status ?? 0,
+        bytes: res.bytes ?? 0,
+        elapsedMs: res.elapsedMs ?? 0,
+        error: res.error ?? undefined,
+        via: "rust",
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // Fall through to browser; keep invoke error if browser also fails.
+      const browser = await timedTransferBrowser({
+        url: opts.url,
+        method,
+        uploadBytes,
+        timeoutMs,
+      });
+      if (!browser.ok && !browser.error) {
+        browser.error = `Rust 调用失败后浏览器回退仍失败：${msg}`;
+      }
+      return browser;
+    }
+  }
+
+  return timedTransferBrowser({
+    url: opts.url,
+    method,
+    uploadBytes,
+    timeoutMs,
+  });
+}
+
+async function timedTransferBrowser(opts: {
+  url: string;
+  method: "GET" | "POST";
+  uploadBytes: number;
+  timeoutMs: number;
+}): Promise<TimedTransferResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
+  const t0 = performance.now();
+  try {
+    let res: Response;
+    if (opts.method === "POST") {
+      const body = new Uint8Array(opts.uploadBytes);
+      res = await fetch(opts.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body,
+        signal: controller.signal,
+      });
+      // Drain response so timing includes full round-trip.
+      await res.arrayBuffer().catch(() => null);
+      const elapsedMs = Math.max(1, Math.round(performance.now() - t0));
+      const ok = res.ok || (res.status >= 200 && res.status < 400);
+      return {
+        ok,
+        status: res.status,
+        bytes: opts.uploadBytes,
+        elapsedMs,
+        error: ok ? undefined : `HTTP ${res.status}`,
+        via: "browser",
+      };
+    }
+
+    res = await fetch(opts.url, { signal: controller.signal });
+    const buf = await res.arrayBuffer();
+    const elapsedMs = Math.max(1, Math.round(performance.now() - t0));
+    const ok = (res.ok || (res.status >= 200 && res.status < 400)) && buf.byteLength > 0;
+    return {
+      ok,
+      status: res.status,
+      bytes: buf.byteLength,
+      elapsedMs,
+      error: ok ? undefined : res.status ? `HTTP ${res.status}` : "超时或不可达",
+      via: "browser",
+    };
+  } catch (e) {
+    const elapsedMs = Math.max(1, Math.round(performance.now() - t0));
+    const msg = e instanceof Error ? e.message : String(e);
+    const aborted = /abort/i.test(msg);
+    return {
+      ok: false,
+      status: 0,
+      bytes: 0,
+      elapsedMs,
+      error: aborted ? "超时" : msg,
+      via: "browser",
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}

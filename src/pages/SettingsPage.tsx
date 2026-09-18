@@ -1,11 +1,17 @@
 import { useState } from "react";
-import type { ConnectionState, ControllerConfig } from "../lib/mihomo";
+import {
+  clientLabel,
+  type ClientId,
+  type ConnectionState,
+  type ControllerConfig,
+} from "../lib/mihomo";
 
 export function SettingsPage({
   connection,
   manual,
   busy,
   forceMock,
+  clientId,
   onChangeManual,
   onResetManual,
   onForceMockChange,
@@ -15,12 +21,14 @@ export function SettingsPage({
   manual: Partial<ControllerConfig>;
   busy: boolean;
   forceMock: boolean;
+  clientId: ClientId | null;
   onChangeManual: (patch: Partial<ControllerConfig>) => void;
   onResetManual: () => void;
   onForceMockChange: (v: boolean) => void;
   onRefresh: (override?: Partial<ControllerConfig>) => Promise<unknown>;
 }) {
   const cfg = connection.config;
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [host, setHost] = useState(manual.host ?? cfg?.host ?? "127.0.0.1");
   const [port, setPort] = useState(String(manual.port ?? cfg?.port ?? 9097));
   const [secret, setSecret] = useState(manual.secret ?? cfg?.secret ?? "");
@@ -54,8 +62,15 @@ export function SettingsPage({
       <div className="page-header">
         <div>
           <h1>设置</h1>
-          <p>连接 Mihomo / Clash Meta 兼容客户端（默认 Clash Verge Rev）</p>
+          <p>日常使用请回首页选软件并刷新；这里主要是演示与高级调试。</p>
         </div>
+      </div>
+
+      <div className="note note-compact" style={{ marginBottom: 12 }}>
+        当前软件：<strong>{clientLabel(clientId)}</strong>
+        {clientId
+          ? " — 连接参数会按该软件自动发现，一般不用改下面内容。"
+          : " — 请先回首页选择你正在用的软件。"}
       </div>
 
       <div className="status-pill" style={{ marginBottom: 16 }}>
@@ -67,11 +82,7 @@ export function SettingsPage({
 
       {connection.proxiesError && !forceMock ? (
         <div className="note" style={{ marginBottom: 14 }}>
-          节点列表：{connection.proxiesError}
-          <div className="muted" style={{ marginTop: 6 }}>
-            请确认 Secret 正确后点击「保存并测试连接」。演示节点仅在开启上方 Mock
-            演示模式时出现。
-          </div>
+          {connection.proxiesError}
         </div>
       ) : null}
 
@@ -84,85 +95,87 @@ export function SettingsPage({
           />
           <span>
             <strong>Mock 演示模式</strong>
-            <span className="muted"> — 使用假节点与延迟，无需 Clash</span>
+            <span className="muted"> — 用假数据预览界面，不连真实软件</span>
           </span>
         </label>
       </div>
 
-      <div className="form-grid card" style={{ padding: 16 }}>
-        <div className="field">
-          <label>Host</label>
-          <input
-            value={host}
-            onChange={(e) => setHost(e.target.value)}
-            disabled={forceMock}
-          />
-        </div>
-        <div className="field">
-          <label>Port（external-controller）</label>
-          <input
-            value={port}
-            onChange={(e) => setPort(e.target.value)}
-            disabled={forceMock}
-          />
-        </div>
-        <div className="field">
-          <label>Secret（不会写入日志 / 仓库）</label>
-          <input
-            type="password"
-            value={secret}
-            onChange={(e) => setSecret(e.target.value)}
-            autoComplete="off"
-            disabled={forceMock}
-          />
-        </div>
-        <div className="field">
-          <label>mixed-port（经代理探针）</label>
-          <input
-            value={mixedPort}
-            onChange={(e) => setMixedPort(e.target.value)}
-            disabled={forceMock}
-          />
-        </div>
-        <div className="toolbar" style={{ marginBottom: 0 }}>
-          <button
-            className="btn btn-primary"
-            type="button"
-            disabled={busy || forceMock}
-            onClick={() => void apply()}
-          >
-            保存并测试连接
-          </button>
-          <button
-            className="btn"
-            type="button"
-            disabled={busy || forceMock}
-            onClick={() => void autoDetect()}
-          >
-            自动探测
-          </button>
-        </div>
-        <p className="muted" style={{ margin: 0, fontSize: 12 }}>
-          自动探测读取：
-          <br />
-          ~/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/config.yaml
-          <br />
-          检测到的 Unix 套接字：{cfg?.sockPath ?? "（未检测到）"}
-          <br />
-          默认路径：/tmp/verge/verge-mihomo.sock
-          <br />
-          来源：{cfg?.source ?? "—"} · mixed-port：{cfg?.mixedPort ?? "—"}
-        </p>
-        <p className="muted" style={{ margin: "8px 0 0", fontSize: 12 }}>
-          若 TCP 端口连不上会自动尝试 Verge 默认套接字；也可在 Verge 打开
-          external-controller 监听 127.0.0.1:端口。
-        </p>
-      </div>
+      <div className="card" style={{ padding: 16 }}>
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={() => setAdvancedOpen((v) => !v)}
+          style={{ marginBottom: advancedOpen ? 12 : 0 }}
+        >
+          {advancedOpen ? "收起高级 / 调试" : "展开高级 / 调试（一般不用）"}
+        </button>
 
-      <div className="note">
-        请在 Clash Verge Rev 中开启 <strong>external-controller</strong> 并设置{" "}
-        <strong>secret</strong>，否则无法拉取节点 / 测延迟。若未开启 TCP
-        控制器，本应用会回退到 Unix 套接字。本应用不提供任何代理节点。
+        {advancedOpen ? (
+          <div className="form-grid">
+            <p className="muted" style={{ margin: "0 0 8px", fontSize: 12 }}>
+              以下字段仅在自动连接失败、或你清楚自己改过控制口时使用。普通用户请回首页重选软件并刷新。
+            </p>
+            <div className="field">
+              <label>Host</label>
+              <input
+                value={host}
+                onChange={(e) => setHost(e.target.value)}
+                disabled={forceMock}
+              />
+            </div>
+            <div className="field">
+              <label>Port（external-controller）</label>
+              <input
+                value={port}
+                onChange={(e) => setPort(e.target.value)}
+                disabled={forceMock}
+              />
+            </div>
+            <div className="field">
+              <label>Secret（不会写入日志 / 仓库）</label>
+              <input
+                type="password"
+                value={secret}
+                onChange={(e) => setSecret(e.target.value)}
+                autoComplete="off"
+                disabled={forceMock}
+              />
+            </div>
+            <div className="field">
+              <label>mixed-port（经代理探针）</label>
+              <input
+                value={mixedPort}
+                onChange={(e) => setMixedPort(e.target.value)}
+                disabled={forceMock}
+              />
+            </div>
+            <div className="toolbar" style={{ marginBottom: 0 }}>
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={busy || forceMock}
+                onClick={() => void apply()}
+              >
+                保存并测试连接
+              </button>
+              <button
+                className="btn"
+                type="button"
+                disabled={busy || forceMock}
+                onClick={() => void autoDetect()}
+              >
+                重新自动发现
+              </button>
+            </div>
+            <p className="muted" style={{ margin: "8px 0 0", fontSize: 12 }}>
+              来源：{cfg?.source ?? "—"}
+              <br />
+              Unix 套接字：{cfg?.sockPath ?? "（无）"}
+              <br />
+              mixed-port：{cfg?.mixedPort ?? "—"}
+            </p>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -126,7 +126,7 @@ select {
   min-height: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 8px 12px 10px;
+  padding: 6px 10px 8px;
 }
 
 .page-header {
@@ -164,12 +164,51 @@ select {
   line-height: 1.35;
 }
 
+
+.client-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  min-height: 28px;
+  flex-wrap: wrap;
+}
+
+.client-picker-label {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.client-picker-select {
+  flex: 0 1 240px;
+  max-width: 100%;
+  min-width: 160px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.client-picker-hint {
+  flex: 1 1 140px;
+  font-size: 11px;
+  line-height: 1.3;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .home-chrome {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   min-height: 0;
 }
 
@@ -252,10 +291,10 @@ select {
   padding-bottom: 8px;
 }
 
-/* 首页：4 列 → 两行装下 7 卡全文 */
+/* 首页：4 列密集布局；卡多时纵向滚动（过程默认折叠，点「查看过程」展开） */
 .card-grid-home {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
+  gap: 4px;
   padding-bottom: 0;
   align-items: stretch;
 }
@@ -275,7 +314,7 @@ select {
 }
 
 .card-dense {
-  padding: 6px 8px;
+  padding: 5px 7px;
   border-radius: 8px;
   box-shadow: none;
   min-height: 0;
@@ -330,26 +369,43 @@ select {
   background: var(--unknown-bg);
 }
 
-.card-summary {
-  margin-top: 2px;
-  font-size: 12px;
+.card-conclusion {
+  margin-top: 1px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
-.card-detail {
-  margin-top: 2px;
-  color: var(--text-muted);
-  font-size: 10px;
-  line-height: 1.28;
-  white-space: pre-wrap;
-}
-
-.card-tip {
-  margin-top: 2px;
-  font-size: 10px;
-  line-height: 1.28;
+.card-suggestion {
+  margin-top: 1px;
+  font-size: 9px;
+  line-height: 1.22;
   color: var(--accent);
+}
+
+.card-process-toggle {
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.22;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.card-process-toggle:hover {
+  color: var(--accent);
+}
+
+.card-process {
+  margin-top: 1px;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.22;
+  white-space: pre-wrap;
 }
 
 .toolbar {
@@ -515,4 +571,21 @@ table.data tr:last-child td {
 .about-block ul {
   padding-left: 18px;
   color: var(--text-muted);
+}
+
+.about-check-notes {
+  padding-left: 1.2em;
+  margin: 8px 0 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.about-check-notes li {
+  margin-bottom: 8px;
+}
+.about-check-notes strong {
+  color: var(--text);
+}
+.about-check-notes code {
+  font-size: 12px;
 }

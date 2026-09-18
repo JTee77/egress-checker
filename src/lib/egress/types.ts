@@ -4,8 +4,17 @@ export interface CheckCard {
   id: string;
   title: string;
   level: CheckLevel;
-  summary: string;
+  /** Always-visible plain-Chinese one-sentence result */
+  conclusion: string;
+  /** Technical detail (URLs, HTTP codes, timings…); collapsed by default in UI */
+  process?: string;
+  /** Always-visible next-step / honesty-boundary tip */
+  suggestion?: string;
+  /** @deprecated Prefer `conclusion`. Kept for migration / older callers. */
+  summary?: string;
+  /** @deprecated Prefer `process`. */
   detail?: string;
+  /** @deprecated Prefer `suggestion`. */
   tip?: string;
 }
 
@@ -24,9 +33,9 @@ export interface UnlockResult {
   /** Internal machine level: full | web_only | app_only | blocked | unknown */
   level?: string;
   region: string | null;
-  /** Short headline for the card summary (plain Chinese, no jargon) */
+  /** Short headline for the card conclusion (plain Chinese, no jargon) */
   status: string;
-  /** One-line breakdowns shown in detail */
+  /** One-line breakdowns shown in process */
   lines?: string[];
   /** What we probed */
   probed?: string[];

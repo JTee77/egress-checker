@@ -1,8 +1,11 @@
+mod dns;
 mod mihomo;
 
+use dns::DnsResolversResult;
 use mihomo::{
-    discover_controller, http_via_tcp_async, http_via_unix, list_nodes_async, proxy_fetch_async,
-    DiscoverResult, ListNodesResult, UnixHttpResult,
+    discover_controller, discover_for_client, http_via_tcp_async, http_via_unix, list_nodes_async,
+    proxy_fetch_async, proxy_timed_transfer_async, DiscoverResult, ListNodesResult,
+    TimedTransferResult, UnixHttpResult,
 };
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +39,26 @@ async fn discover_mihomo() -> Result<ControllerConfig, String> {
     tauri::async_runtime::spawn_blocking(|| {
         catch_disk(|| {
             let d: DiscoverResult = discover_controller();
+            Ok(ControllerConfig {
+                host: d.host,
+                port: d.port,
+                secret: d.secret,
+                mixed_port: d.mixed_port,
+                source: d.source,
+                sock_path: d.sock_path,
+            })
+        })
+    })
+    .await
+    .map_err(join_err)?
+}
+
+
+#[tauri::command]
+async fn discover_mihomo_for_client(client_id: String) -> Result<ControllerConfig, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        catch_disk(|| {
+            let d: DiscoverResult = discover_for_client(&client_id);
             Ok(ControllerConfig {
                 host: d.host,
                 port: d.port,
@@ -156,6 +179,40 @@ async fn egress_proxy_fetch(req: ProxyFetchRequest) -> Result<UnixHttpResult, St
     )
     .await
 }
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TimedTransferRequest {
+    url: String,
+    mixed_port: Option<u16>,
+    method: Option<String>,
+    upload_bytes: Option<u64>,
+    timeout_ms: Option<u64>,
+}
+
+#[tauri::command]
+async fn egress_proxy_timed_transfer(
+    req: TimedTransferRequest,
+) -> Result<TimedTransferResult, String> {
+    proxy_timed_transfer_async(
+        &req.url,
+        req.mixed_port,
+        req.method.as_deref().unwrap_or("GET"),
+        req.upload_bytes,
+        req.timeout_ms.unwrap_or(12000),
+    )
+    .await
+}
+
+#[tauri::command]
+async fn egress_list_dns_resolvers() -> Result<DnsResolversResult, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        catch_disk(|| Ok(dns::list_dns_resolvers_blocking()))
+    })
+    .await
+    .map_err(join_err)?
+}
+
 
 /// Append a line to ~/Library/Logs/EgressChecker/app.log (macOS). Best-effort.
 fn append_app_log(msg: &str) {
@@ -302,11 +359,14 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             discover_mihomo,
+            discover_mihomo_for_client,
             read_verge_config_raw,
             mihomo_http,
             mihomo_list_nodes,
             mihomo_unix_http,
-            egress_proxy_fetch
+            egress_proxy_fetch,
+            egress_proxy_timed_transfer,
+            egress_list_dns_resolvers
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
