@@ -9,22 +9,22 @@ import {
 } from "../lib/mihomo";
 
 const PLACEHOLDERS: CheckCard[] = [
-  { id: "reachability", title: "连通性", level: "unknown", summary: "尚未检测" },
-  { id: "dns-leak", title: "DNS 解析器", level: "unknown", summary: "尚未检测" },
-  { id: "ipv6-leak", title: "IPv6 泄漏", level: "unknown", summary: "尚未检测" },
-  { id: "webrtc", title: "WebRTC", level: "unknown", summary: "尚未检测" },
-  { id: "exit-ip", title: "出口 IP", level: "unknown", summary: "尚未检测" },
-  { id: "gemini", title: "Gemini（换节点对照）", level: "unknown", summary: "尚未检测" },
-  { id: "chatgpt", title: "ChatGPT（换节点对照）", level: "unknown", summary: "尚未检测" },
-  { id: "latency", title: "延迟采样", level: "unknown", summary: "尚未检测" },
-  { id: "bandwidth", title: "抽样带宽", level: "unknown", summary: "尚未检测" },
-  { id: "split-routing", title: "分流抽检", level: "unknown", summary: "尚未检测" },
-  { id: "bare-egress", title: "裸奔粗检", level: "unknown", summary: "尚未检测" },
-  { id: "netflix", title: "Netflix", level: "unknown", summary: "尚未检测" },
-  { id: "disney", title: "Disney+", level: "unknown", summary: "尚未检测" },
-  { id: "youtube", title: "YouTube", level: "unknown", summary: "尚未检测" },
-  { id: "app-store", title: "App Store", level: "unknown", summary: "尚未检测" },
-  { id: "google-play", title: "Google Play", level: "unknown", summary: "尚未检测" },
+  { id: "reachability", title: "连通性", level: "unknown", conclusion: "尚未检测" },
+  { id: "dns-leak", title: "DNS 解析器", level: "unknown", conclusion: "尚未检测" },
+  { id: "ipv6-leak", title: "IPv6 泄漏", level: "unknown", conclusion: "尚未检测" },
+  { id: "webrtc", title: "WebRTC", level: "unknown", conclusion: "尚未检测" },
+  { id: "exit-ip", title: "出口 IP", level: "unknown", conclusion: "尚未检测" },
+  { id: "gemini", title: "Gemini（换节点对照）", level: "unknown", conclusion: "尚未检测" },
+  { id: "chatgpt", title: "ChatGPT（换节点对照）", level: "unknown", conclusion: "尚未检测" },
+  { id: "latency", title: "延迟采样", level: "unknown", conclusion: "尚未检测" },
+  { id: "bandwidth", title: "抽样带宽", level: "unknown", conclusion: "尚未检测" },
+  { id: "split-routing", title: "分流抽检", level: "unknown", conclusion: "尚未检测" },
+  { id: "bare-egress", title: "裸奔粗检", level: "unknown", conclusion: "尚未检测" },
+  { id: "netflix", title: "Netflix", level: "unknown", conclusion: "尚未检测" },
+  { id: "disney", title: "Disney+", level: "unknown", conclusion: "尚未检测" },
+  { id: "youtube", title: "YouTube", level: "unknown", conclusion: "尚未检测" },
+  { id: "app-store", title: "App Store", level: "unknown", conclusion: "尚未检测" },
+  { id: "google-play", title: "Google Play", level: "unknown", conclusion: "尚未检测" },
 ];
 
 export function HomePage({
@@ -54,7 +54,7 @@ export function HomePage({
 
   const run = async () => {
     setRunning(true);
-    setCards(PLACEHOLDERS.map((c) => ({ ...c, level: "running", summary: "检测中…" })));
+    setCards(PLACEHOLDERS.map((c) => ({ ...c, level: "running", conclusion: "检测中…" })));
     try {
       const r = await runEgressDiagnostics(
         (card) => {
@@ -78,9 +78,9 @@ export function HomePage({
       const failCards: CheckCard[] = PLACEHOLDERS.map((c) => ({
         ...c,
         level: "fail",
-        summary: "本轮检测失败",
-        detail: msg,
-        tip: "请确认代理软件已打开并已连接，然后重新检测。",
+        conclusion: "本轮检测失败",
+        process: msg,
+        suggestion: "请确认代理软件已打开并已连接，然后重新检测。",
       }));
       setCards(failCards);
       setReport({

@@ -291,7 +291,7 @@ select {
   padding-bottom: 8px;
 }
 
-/* 首页：4 列密集布局；卡多时纵向滚动（详情全文可见，不折叠隐藏） */
+/* 首页：4 列密集布局；卡多时纵向滚动（过程默认折叠，点「查看过程」展开） */
 .card-grid-home {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
@@ -369,26 +369,43 @@ select {
   background: var(--unknown-bg);
 }
 
-.card-summary {
+.card-conclusion {
   margin-top: 1px;
   font-size: 11px;
   font-weight: 600;
   line-height: 1.2;
 }
 
-.card-detail {
+.card-suggestion {
+  margin-top: 1px;
+  font-size: 9px;
+  line-height: 1.22;
+  color: var(--accent);
+}
+
+.card-process-toggle {
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.22;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.card-process-toggle:hover {
+  color: var(--accent);
+}
+
+.card-process {
   margin-top: 1px;
   color: var(--text-muted);
   font-size: 9px;
   line-height: 1.22;
   white-space: pre-wrap;
-}
-
-.card-tip {
-  margin-top: 1px;
-  font-size: 9px;
-  line-height: 1.22;
-  color: var(--accent);
 }
 
 .toolbar {

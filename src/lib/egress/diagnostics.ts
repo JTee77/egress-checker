@@ -107,9 +107,9 @@ export async function checkReachability(
       id: "reachability",
       title: "连通性",
       level: "fail",
-      summary: "无法访问境外 HTTPS 探测点",
-      detail: results.map((r) => `${r.url} → HTTP ${r.status || "超时"}`).join("\n"),
-      tip: "请确认 Clash Verge Rev 已连接，且系统代理 / TUN 已开启；并检查设置中的 mixed-port。",
+      conclusion: "无法访问境外 HTTPS 探测点",
+      process: results.map((r) => `${r.url} → HTTP ${r.status || "超时"}`).join("\n"),
+      suggestion: "请确认 Clash Verge Rev 已连接，且系统代理 / TUN 已开启；并检查设置中的 mixed-port。",
     };
   }
   const level: CheckLevel = ok.length === results.length ? "pass" : "warn";
@@ -117,10 +117,11 @@ export async function checkReachability(
     id: "reachability",
     title: "连通性",
     level,
-    summary: `${ok.length}/${results.length} 探测点可达（约 ${ok[0].ms} ms）`,
-    detail: results
+    conclusion: `${ok.length}/${results.length} 个境外探测点能通（约 ${ok[0].ms} ms）`,
+    process: results
       .map((r) => `${r.url}: ${r.status || "超时"} (${r.ms}ms)`)
       .join("\n"),
+    suggestion: "能通只说明代理路径大致可用，不代表所有网站都正常。",
   };
 }
 
@@ -193,8 +194,8 @@ export function exitIpCard(info: ExitIpInfo): CheckCard {
       id: "exit-ip",
       title: "出口 IP",
       level: "fail",
-      summary: "无法获取出口 IP",
-      tip: "检查网络或临时关闭拦截局域网流量的规则。",
+      conclusion: "无法获取出口 IP",
+      suggestion: "检查网络或临时关闭拦截局域网流量的规则。",
     };
   }
   const level: CheckLevel = info.hosting ? "warn" : "pass";
@@ -202,9 +203,9 @@ export function exitIpCard(info: ExitIpInfo): CheckCard {
     id: "exit-ip",
     title: "出口 IP",
     level,
-    summary: `${info.ip} · ${info.countryCode ?? "?"} · ${info.ipTypeLabel}`,
-    detail: `组织 ${info.org ?? "--"} · ISP ${info.isp ?? "--"} · 国家 ${info.country ?? "--"}`,
-    tip: info.hosting
+    conclusion: `${info.ip} · ${info.countryCode ?? "?"} · ${info.ipTypeLabel}`,
+    process: `组织 ${info.org ?? "--"} · ISP ${info.isp ?? "--"} · 国家 ${info.country ?? "--"}`,
+    suggestion: info.hosting
       ? "机房 IP 可能导致部分 AI / 流媒体风控；可尝试住宅/家宽节点。"
       : undefined,
   };
@@ -246,8 +247,8 @@ export async function checkDnsResolvers(
       id: "dns-leak",
       title: "DNS 解析器",
       level: "unknown",
-      summary: `系统解析器读取失败：${dns.error}`,
-      detail: [
+      conclusion: `系统解析器读取失败：${dns.error}`,
+      process: [
         `source: ${dns.source}`,
         dns.rawHint ? `raw_hint:\n${dns.rawHint}` : "",
         heuristicLine,
@@ -255,13 +256,13 @@ export async function checkDnsResolvers(
       ]
         .filter(Boolean)
         .join("\n"),
-      tip: "仅 macOS 支持 scutil --dns。可对照 Wi-Fi DNS / 隧道内 DNS（如 1.1.1.1）。",
+      suggestion: "仅 macOS 支持 scutil --dns。可对照 Wi-Fi DNS / 隧道内 DNS（如 1.1.1.1）。",
     };
   }
 
   const preview = resolvers.slice(0, 4).join(", ");
   const more = resolvers.length > 4 ? ` 等 ${resolvers.length} 个` : "";
-  const summary =
+  const conclusion =
     resolvers.length === 0
       ? "系统解析器 0 个（未解析到 nameserver）"
       : `系统解析器 ${resolvers.length} 个：${preview}${more}`;
@@ -270,8 +271,8 @@ export async function checkDnsResolvers(
     id: "dns-leak",
     title: "DNS 解析器",
     level: resolvers.length > 0 ? "pass" : "warn",
-    summary,
-    detail: [
+    conclusion,
+    process: [
       `resolvers: ${resolvers.join(", ") || "(无)"}`,
       `source: ${dns.source}`,
       dns.error ? `note: ${dns.error}` : "",
@@ -281,7 +282,7 @@ export async function checkDnsResolvers(
     ]
       .filter(Boolean)
       .join("\n"),
-    tip: "若解析器仍是运营商 DNS，可把 Wi-Fi DNS 改到隧道可达的 1.1.1.1 / 8.8.8.8，并确认流量走代理。",
+    suggestion: "若解析器仍是运营商 DNS，可把 Wi-Fi DNS 改到隧道可达的 1.1.1.1 / 8.8.8.8，并确认流量走代理。",
   };
 }
 
@@ -389,9 +390,9 @@ export async function checkIpv6Leak(
       id: "ipv6-leak",
       title: "IPv6 泄漏",
       level: "pass",
-      summary: "本机当前探测不到可用 IPv6 出口（直连与代理均无）",
-      detail: lines.join("\n"),
-      tip: "无 IPv6 时通常不构成 IPv6 泄漏面；若你刻意开了 IPv6，请检查系统网络与节点是否支持。",
+      conclusion: "本机当前探测不到可用 IPv6 出口（直连与代理均无）",
+      process: lines.join("\n"),
+      suggestion: "无 IPv6 时通常不构成 IPv6 泄漏面；若你刻意开了 IPv6，请检查系统网络与节点是否支持。",
     };
   }
 
@@ -401,9 +402,9 @@ export async function checkIpv6Leak(
         id: "ipv6-leak",
         title: "IPv6 泄漏",
         level: "fail",
-        summary: `直连能拿到 IPv6（${directV6}），代理侧没有 — 可能绕过代理`,
-        detail: lines.join("\n"),
-        tip: "若期望全局走代理：检查 Clash 的 IPv6 / TUN / 系统代理，或暂时关闭系统 IPv6。",
+        conclusion: `直连能拿到 IPv6（${directV6}），代理侧没有 — 可能绕过代理`,
+        process: lines.join("\n"),
+        suggestion: "若期望全局走代理：检查 Clash 的 IPv6 / TUN / 系统代理，或暂时关闭系统 IPv6。",
       };
     }
     if (proxiedV6 !== directV6) {
@@ -411,9 +412,9 @@ export async function checkIpv6Leak(
         id: "ipv6-leak",
         title: "IPv6 泄漏",
         level: "warn",
-        summary: `直连 ${directV6} 与代理 ${proxiedV6} 不一致 — 存在独立直连 IPv6 面`,
-        detail: lines.join("\n"),
-        tip: "代理期望生效时，直连仍能出 IPv6 可能泄漏真实网络身份。可关 IPv6 或强制 TUN。",
+        conclusion: `直连 ${directV6} 与代理 ${proxiedV6} 不一致 — 存在独立直连 IPv6 面`,
+        process: lines.join("\n"),
+        suggestion: "代理期望生效时，直连仍能出 IPv6 可能泄漏真实网络身份。可关 IPv6 或强制 TUN。",
       };
     }
     // same address both paths — unusual but report honestly
@@ -421,9 +422,9 @@ export async function checkIpv6Leak(
       id: "ipv6-leak",
       title: "IPv6 泄漏",
       level: "warn",
-      summary: `直连与代理看到相同 IPv6（${directV6}）— 请人工确认是否真经代理`,
-      detail: lines.join("\n"),
-      tip: "相同地址不一定等于泄漏，也可能是代理出口与本机碰巧一致；请结合出口 IP 卡核对。",
+      conclusion: `直连与代理看到相同 IPv6（${directV6}）— 请人工确认是否真经代理`,
+      process: lines.join("\n"),
+      suggestion: "相同地址不一定等于泄漏，也可能是代理出口与本机碰巧一致；请结合出口 IP 卡核对。",
     };
   }
 
@@ -432,9 +433,9 @@ export async function checkIpv6Leak(
       id: "ipv6-leak",
       title: "IPv6 泄漏",
       level: "pass",
-      summary: `仅代理侧有 IPv6（${proxiedV6}），直连无 — 未见直连旁路`,
-      detail: lines.join("\n"),
-      tip: "说明当前探测下 IPv6 更像走 mixed-port；仍非内核级证明。",
+      conclusion: `仅代理侧有 IPv6（${proxiedV6}），直连无 — 未见直连旁路`,
+      process: lines.join("\n"),
+      suggestion: "说明当前探测下 IPv6 更像走 mixed-port；仍非内核级证明。",
     };
   }
 
@@ -443,11 +444,11 @@ export async function checkIpv6Leak(
     id: "ipv6-leak",
     title: "IPv6 泄漏",
     level: "unknown",
-    summary: directV6
+    conclusion: directV6
       ? `直连 IPv6 可达（${directV6}）；未配置 mixed-port，无法对照代理`
       : "IPv6 状态不明",
-    detail: lines.join("\n"),
-    tip: "在设置中填写 mixed-port 后再测，才能判断是否存在「直连 IPv6 旁路」。",
+    process: lines.join("\n"),
+    suggestion: "在设置中填写 mixed-port 后再测，才能判断是否存在「直连 IPv6 旁路」。",
   };
 }
 
@@ -491,10 +492,10 @@ export async function checkWebRtcLeak(): Promise<CheckCard> {
       id: "webrtc",
       title: "WebRTC",
       level: "unknown",
-      summary: "当前 WebView 无 RTCPeerConnection，无法收集 ICE 候选",
-      detail:
+      conclusion: "当前 WebView 无 RTCPeerConnection，无法收集 ICE 候选",
+      process:
         "嵌入式 WebView 可能禁用 WebRTC。这不等于「无泄漏」，只是本环境测不了。\n测了什么：无（API 缺失）。\n没测：完整 BrowserLeaks / 系统级 WebRTC 策略。",
-      tip: "可在系统浏览器打开 chrome://webrtc-internals 或 BrowserLeaks 复核；或在代理客户端关闭 WebRTC 泄露防护对照。",
+      suggestion: "可在系统浏览器打开 chrome://webrtc-internals 或 BrowserLeaks 复核；或在代理客户端关闭 WebRTC 泄露防护对照。",
     };
   }
 
@@ -565,10 +566,10 @@ export async function checkWebRtcLeak(): Promise<CheckCard> {
       id: "webrtc",
       title: "WebRTC",
       level: "warn",
-      summary: `STUN/ICE 收集失败：${failMsg}`,
-      detail:
+      conclusion: `本次未能收集 WebRTC 候选：${failMsg}`,
+      process:
         "WebView 可能限制 WebRTC。失败≠无泄漏。\n边界：仅做短时 STUN 候选收集，不是完整泄漏证明。",
-      tip: "若持续失败，以系统浏览器复核为准。",
+      suggestion: "若持续失败，以系统浏览器复核为准。",
     };
   }
 
@@ -584,7 +585,7 @@ export async function checkWebRtcLeak(): Promise<CheckCard> {
   const publicHost = host.filter((c) => c.scope === "public");
   const publicSrflx = srflx.filter((c) => c.scope === "public");
 
-  const summaryParts = [
+  const conclusionParts = [
     `候选 ${list.length}`,
     `host ${host.length}`,
     `srflx ${srflx.length}`,
@@ -592,16 +593,16 @@ export async function checkWebRtcLeak(): Promise<CheckCard> {
   ];
 
   let level: CheckLevel = "pass";
-  let summary = `已收集 ICE：${summaryParts.join(" · ")}`;
+  let conclusion = `已收集到 WebRTC 候选：${conclusionParts.join(" · ")}`;
   if (list.length === 0) {
     level = "unknown";
-    summary = "未收集到 ICE 候选（可能被策略拦截或网络限制）";
+    conclusion = "未收集到 ICE 候选（可能被策略拦截或网络限制）";
   } else if (publicHost.length > 0) {
     level = "warn";
-    summary = `发现公网 host 候选（${publicHost.map((c) => c.address).join(", ")}）— 可能暴露地址`;
+    conclusion = `发现公网 host 候选（${publicHost.map((c) => c.address).join(", ")}）— 可能暴露地址`;
   } else if (publicSrflx.length > 0) {
     level = "warn";
-    summary = `发现 srflx 公网反射地址（${publicSrflx.map((c) => c.address).slice(0, 2).join(", ")}）`;
+    conclusion = `发现 srflx 公网反射地址（${publicSrflx.map((c) => c.address).slice(0, 2).join(", ")}）`;
   }
 
   const detailLines = [
@@ -618,9 +619,9 @@ export async function checkWebRtcLeak(): Promise<CheckCard> {
     id: "webrtc",
     title: "WebRTC",
     level,
-    summary,
-    detail: detailLines.join("\n"),
-    tip: "若在意暴露：在浏览器/系统关闭 WebRTC，或仅允许代理路径；并到系统浏览器复核。",
+    conclusion,
+    process: detailLines.join("\n"),
+    suggestion: "若在意暴露：在浏览器/系统关闭 WebRTC，或仅允许代理路径；并到系统浏览器复核。",
   };
 }
 
@@ -630,7 +631,7 @@ export function webrtcCard(): CheckCard {
     id: "webrtc",
     title: "WebRTC",
     level: "unknown",
-    summary: "请调用异步 checkWebRtcLeak()",
+    conclusion: "请调用异步 checkWebRtcLeak()",
   };
 }
 
@@ -882,7 +883,7 @@ function unlockCard(
   const probed = (result.probed ?? []).join("；");
   const notProbed = (result.notProbed ?? []).join("；");
 
-  const detailParts = [
+  const processParts = [
     lines ? `结果对照：${lines}` : "",
     probed ? `测了什么：${probed}` : "",
     notProbed ? `没测什么：${notProbed}` : "",
@@ -894,9 +895,9 @@ function unlockCard(
     id,
     title,
     level,
-    summary: result.status,
-    detail: detailParts.join("\n"),
-    tip: "主要用 Mac 桌面版时，桌面项会写「未单独检测」——以官方客户端实际体验为准。",
+    conclusion: result.status,
+    process: processParts.join("\n"),
+    suggestion: "主要用 Mac 桌面版时，桌面项会写「未单独检测」——以官方客户端实际体验为准。",
   };
 }
 
@@ -918,9 +919,9 @@ export async function sampleLatency(
         id: "latency",
         title: "延迟采样",
         level: "fail",
-        summary: "采样失败",
-        detail: `目标: ${url} → HTTP ${r.status || "超时"}`,
-        tip: "请确认 mixed-port 与系统代理 / TUN 可用。",
+        conclusion: "采样失败",
+        process: `目标: ${url} → HTTP ${r.status || "超时"}`,
+        suggestion: "请确认 mixed-port 与系统代理 / TUN 可用。",
       },
     };
   }
@@ -931,8 +932,9 @@ export async function sampleLatency(
       id: "latency",
       title: "延迟采样",
       level,
-      summary: `${ms} ms（轻量 HTTPS）`,
-      detail: `目标: ${url}`,
+      conclusion: `大约 ${ms} ms（轻量探测）`,
+      process: `目标: ${url}`,
+      suggestion: "这是单次轻量 HTTPS 抽样，不是面板延迟，也不是网页打开速度。",
     },
   };
 }
@@ -1070,7 +1072,7 @@ export async function checkSplitRouting(
     }
   }
 
-  const detail = [
+  const process = [
     expectProxy
       ? `经 mixed-port(${port}) 国内：${cnOk}/${cnViaMixed.length} 可达`
       : "未配置 mixed-port，跳过「经代理」国内/境外对照",
@@ -1096,40 +1098,40 @@ export async function checkSplitRouting(
       id: "split-routing",
       title: "分流抽检",
       level: cnDirectOk > 0 ? "unknown" : "fail",
-      summary: cnDirectOk > 0
+      conclusion: cnDirectOk > 0
         ? "仅完成直连国内基线；未配置 mixed-port，无法判断分流"
         : "国内直连基线失败，且未配置 mixed-port",
-      detail,
-      tip: "在设置中填写 mixed-port 并确保 Clash 已连接后重测，才能对照「国内 DIRECT / 境外走代理」。",
+      process,
+      suggestion: "在设置中填写 mixed-port 并确保 Clash 已连接后重测，才能对照「国内 DIRECT / 境外走代理」。",
     };
   }
 
   let level: CheckLevel;
-  let summary: string;
+  let conclusion: string;
   if (cnOk === 0 && foreignOk === 0) {
     level = "fail";
-    summary = "经代理的国内与境外样本均失败";
+    conclusion = "经代理的国内与境外样本均失败";
   } else if (cnOk === cnViaMixed.length && foreignOk === foreignViaMixed.length) {
     level = "pass";
-    summary = `抽样大致正常：国内 ${cnOk}/${cnViaMixed.length} · 境外 ${foreignOk}/${foreignViaMixed.length} 经代理可达`;
+    conclusion = `抽样大致正常：国内 ${cnOk}/${cnViaMixed.length} · 境外 ${foreignOk}/${foreignViaMixed.length} 经代理可达`;
   } else if (cnOk > 0 && foreignOk === 0) {
     level = "warn";
-    summary = `国内可达但境外经代理失败（${foreignOk}/${foreignViaMixed.length}）— 代理路径或规则可能异常`;
+    conclusion = `国内可达但境外经代理失败（${foreignOk}/${foreignViaMixed.length}）— 代理路径或规则可能异常`;
   } else if (cnOk === 0 && foreignOk > 0) {
     level = "warn";
-    summary = `境外可达但国内经代理失败 — 国内站或 DIRECT 规则可能异常`;
+    conclusion = `境外可达但国内经代理失败 — 国内站或 DIRECT 规则可能异常`;
   } else {
     level = "warn";
-    summary = `部分可达：国内 ${cnOk}/${cnViaMixed.length} · 境外 ${foreignOk}/${foreignViaMixed.length}`;
+    conclusion = `部分可达：国内 ${cnOk}/${cnViaMixed.length} · 境外 ${foreignOk}/${foreignViaMixed.length}`;
   }
 
   return {
     id: "split-routing",
     title: "分流抽检",
     level,
-    summary,
-    detail,
-    tip: "期望常见配置下国内偏 DIRECT、境外走代理。本卡只抽检少数域名，不能证明整份规则无误。",
+    conclusion,
+    process,
+    suggestion: "期望常见配置下国内偏 DIRECT、境外走代理。本卡只抽检少数域名，不能证明整份规则无误。",
   };
 }
 
@@ -1212,38 +1214,38 @@ export async function checkBareEgress(
       id: "bare-egress",
       title: "裸奔粗检",
       level: "unknown",
-      summary: directOk
+      conclusion: directOk
         ? "直连境外可达；未配置 mixed-port，无法判断是否裸奔"
         : "直连境外不可达；未配置 mixed-port",
-      detail: lines.join("\n"),
-      tip: "填写 mixed-port 后重测：若代理路径失败而直连境外仍通，会提示「可能裸奔」。",
+      process: lines.join("\n"),
+      suggestion: "填写 mixed-port 后重测：若代理路径失败而直连境外仍通，会提示「可能裸奔」。",
     };
   }
 
   let level: CheckLevel;
-  let summary: string;
+  let conclusion: string;
   if (!mixedOk && directOk) {
     level = "warn";
-    summary = "可能裸奔：mixed-port 失败但直连境外仍通";
+    conclusion = "可能裸奔：mixed-port 失败但直连境外仍通";
   } else if (!mixedOk && !directOk) {
     level = "unknown";
-    summary = "代理与直连境外均失败 — 可能离线或探测点不可达";
+    conclusion = "代理与直连境外均失败 — 可能离线或探测点不可达";
   } else if (mixedOk && !directOk) {
     level = "pass";
-    summary = "代理路径可达，直连境外失败 — 未见「代理挂了仍直出」";
+    conclusion = "代理路径可达，直连境外失败 — 未见「代理挂了仍直出」";
   } else {
     // both OK
     level = "pass";
-    summary = "代理路径可达（直连境外亦通，属环境常见情况）";
+    conclusion = "代理路径可达（直连境外亦通，属环境常见情况）";
   }
 
   return {
     id: "bare-egress",
     title: "裸奔粗检",
     level,
-    summary,
-    detail: lines.join("\n"),
-    tip: "若提示可能裸奔：检查 Clash 是否断连、mixed-port/TUN/系统代理是否关掉；本卡不能替代系统级抓包。",
+    conclusion,
+    process: lines.join("\n"),
+    suggestion: "若提示可能裸奔：检查 Clash 是否断连、mixed-port/TUN/系统代理是否关掉；本卡不能替代系统级抓包。",
   };
 }
 
@@ -1302,14 +1304,14 @@ export async function sampleBandwidth(
     up.error ||
     (!up.ok ? (up.status ? `HTTP ${up.status}` : "超时或不可达") : null);
 
-  const summaryParts: string[] = [];
+  const conclusionParts: string[] = [];
   if (downMbps != null)
-    summaryParts.push(
+    conclusionParts.push(
       `↓ ${fmtMbps(downMbps)} Mbps${downPartial ? "（部分）" : ""}`,
     );
-  else summaryParts.push(`↓ 失败`);
-  if (upMbps != null) summaryParts.push(`↑ ${fmtMbps(upMbps)} Mbps`);
-  else summaryParts.push(`↑ 失败`);
+  else conclusionParts.push(`↓ 失败`);
+  if (upMbps != null) conclusionParts.push(`↑ ${fmtMbps(upMbps)} Mbps`);
+  else conclusionParts.push(`↑ 失败`);
 
   let level: CheckLevel;
   if (downMbps != null && upMbps != null && !downPartial && down.ok) level = "pass";
@@ -1321,7 +1323,7 @@ export async function sampleBandwidth(
       ? `经 mixed-port(${mixedPort})`
       : "未配置 mixed-port（可能走直连）";
 
-  const detail = [
+  const process = [
     `下载：GET ${BW_DOWN_URL}`,
     `  期望约 ${BW_DOWN_EXPECT} B · 实际 ${down.bytes} B · ${down.elapsedMs} ms · via ${down.via}` +
       (downMbps != null ? ` · ${fmtMbps(downMbps)} Mbps` : "") +
@@ -1335,18 +1337,18 @@ export async function sampleBandwidth(
     "端点：Cloudflare Speed（__down 512KiB / __up 512KiB）。请求 Accept-Encoding: identity，按字节流计数（避免经代理 gzip 解码失败）。未用 httpbin。",
   ].join("\n");
 
-  const summary =
+  const conclusion =
     level === "fail"
       ? `抽样失败（↓ ${downErr ?? "失败"} · ↑ ${upErr ?? "失败"}）`
-      : summaryParts.join(" · ");
+      : conclusionParts.join(" · ");
 
   return {
     id: "bandwidth",
     title: "抽样带宽",
     level,
-    summary,
-    detail,
-    tip: "结果随节点与负载波动较大，仅适合换节点时粗对比；勿当作全网测速或面板延迟。",
+    conclusion,
+    process,
+    suggestion: "结果随节点与负载波动较大，仅适合换节点时粗对比；勿当作全网测速或面板延迟。",
   };
 }
 
@@ -1355,8 +1357,8 @@ export async function sampleBandwidth(
 type ProbeLine = {
   name: string;
   level: CheckLevel;
-  summary: string;
-  detail: string;
+  conclusion: string;
+  process: string;
 };
 
 function extractNetflixRegion(text: string): string | null {
@@ -1393,8 +1395,8 @@ async function probeNetflixLine(
     return {
       name: "Netflix",
       level: "unknown",
-      summary: "探测超时或不可达",
-      detail: `${url} → 超时/无响应（${ms}ms）。短超时粗检；失败≠节点一定不可用。`,
+      conclusion: "探测超时或不可达",
+      process: `${url} → 超时/无响应（${ms}ms）。短超时粗检；失败≠节点一定不可用。`,
     };
   }
 
@@ -1406,8 +1408,8 @@ async function probeNetflixLine(
     return {
       name: "Netflix",
       level: "fail",
-      summary: `疑似墙或地区拦截（HTTP ${r.status || "?"}）。`,
-      detail: `${url} → HTTP ${r.status} · ${ms}ms\n信号：NSEZ-403 / 403 / 地区拦截文案。\n边界：粗检 ≠ 会员权益/片库/画质。`,
+      conclusion: "当前节点下 Netflix 标题页疑似被墙或地区拦截。",
+      process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：NSEZ-403 / 403 / 地区拦截文案。\n边界：粗检 ≠ 会员权益/片库/画质。`,
     };
   }
 
@@ -1423,8 +1425,8 @@ async function probeNetflixLine(
     return {
       name: "Netflix",
       level: "warn",
-      summary: `可达，但标题页异常（可能仅自制剧，HTTP ${r.status}）。`,
-      detail: `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B\n信号：Oh no! / page-404 / 404。\n边界：粗检 ≠ 完整片库解锁。`,
+      conclusion: "标题页能打开，但内容异常（可能仅自制剧）。",
+      process: `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B\n信号：Oh no! / page-404 / 404。\n边界：粗检 ≠ 完整片库解锁。`,
     };
   }
 
@@ -1432,10 +1434,10 @@ async function probeNetflixLine(
     return {
       name: "Netflix",
       level: region ? "pass" : "warn",
-      summary: region
+      conclusion: region
         ? `标题页可达。地区线索：${region}。`
         : "标题页可达。地区线索未解析。",
-      detail: [
+      process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         region
           ? `地区线索：${region}`
@@ -1449,8 +1451,8 @@ async function probeNetflixLine(
   return {
     name: "Netflix",
     level: "unknown",
-    summary: `状态不明（HTTP ${r.status || "超时"}）`,
-    detail: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B。探针偏抖时标 unknown。`,
+    conclusion: "这次没测清楚（页面响应异常）。",
+    process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B。探针偏抖时标 unknown。`,
   };
 }
 
@@ -1473,8 +1475,8 @@ async function probeDisneyLine(
     return {
       name: "Disney+",
       level: "unknown",
-      summary: "探测超时或不可达",
-      detail: `${url} → 超时/无响应（${ms}ms）。未跑 bamgrid 多步注册（本版仅 GET 粗检）。`,
+      conclusion: "探测超时或不可达",
+      process: `${url} → 超时/无响应（${ms}ms）。未跑 bamgrid 多步注册（本版仅 GET 粗检）。`,
     };
   }
 
@@ -1496,8 +1498,8 @@ async function probeDisneyLine(
     return {
       name: "Disney+",
       level: "fail",
-      summary: `疑似墙或地区不可用（HTTP ${r.status || "?"}）。`,
-      detail: `${url} → HTTP ${r.status} · ${ms}ms\n信号：unavailable / not available / 403。\n边界：粗检 ≠ 会员登录与片库。`,
+      conclusion: "当前节点下 Disney+ 疑似不可用或被地区限制。",
+      process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：unavailable / not available / 403。\n边界：粗检 ≠ 会员登录与片库。`,
     };
   }
 
@@ -1509,10 +1511,10 @@ async function probeDisneyLine(
     return {
       name: "Disney+",
       level: "pass",
-      summary: region
+      conclusion: region
         ? `首页可达。地区线索：${region}。`
         : `首页可达（HTTP ${r.status}）。`,
-      detail: [
+      process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         region ? `地区线索：${region}` : "未从 HTML 解析到稳定地区码（仍可能可用）。",
         "测了什么：disneyplus.com 首页 GET。",
@@ -1524,8 +1526,8 @@ async function probeDisneyLine(
   return {
     name: "Disney+",
     level: "unknown",
-    summary: `状态不明（HTTP ${r.status || "超时"}）`,
-    detail: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
+    conclusion: "这次没测清楚（页面响应异常）。",
+    process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
   };
 }
 
@@ -1548,8 +1550,8 @@ async function probeYoutubeLine(
     return {
       name: "YouTube",
       level: "unknown",
-      summary: "探测超时或不可达",
-      detail: `${url} → 超时/无响应（${ms}ms）`,
+      conclusion: "探测超时或不可达",
+      process: `${url} → 超时/无响应（${ms}ms）`,
     };
   }
 
@@ -1572,8 +1574,8 @@ async function probeYoutubeLine(
     return {
       name: "YouTube",
       level: "fail",
-      summary: `疑似墙：Premium 页提示地区不可用${country ? `（${country}）` : ""}。`,
-      detail: `${url} → HTTP ${r.status} · ${ms}ms\n信号：not available in your country。\n边界：粗检 ≠ Premium 订阅/全家共享/画质。`,
+      conclusion: `疑似墙：Premium 页提示地区不可用${country ? `（${country}）` : ""}。`,
+      process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：not available in your country。\n边界：粗检 ≠ Premium 订阅/全家共享/画质。`,
     };
   }
 
@@ -1585,10 +1587,10 @@ async function probeYoutubeLine(
     return {
       name: "YouTube",
       level: "pass",
-      summary: country
+      conclusion: country
         ? `Premium 页可达。地区线索：${country}。`
         : "Premium 页可达（粗检）。",
-      detail: [
+      process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         country ? `country-code / GL：${country}` : "未解析到 country-code（页仍可达）。",
         "测了什么：youtube.com/premium 文案与粗国家码。",
@@ -1601,16 +1603,16 @@ async function probeYoutubeLine(
     return {
       name: "YouTube",
       level: "warn",
-      summary: `页可达，但 Premium 信号弱（HTTP ${r.status}）。`,
-      detail: `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B。可能被改版/重定向稀释信号。`,
+      conclusion: "页面能打开，但 Premium 相关信号偏弱。",
+      process: `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B。可能被改版/重定向稀释信号。`,
     };
   }
 
   return {
     name: "YouTube",
     level: "unknown",
-    summary: `状态不明（HTTP ${r.status || "超时"}）`,
-    detail: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
+    conclusion: "这次没测清楚（页面响应异常）。",
+    process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
   };
 }
 
@@ -1643,8 +1645,8 @@ async function probeAppleStoreLine(
     return {
       name: "App Store",
       level: "unknown",
-      summary: "探测超时或不可达",
-      detail: `${url} → 超时/无响应（${ms}ms）`,
+      conclusion: "探测超时或不可达",
+      process: `${url} → 超时/无响应（${ms}ms）`,
     };
   }
 
@@ -1662,8 +1664,8 @@ async function probeAppleStoreLine(
     return {
       name: "App Store",
       level: "fail",
-      summary: `疑似墙或地区不可用（HTTP ${r.status || "?"}）。`,
-      detail: `${url} → HTTP ${r.status} · ${ms}ms\n边界：不是下载、支付、上架审核。`,
+      conclusion: "当前节点下商店页疑似不可用或被地区限制。",
+      process: `${url} → HTTP ${r.status} · ${ms}ms\n边界：不是下载、支付、上架审核。`,
     };
   }
 
@@ -1671,10 +1673,10 @@ async function probeAppleStoreLine(
     return {
       name: "App Store",
       level: "pass",
-      summary: sf
+      conclusion: sf
         ? `网页店面可达。地区线索：${sf}。`
         : `网页店面可达（HTTP ${r.status}）。`,
-      detail: [
+      process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         sf
           ? `storefront / 国家路径线索：${sf}`
@@ -1688,8 +1690,8 @@ async function probeAppleStoreLine(
   return {
     name: "App Store",
     level: "unknown",
-    summary: `状态不明（HTTP ${r.status || "超时"}）`,
-    detail: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
+    conclusion: "这次没测清楚（页面响应异常）。",
+    process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
   };
 }
 
@@ -1712,8 +1714,8 @@ async function probeGooglePlayLine(
     return {
       name: "Google Play",
       level: "unknown",
-      summary: "探测超时或不可达",
-      detail: `${url} → 超时/无响应（${ms}ms）`,
+      conclusion: "探测超时或不可达",
+      process: `${url} → 超时/无响应（${ms}ms）`,
     };
   }
 
@@ -1736,8 +1738,8 @@ async function probeGooglePlayLine(
     return {
       name: "Google Play",
       level: "fail",
-      summary: `疑似墙或地区不可用（HTTP ${r.status || "?"}）。`,
-      detail: `${url} → HTTP ${r.status} · ${ms}ms\n边界：不是下载、支付、上架审核。`,
+      conclusion: "当前节点下商店页疑似不可用或被地区限制。",
+      process: `${url} → HTTP ${r.status} · ${ms}ms\n边界：不是下载、支付、上架审核。`,
     };
   }
 
@@ -1745,10 +1747,10 @@ async function probeGooglePlayLine(
     return {
       name: "Google Play",
       level: "pass",
-      summary: gl
+      conclusion: gl
         ? `网页商店可达。地区线索：${gl}。`
         : `网页商店可达（HTTP ${r.status}）。`,
-      detail: [
+      process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         gl ? `gl 线索：${gl}` : "未解析到 gl 参数（页仍可达）。",
         "测了什么：play.google.com 网页是否打开。",
@@ -1760,8 +1762,8 @@ async function probeGooglePlayLine(
   return {
     name: "Google Play",
     level: "unknown",
-    summary: `状态不明（HTTP ${r.status || "超时"}）`,
-    detail: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
+    conclusion: "这次没测清楚（页面响应异常）。",
+    process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
   };
 }
 
@@ -1775,16 +1777,16 @@ function serviceCardFromLine(
   id: string,
   title: string,
   line: ProbeLine,
-  tip: string,
+  suggestion: string,
   mixedPort?: number | null,
 ): CheckCard {
   return {
     id,
     title,
     level: line.level,
-    summary: line.summary,
-    detail: [line.detail, mixedPortPathNote(mixedPort)].join("\n"),
-    tip,
+    conclusion: line.conclusion,
+    process: [line.process, mixedPortPathNote(mixedPort)].join("\n"),
+    suggestion,
   };
 }
 
