@@ -121,7 +121,7 @@ export async function checkReachability(
     process: results
       .map((r) => `${r.url}: ${r.status || "超时"} (${r.ms}ms)`)
       .join("\n"),
-    suggestion: level === "warn" ? "换个节点再测一次" : undefined,
+    suggestion: undefined,
   };
 }
 
@@ -811,12 +811,7 @@ function unlockCard(
     "换节点时一次对照用，不能替代你自己打开网站。",
   ].filter(Boolean);
 
-  let suggestion: string | undefined;
-  if (level === "fail" || level === "unknown") {
-    suggestion = "换个节点再测一次";
-  } else if (level === "warn") {
-    suggestion = "结果不一致时可换个节点再试";
-  }
+  const suggestion: string | undefined = undefined;
 
   return {
     id,
@@ -861,7 +856,7 @@ export async function sampleLatency(
       level,
       conclusion: `大约 ${ms} ms（轻量探测）`,
       process: `目标: ${url}\n边界：单次轻量 HTTPS 抽样，不是面板延迟。`,
-      suggestion: level === "pass" ? undefined : "换个节点再测一次",
+      suggestion: undefined,
     },
   };
 }
@@ -1058,7 +1053,7 @@ export async function checkSplitRouting(
     level,
     conclusion,
     process,
-    suggestion: level === "fail" || level === "warn" ? "换个节点或检查分流规则后再测一次" : undefined,
+    suggestion: undefined,
   };
 }
 
@@ -1275,7 +1270,7 @@ export async function sampleBandwidth(
     level,
     conclusion,
     process,
-    suggestion: level === "fail" ? "请确认代理已连接后再测一次" : level === "warn" ? "结果不好就换个节点再测一次" : undefined,
+    suggestion: level === "fail" ? "请确认代理软件已连上后再测。" : undefined,
   };
 }
 
@@ -1676,7 +1671,7 @@ async function probeGooglePlayLine(
       level: "pass",
       conclusion: gl
         ? `网页商店可达。地区线索：${gl}。`
-        : `网页商店可达（HTTP ${r.status}）。`,
+        : "网页商店可达。",
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         gl ? `gl 线索：${gl}` : "未解析到 gl 参数（页仍可达）。",
@@ -1724,10 +1719,10 @@ function serviceCardFromLine(
   };
 }
 
-/** Short actionable tip for streaming cards; empty = no suggestion on pass. */
-const STREAM_TIP = "结果不好就换个节点再测一次";
-/** Short actionable tip for store cards; empty = no suggestion on pass. */
-const STORE_TIP = "结果不好就换个节点再测一次";
+/** Streaming cards: no canned「换节点」suggestion. */
+const STREAM_TIP = "";
+/** Store cards: no canned「换节点」suggestion. */
+const STORE_TIP = "";
 
 /** Netflix 单独卡：标题页粗可达与地区线索。 */
 export async function checkNetflixUnlock(
@@ -1792,7 +1787,7 @@ function timeoutCard(
     level: "unknown",
     conclusion: "这次没测出来",
     process: "探测超时或卡住，已按截止时间结束本项。",
-    suggestion: "请再试一次或换节点",
+    suggestion: undefined,
   };
 }
 
@@ -1818,7 +1813,7 @@ async function withCardDeadline(
       level: "unknown",
       conclusion: "这次没测出来",
       process: msg,
-      suggestion: "请再试一次或换节点",
+      suggestion: undefined,
     };
   } finally {
     if (timer) clearTimeout(timer);
