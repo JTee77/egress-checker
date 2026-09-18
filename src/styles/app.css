@@ -696,6 +696,29 @@ table.data tr:last-child td {
   line-height: 1.45;
 }
 
+.switch-warn {
+  border-left: 3px solid var(--warn);
+  padding-left: 10px;
+}
+
+.confirm-panel {
+  margin: 0 0 12px;
+  padding: 14px;
+  border: 1px solid var(--warn);
+  background: var(--warn-bg);
+}
+
+.confirm-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.confirm-body {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .progress-line {
   margin-bottom: 10px;
   font-size: 13px;

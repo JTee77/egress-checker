@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { CheckCardView } from "../components/CheckCardView";
 import {
   runEnvDiagnostics,
@@ -12,11 +12,14 @@ import {
   findSelectorGroup,
   normalizeClientId,
   probeDelay,
+  resolveSelectorSnapshot,
+  restoreProxy,
   switchProxy,
   type ClientId,
   type ConnectionState,
   type ControllerConfig,
   type ProxyNode,
+  type SelectorSnapshot,
 } from "../lib/mihomo";
 import {
   formatStars,
@@ -99,8 +102,10 @@ export function HomePage({
   const [vpnScore, setVpnScore] = useState<VpnScoreResult | null>(null);
   const [envOpen, setEnvOpen] = useState(false);
   const [envRunning, setEnvRunning] = useState(false);
-  const [allowSwitch, setAllowSwitch] = useState(false);
+  const [allConfirmOpen, setAllConfirmOpen] = useState(false);
   const [switchHint, setSwitchHint] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const abortAllRef = useRef(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [expandedScore, setExpandedScore] = useState<string | null>(null);
@@ -225,11 +230,18 @@ export function HomePage({
   };
 
   const testAll = async () => {
+    abortAllRef.current = false;
     setRunning(true);
     setNodeScores([]);
     setVpnScore(null);
     setSelectedNodeName(null);
     setSwitchHint(null);
+    setRestoreError(null);
+
+    let originalSnap: SelectorSnapshot | null = null;
+    let didSwitch = false;
+    const config = connection.config;
+
     try {
       const g = await ensureGate();
       if (!g.ok) return;
@@ -257,16 +269,32 @@ export function HomePage({
         return;
       }
 
-      const config = connection.config;
       const results: NodeScoreResult[] = [];
-      const original = connection.currentProxy;
       const alive: ProxyNode[] = [];
+      const canSwitch =
+        !!config && !connection.usingMock && !forceMock;
+
+      if (canSwitch) {
+        originalSnap = await resolveSelectorSnapshot(
+          config,
+          connection.currentProxy,
+        );
+        if (!originalSnap?.now && connection.currentProxy) {
+          const group =
+            (await findSelectorGroup(config, connection.currentProxy)) ??
+            originalSnap?.group;
+          if (group) {
+            originalSnap = { group, now: connection.currentProxy };
+          }
+        }
+      }
 
       setProgress(`淘汰不通节点：0/${list.length}`);
       for (let i = 0; i < list.length; i++) {
+        if (abortAllRef.current) break;
         const n = list[i];
         setProgress(`淘汰不通节点：${i + 1}/${list.length}`);
-        if (connection.usingMock || forceMock || !config) {
+        if (!canSwitch) {
           if (i === list.length - 1 && list.length > 1) {
             results.push(scoreDeadNode(n.name, "演示：延迟探测失败，按不可用处理。"));
           } else {
@@ -282,67 +310,40 @@ export function HomePage({
         }
       }
 
-      if (!allowSwitch) {
-        setProgress("深测当前出口（未授权切换，其它存活节点仅标记可达）…");
-        setNodeCards(asRunning(NODE_PLACEHOLDERS));
-        const r = await runNodeDiagnostics(upsertNodeCard, {
-          mixedPort: mixedPortNum,
-          mihomoConfig: config,
-        });
-        setReport(r);
-        setNodeCards(r.cards);
-        const currentName = original ?? "当前节点";
-        for (const n of alive) {
-          if (n.name === currentName) {
-            results.push(scoreNodeFromCards(n.name, r.cards, r.ranAt));
-          } else {
-            results.push({
-              nodeName: n.name,
-              stars: 3,
-              totalScore: 60,
-              blurb:
-                "延迟探测可达，但本轮未做深测。若要完整星级，请勾选下方授权临时切换，或在客户端切到该节点后再测当前。",
-              breakdown: [
-                { key: "availability", label: "可用性", weight: 0.25, score: 80, note: "延迟探测可达" },
-                { key: "throughput", label: "吞吐抽样", weight: 0.3, score: 50, note: "未深测" },
-                { key: "services", label: "服务面", weight: 0.3, score: 50, note: "未深测" },
-                { key: "exit", label: "出口质量", weight: 0.15, score: 50, note: "未深测" },
-              ],
-              cards: [],
-              ranAt: new Date().toISOString(),
-            });
-          }
-        }
+      if (abortAllRef.current) {
+        setSwitchHint("已停止。");
+      } else if (canSwitch && originalSnap?.group && originalSnap.now) {
         setSwitchHint(
-          "未授权切换节点：完整星级仅覆盖当前出口。要深测其它节点，请勾选授权，或到代理软件里手动切换后再测。",
-        );
-      } else if (config && !connection.usingMock && !forceMock) {
-        setSwitchHint(
-          original
-            ? `已授权临时切换。原先选中：${original}。测完后请到代理软件里自己改回，本应用不会自动改回。`
-            : "已授权临时切换。测完后请到代理软件里确认当前节点。",
+          `测全部会临时切换节点。原先选中：${originalSnap.now}。测完后会自动切回去。`,
         );
         for (let i = 0; i < alive.length; i++) {
+          if (abortAllRef.current) {
+            setSwitchHint("已停止，正在切回原先节点…");
+            break;
+          }
           const n = alive[i];
           setProgress(`深测存活节点：${i + 1}/${alive.length}（${n.name}）`);
-          const group = await findSelectorGroup(config, n.name);
+          const group =
+            (await findSelectorGroup(config!, n.name)) ?? originalSnap.group;
           if (!group) {
             results.push(
               scoreDeadNode(
                 n.name,
-                "找不到可切换的策略组。请在代理软件里手动选中该节点后再测。",
+                "找不到可切换的策略组，这轮没法深测这个节点。",
               ),
             );
             continue;
           }
-          const ok = await switchProxy(config, group, n.name);
+          const ok = await switchProxy(config!, group, n.name);
           if (!ok) {
             results.push(
-              scoreDeadNode(n.name, "切换失败。请在代理软件里手动选中该节点后再测。"),
+              scoreDeadNode(n.name, "切换失败，这轮没法深测这个节点。"),
             );
             continue;
           }
+          didSwitch = true;
           await new Promise((r) => setTimeout(r, 400));
+          if (abortAllRef.current) break;
           setNodeCards(asRunning(NODE_PLACEHOLDERS));
           const r = await runNodeDiagnostics(upsertNodeCard, {
             mixedPort: mixedPortNum,
@@ -352,8 +353,34 @@ export function HomePage({
           setNodeCards(r.cards);
           results.push(scoreNodeFromCards(n.name, r.cards, r.ranAt));
         }
+      } else if (canSwitch) {
+        // API 在，但读不到原先选中 / 策略组：仍尽量深测当前出口，并说明原因
+        setSwitchHint(
+          "连上了代理软件，但读不到当前选中的节点或策略组，没法安全地临时切换。这轮只深测当前出口。",
+        );
+        setProgress("深测当前出口（无法安全切换）…");
+        setNodeCards(asRunning(NODE_PLACEHOLDERS));
+        const r = await runNodeDiagnostics(upsertNodeCard, {
+          mixedPort: mixedPortNum,
+          mihomoConfig: config,
+        });
+        setReport(r);
+        setNodeCards(r.cards);
+        const currentName = connection.currentProxy ?? "当前节点";
+        results.push(scoreNodeFromCards(currentName, r.cards, r.ranAt));
+        for (const n of alive) {
+          if (n.name === currentName) continue;
+          results.push(
+            scoreDeadNode(
+              n.name,
+              "这轮没法切换到该节点做深测（读不到策略组或当前选中）。",
+            ),
+          );
+        }
       } else {
+        // Mock / 无配置：演示深测，不切换
         for (let i = 0; i < alive.length; i++) {
+          if (abortAllRef.current) break;
           const n = alive[i];
           setProgress(`深测存活节点：${i + 1}/${alive.length}（演示）`);
           setNodeCards(asRunning(NODE_PLACEHOLDERS));
@@ -381,7 +408,27 @@ export function HomePage({
       setGate({ ok: false, message: `测全部节点时出错：${msg}` });
       setGateDetailOpen(true);
     } finally {
+      // 成功 / 中止 / 出错：只要切过，就必须尝试切回；失败要明确报错
+      if (didSwitch && config && originalSnap?.now && originalSnap.group) {
+        setProgress(`正在切回原先节点：${originalSnap.now}…`);
+        const restored = await restoreProxy(config, originalSnap);
+        if (!restored) {
+          const errMsg = `没法自动切回原先的节点「${originalSnap.now}」。请立刻到代理软件里手动选回去，否则你可能还停在别的节点上。`;
+          setRestoreError(errMsg);
+          setSwitchHint(errMsg);
+        } else {
+          setRestoreError(null);
+          setSwitchHint(`已切回原先节点：${originalSnap.now}`);
+        }
+        setProgress(null);
+      } else if (didSwitch && (!originalSnap?.now || !originalSnap.group)) {
+        const errMsg =
+          "测全部时切换过节点，但应用没有记下原先选中的节点，没法自动切回。请到代理软件里确认当前节点。";
+        setRestoreError(errMsg);
+        setSwitchHint(errMsg);
+      }
       setRunning(false);
+      abortAllRef.current = false;
     }
   };
 
@@ -422,8 +469,23 @@ export function HomePage({
   };
 
   const onPrimary = () => {
-    if (mode === "current") void testCurrent();
-    else void testAll();
+    if (mode === "current") {
+      setAllConfirmOpen(false);
+      void testCurrent();
+      return;
+    }
+    setRestoreError(null);
+    setAllConfirmOpen(true);
+  };
+
+  const onConfirmAll = () => {
+    setAllConfirmOpen(false);
+    void testAll();
+  };
+
+  const onAbortAll = () => {
+    abortAllRef.current = true;
+    setProgress("正在停止…");
   };
 
   const selectedScore = useMemo(
@@ -519,7 +581,10 @@ export function HomePage({
           type="button"
           className={`mode-btn ${mode === "current" ? "active" : ""}`}
           disabled={running}
-          onClick={() => setMode("current")}
+          onClick={() => {
+            setMode("current");
+            setAllConfirmOpen(false);
+          }}
         >
           测当前节点
         </button>
@@ -533,37 +598,72 @@ export function HomePage({
         </button>
       </div>
 
-      {mode === "all" ? (
-        <label className="switch-consent">
-          <input
-            type="checkbox"
-            checked={allowSwitch}
-            disabled={running}
-            onChange={(e) => setAllowSwitch(e.target.checked)}
-          />
-          <span>
-            授权临时切换节点以便深测（测完请到代理软件里自己改回；本应用不会偷偷切换，也不会自动改回）
+      {mode === "all" && !running && !allConfirmOpen ? (
+        <div className="note note-compact switch-warn" role="status">
+          <span className="note-line">
+            「测全部」会对每个能通的节点做深测：应用会临时切换你当前选中的节点，出口会跟着变；测完（或你中途停止）后会自动切回原来的节点。
           </span>
-        </label>
+        </div>
       ) : null}
 
-      <div className="toolbar" style={{ marginBottom: 12 }}>
-        <button
-          className="btn btn-primary"
-          type="button"
-          disabled={running || clientUnset}
-          onClick={onPrimary}
-        >
-          {running
-            ? (progress ?? "检测中…")
-            : mode === "current"
-              ? "开始测当前节点"
-              : "开始测全部节点"}
-        </button>
-      </div>
+      {allConfirmOpen && mode === "all" ? (
+        <div className="confirm-panel card" role="dialog" aria-labelledby="all-confirm-title">
+          <div id="all-confirm-title" className="confirm-title">
+            开始前请确认
+          </div>
+          <p className="confirm-body">
+            测全部节点时，应用会在节点之间来回切换，你的上网出口会跟着变。测完或中途停止后，会自动切回你现在选中的节点。若切回失败，界面会明确报错，请你到代理软件里手动改回。
+          </p>
+          <div className="toolbar" style={{ marginBottom: 0 }}>
+            <button
+              className="btn btn-primary"
+              type="button"
+              disabled={clientUnset}
+              onClick={onConfirmAll}
+            >
+              开始测全部（会切换节点）
+            </button>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => setAllConfirmOpen(false)}
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="toolbar" style={{ marginBottom: 12 }}>
+          <button
+            className="btn btn-primary"
+            type="button"
+            disabled={running || clientUnset}
+            onClick={onPrimary}
+          >
+            {running
+              ? (progress ?? "检测中…")
+              : mode === "current"
+                ? "开始测当前节点"
+                : "开始测全部（会切换节点）"}
+          </button>
+          {running && mode === "all" ? (
+            <button className="btn" type="button" onClick={onAbortAll}>
+              停止并切回
+            </button>
+          ) : null}
+        </div>
+      )}
 
       {progress ? <div className="progress-line muted">{progress}</div> : null}
-      {switchHint ? <div className="note note-compact">{switchHint}</div> : null}
+      {restoreError ? (
+        <div className="gate-banner gate-banner-block" role="alert">
+          <div className="gate-banner-title">没能切回原先节点</div>
+          <div className="gate-banner-msg">{restoreError}</div>
+        </div>
+      ) : null}
+      {switchHint && !restoreError ? (
+        <div className="note note-compact">{switchHint}</div>
+      ) : null}
 
       {vpnScore ? (
         <div className="vpn-score-card card">
@@ -795,7 +895,7 @@ export function HomePage({
               <li>不支持 Shadowrocket / Surge / 商业封闭客户端</li>
               <li>仅支持 macOS Apple Silicon（arm64）</li>
               <li>结果用于换节点对照，不是完整安全鉴定报告</li>
-              <li>默认不会偷偷切换你的代理节点</li>
+              <li>除「测全部」经你确认外，不会偷偷切换你的代理节点；测完会强制切回</li>
             </ul>
             <p className="muted">
               v0.1.4：轻量门槛 → 测当前 / 测全部节点星级 → 点选节点得 VPN

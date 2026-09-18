@@ -623,33 +623,63 @@ export async function probeDelay(
 
 /**
  * 查找包含该节点的选择器组名（优先 Proxy / GLOBAL）。
- * 仅用于用户明确确认后的切换；默认测评路径不要调用 switchProxy。
+ * 仅用于用户确认后的「测全部」临时切换；其它路径不要调用 switchProxy。
  */
 export async function findSelectorGroup(
   config: ControllerConfig,
   nodeName: string,
 ): Promise<string | null> {
+  const snap = await resolveSelectorSnapshot(config, nodeName);
+  return snap?.group ?? null;
+}
+
+export type SelectorSnapshot = {
+  group: string;
+  /** 该策略组当前选中的节点名 */
+  now: string | null;
+};
+
+/**
+ * 解析包含指定节点（或当前选中）的策略组，并读出组内 `now`。
+ * 用于「测全部」开始前记录、结束后强制切回。
+ */
+export async function resolveSelectorSnapshot(
+  config: ControllerConfig,
+  nodeName?: string | null,
+): Promise<SelectorSnapshot | null> {
   const res = await httpApi(config, "GET", "/proxies", undefined, 18000);
   if (!res || !is2xx(res.status) || !res.json) return null;
   const obj = res.json as { proxies?: Record<string, ProxyInfo> };
   const proxies = obj.proxies ?? {};
   const prefer = ["Proxy", "GLOBAL", "proxy", "SELECT", "节点选择"];
+
+  const isSelectable = (p: ProxyInfo) => {
+    const t = (p.type || "").toLowerCase();
+    return t === "selector" || t === "urltest" || t === "fallback";
+  };
+
   const candidates: string[] = [];
   for (const name of prefer) {
     const p = proxies[name];
-    if (p?.all?.includes(nodeName)) candidates.push(name);
-  }
-  for (const [name, p] of Object.entries(proxies)) {
-    if (prefer.includes(name)) continue;
-    const t = (p.type || "").toLowerCase();
-    if (
-      (t === "selector" || t === "urltest" || t === "fallback") &&
-      p.all?.includes(nodeName)
-    ) {
+    if (!p) continue;
+    if (nodeName) {
+      if (p.all?.includes(nodeName)) candidates.push(name);
+    } else if (isSelectable(p) && p.now) {
       candidates.push(name);
     }
   }
-  return candidates[0] ?? null;
+  for (const [name, p] of Object.entries(proxies)) {
+    if (prefer.includes(name)) continue;
+    if (!isSelectable(p)) continue;
+    if (nodeName ? p.all?.includes(nodeName) : !!p.now) {
+      candidates.push(name);
+    }
+  }
+
+  const group = candidates[0];
+  if (!group) return null;
+  const now = proxies[group]?.now ?? nodeName ?? null;
+  return { group, now };
 }
 
 export async function switchProxy(
@@ -660,6 +690,15 @@ export async function switchProxy(
   const enc = encodeURIComponent(group);
   const res = await httpApi(config, "PUT", `/proxies/${enc}`, { name });
   return !!res && is2xx(res.status);
+}
+
+/** 切回原先节点；失败返回 false（调用方必须向用户报错，不可静默）。 */
+export async function restoreProxy(
+  config: ControllerConfig,
+  snapshot: SelectorSnapshot,
+): Promise<boolean> {
+  if (!snapshot.now) return false;
+  return switchProxy(config, snapshot.group, snapshot.now);
 }
 
 export async function closeConnections(config: ControllerConfig): Promise<boolean> {
