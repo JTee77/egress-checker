@@ -83,20 +83,30 @@ function isReachableStatus(status: number, ok: boolean): boolean {
   return status === 204 || status === 200 || (ok && status >= 200 && status < 400);
 }
 
+export type ReachabilityOptions = {
+  /** light：只探一个点 + 更短超时，供「测全部」批量深测 */
+  light?: boolean;
+};
+
 export async function checkReachability(
   mixedPort?: number | null,
+  opts?: ReachabilityOptions,
 ): Promise<CheckCard> {
-  const targets = [
-    "https://www.google.com/generate_204",
-    "https://cp.cloudflare.com/generate_204",
-  ];
+  const light = !!opts?.light;
+  const targets = light
+    ? ["https://cp.cloudflare.com/generate_204"]
+    : [
+        "https://www.google.com/generate_204",
+        "https://cp.cloudflare.com/generate_204",
+      ];
+  const timeoutMs = light ? 3500 : PROBE_TIMEOUT_MS;
   // Sequential probes to avoid slamming the Rust spawn_blocking pool.
   const results: { url: string; ok: boolean; status: number; text: string; ms: number }[] = [];
   for (const url of targets) {
     const t0 = performance.now();
     const r = await probeText(url, {
       mixedPort,
-      timeoutMs: PROBE_TIMEOUT_MS,
+      timeoutMs,
       method: "GET",
     });
     results.push({ url, ...r, ms: Math.round(performance.now() - t0) });
@@ -1172,11 +1182,23 @@ export async function checkBareEgress(
 }
 
 /** A4: sample up/down Mbps through current egress (mixed-port preferred). */
-const BW_DOWN_URL = "https://speed.cloudflare.com/__down?bytes=524288";
-const BW_DOWN_EXPECT = 524288;
+const BW_DOWN_BYTES_FULL = 524288;
+const BW_DOWN_BYTES_LIGHT = 131072;
+const BW_UP_BYTES_FULL = 512 * 1024;
+const BW_UP_BYTES_LIGHT = 64 * 1024;
+const BW_TIMEOUT_FULL_MS = 12000;
+const BW_TIMEOUT_LIGHT_MS = 6000;
+
+function bwDownUrl(bytes: number): string {
+  return `https://speed.cloudflare.com/__down?bytes=${bytes}`;
+}
+
 const BW_UP_URL = "https://speed.cloudflare.com/__up";
-const BW_UP_BYTES = 512 * 1024;
-const BW_TIMEOUT_MS = 12000;
+
+export type BandwidthSampleOptions = {
+  /** light：更小载荷 + 更紧超时，供「测全部」批量深测 */
+  light?: boolean;
+};
 
 function bytesToMbps(bytes: number, elapsedMs: number): number | null {
   if (bytes <= 0 || elapsedMs <= 0) return null;
@@ -1192,19 +1214,26 @@ function fmtMbps(v: number | null): string {
 
 export async function sampleBandwidth(
   mixedPort?: number | null,
+  opts?: BandwidthSampleOptions,
 ): Promise<CheckCard> {
+  const light = !!opts?.light;
+  const downBytes = light ? BW_DOWN_BYTES_LIGHT : BW_DOWN_BYTES_FULL;
+  const upBytes = light ? BW_UP_BYTES_LIGHT : BW_UP_BYTES_FULL;
+  const timeoutMs = light ? BW_TIMEOUT_LIGHT_MS : BW_TIMEOUT_FULL_MS;
+  const downUrl = bwDownUrl(downBytes);
+
   const down = await timedTransferViaProxy({
-    url: BW_DOWN_URL,
+    url: downUrl,
     mixedPort: mixedPort ?? null,
     method: "GET",
-    timeoutMs: BW_TIMEOUT_MS,
+    timeoutMs,
   });
   const up = await timedTransferViaProxy({
     url: BW_UP_URL,
     mixedPort: mixedPort ?? null,
     method: "POST",
-    uploadBytes: BW_UP_BYTES,
-    timeoutMs: BW_TIMEOUT_MS,
+    uploadBytes: upBytes,
+    timeoutMs,
   });
 
   const downMbps =
@@ -1245,18 +1274,19 @@ export async function sampleBandwidth(
       ? `经 mixed-port(${mixedPort})`
       : "未配置 mixed-port（可能走直连）";
 
+  const kib = (n: number) => `${Math.round(n / 1024)}KiB`;
   const process = [
-    `下载：GET ${BW_DOWN_URL}`,
-    `  期望约 ${BW_DOWN_EXPECT} B · 实际 ${down.bytes} B · ${down.elapsedMs} ms · via ${down.via}` +
+    `下载：GET ${downUrl}`,
+    `  期望约 ${downBytes} B · 实际 ${down.bytes} B · ${down.elapsedMs} ms · via ${down.via}` +
       (downMbps != null ? ` · ${fmtMbps(downMbps)} Mbps` : "") +
       (downErr ? ` · ${downErr}` : ""),
-    `上传：POST ${BW_UP_URL}（Content-Type: application/octet-stream，${BW_UP_BYTES} B 零填充）`,
+    `上传：POST ${BW_UP_URL}（Content-Type: application/octet-stream，${upBytes} B 零填充）`,
     `  发送 ${up.bytes} B · ${up.elapsedMs} ms · via ${up.via}` +
       (upMbps != null ? ` · ${fmtMbps(upMbps)} Mbps` : "") +
       (upErr ? ` · ${upErr}` : ""),
-    `路径：${portNote}；超时 ${BW_TIMEOUT_MS} ms。`,
+    `路径：${portNote}；超时 ${timeoutMs} ms${light ? "（轻量抽样）" : ""}。`,
     "说明：抽样带宽 ≠ 全网测速 / 不等于节点面板延迟。",
-    "端点：Cloudflare Speed（__down 512KiB / __up 512KiB）。请求 Accept-Encoding: identity，按字节流计数（避免经代理 gzip 解码失败）。未用 httpbin。",
+    `端点：Cloudflare Speed（__down ${kib(downBytes)} / __up ${kib(upBytes)}）。请求 Accept-Encoding: identity，按字节流计数（避免经代理 gzip 解码失败）。未用 httpbin。`,
   ].join("\n");
 
   const conclusion =

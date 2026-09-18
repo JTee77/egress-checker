@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import { CheckCardView } from "../components/CheckCardView";
 import {
+  mapPool,
   runEnvDiagnostics,
+  runNodeDeepLight,
   runNodeDiagnostics,
   type CheckCard,
   type EgressReport,
@@ -273,6 +275,8 @@ export function HomePage({
       const alive: ProxyNode[] = [];
       const canSwitch =
         !!config && !connection.usingMock && !forceMock;
+      /** 并发剔死：对齐参考脚本 ThreadPool ~10，取 12 */
+      const CULL_CONCURRENCY = 12;
 
       if (canSwitch) {
         originalSnap = await resolveSelectorSnapshot(
@@ -289,24 +293,40 @@ export function HomePage({
         }
       }
 
-      setProgress(`淘汰不通节点：0/${list.length}`);
-      for (let i = 0; i < list.length; i++) {
-        if (abortAllRef.current) break;
-        const n = list[i];
-        setProgress(`淘汰不通节点：${i + 1}/${list.length}`);
-        if (!canSwitch) {
+      setProgress(`剔死 0/${list.length}`);
+      if (!canSwitch) {
+        for (let i = 0; i < list.length; i++) {
+          if (abortAllRef.current) break;
+          const n = list[i];
+          setProgress(`剔死 ${i + 1}/${list.length}`);
           if (i === list.length - 1 && list.length > 1) {
-            results.push(scoreDeadNode(n.name, "演示：延迟探测失败，按不可用处理。"));
+            results.push(
+              scoreDeadNode(n.name, "演示：延迟探测失败，按不可用处理。"),
+            );
           } else {
             alive.push(n);
           }
-          continue;
         }
-        const delay = await probeDelay(config, n.name, DELAY_URL, 2500);
-        if (delay == null) {
-          results.push(scoreDeadNode(n.name, "这轮延迟探测失败，按不可用处理。"));
-        } else {
-          alive.push(n);
+      } else {
+        let cullDone = 0;
+        const cullOut = await mapPool(list, CULL_CONCURRENCY, async (n) => {
+          if (abortAllRef.current) {
+            return { n, delay: null as number | null, skipped: true };
+          }
+          const delay = await probeDelay(config!, n.name, DELAY_URL, 2500);
+          cullDone += 1;
+          setProgress(`剔死 ${cullDone}/${list.length}`);
+          return { n, delay, skipped: false };
+        });
+        for (const row of cullOut) {
+          if (row.skipped) continue;
+          if (row.delay == null) {
+            results.push(
+              scoreDeadNode(row.n.name, "这轮延迟探测失败，按不可用处理。"),
+            );
+          } else {
+            alive.push(row.n);
+          }
         }
       }
 
@@ -322,7 +342,7 @@ export function HomePage({
             break;
           }
           const n = alive[i];
-          setProgress(`深测存活节点：${i + 1}/${alive.length}（${n.name}）`);
+          setProgress(`深测 ${i + 1}/${alive.length}（${n.name}）`);
           const group =
             (await findSelectorGroup(config!, n.name)) ?? originalSnap.group;
           if (!group) {
@@ -342,10 +362,10 @@ export function HomePage({
             continue;
           }
           didSwitch = true;
-          await new Promise((r) => setTimeout(r, 400));
+          await new Promise((r) => setTimeout(r, 250));
           if (abortAllRef.current) break;
           setNodeCards(asRunning(NODE_PLACEHOLDERS));
-          const r = await runNodeDiagnostics(upsertNodeCard, {
+          const r = await runNodeDeepLight(upsertNodeCard, {
             mixedPort: mixedPortNum,
             mihomoConfig: config,
           });
@@ -360,7 +380,7 @@ export function HomePage({
         );
         setProgress("深测当前出口（无法安全切换）…");
         setNodeCards(asRunning(NODE_PLACEHOLDERS));
-        const r = await runNodeDiagnostics(upsertNodeCard, {
+        const r = await runNodeDeepLight(upsertNodeCard, {
           mixedPort: mixedPortNum,
           mihomoConfig: config,
         });
@@ -378,13 +398,13 @@ export function HomePage({
           );
         }
       } else {
-        // Mock / 无配置：演示深测，不切换
+        // Mock / 无配置：演示轻量深测，不切换
         for (let i = 0; i < alive.length; i++) {
           if (abortAllRef.current) break;
           const n = alive[i];
-          setProgress(`深测存活节点：${i + 1}/${alive.length}（演示）`);
+          setProgress(`深测 ${i + 1}/${alive.length}（演示）`);
           setNodeCards(asRunning(NODE_PLACEHOLDERS));
-          const r = await runNodeDiagnostics(upsertNodeCard, {
+          const r = await runNodeDeepLight(upsertNodeCard, {
             mixedPort: mixedPortNum,
             mihomoConfig: config,
           });
@@ -601,7 +621,7 @@ export function HomePage({
       {mode === "all" && !running && !allConfirmOpen ? (
         <div className="note note-compact switch-warn" role="status">
           <span className="note-line">
-            「测全部」会对每个能通的节点做深测：应用会临时切换你当前选中的节点，出口会跟着变；测完（或你中途停止）后会自动切回原来的节点。
+            「测全部」会先并发剔死，再对存活节点做轻量深测（几分钟量级）。应用会临时切换你当前选中的节点，出口会跟着变；测完（或你中途停止）后会自动切回原来的节点。
           </span>
         </div>
       ) : null}
