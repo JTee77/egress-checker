@@ -256,7 +256,7 @@ export async function checkDnsResolvers(
       ]
         .filter(Boolean)
         .join("\n"),
-      suggestion: "仅 macOS 支持 scutil --dns。可对照 Wi-Fi DNS / 隧道内 DNS（如 1.1.1.1）。",
+      suggestion: "可对照 Wi-Fi DNS，或改到 1.1.1.1 / 8.8.8.8 后再测。",
     };
   }
 
@@ -666,10 +666,7 @@ export async function probeGeminiUnlock(
   const probed = [
     "网页路径：gemini.google.com/app（看页面是否地区拦截、内容是否正常返回）",
   ];
-  const notProbed = [
-    "Google 官方手机 App",
-    "Mac 桌面客户端",
-  ];
+  const notProbed: string[] = [];
 
   if (blocked) {
     return {
@@ -760,64 +757,19 @@ export async function probeChatgptUnlock(
     }
   }
 
-  let appOk = false;
-  const app = await fetchTextViaProxy("https://ios.chat.openai.com/", {
-    mixedPort: mixedPort ?? null,
-    userAgent:
-      "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15",
-    timeoutMs: 3500,
-  });
-  if (app.status && app.status !== 403 && app.status !== 0) {
-    const body = app.text;
-    if (
-      !body.includes("Request is not allowed") &&
-      !(body.includes("VPN") && body.includes("dc"))
-    ) {
-      appOk = true;
-    }
-  } else if (app.ok) {
-    appOk = true;
-  }
-
   const locTag = loc ?? "未知地区";
   const probed = [
-    "网页相关：chatgpt.com/cdn-cgi/trace、OpenAI compliance 接口（必要时再看 chatgpt.com 首页）",
-    "手机 App 相关：ios.chat.openai.com（粗检）",
+    "网页：chatgpt.com/cdn-cgi/trace、OpenAI compliance 接口（必要时再看 chatgpt.com 首页）",
   ];
-  const notProbed = [
-    "Mac 官方桌面版 ChatGPT",
-    "你浏览器里已经登录后的完整网页体验",
-  ];
+  const notProbed: string[] = [];
 
-  if (!webOk && !appOk) {
+  if (!webOk) {
     return {
       supported: false,
       level: "blocked",
       region: loc,
-      status: `网页：不可用 · 手机 App：可能不行（${locTag}）`,
-      lines: ["网页：不可用", "手机 App：可能不行"],
-      probed,
-      notProbed,
-    };
-  }
-  if (webOk && !appOk) {
-    return {
-      supported: true,
-      level: "web_only",
-      region: loc,
-      status: `网页：可用 · 手机 App：可能不行（${locTag}）`,
-      lines: ["网页：可用", "手机 App：可能不行"],
-      probed,
-      notProbed,
-    };
-  }
-  if (!webOk && appOk) {
-    return {
-      supported: true,
-      level: "app_only",
-      region: loc,
-      status: `网页：不可用 · 手机 App：可用（粗检，${locTag}）`,
-      lines: ["网页：不可用", "手机 App：可用（粗检）"],
+      status: `网页：不可用（${locTag}）`,
+      lines: ["网页：不可用"],
       probed,
       notProbed,
     };
@@ -826,8 +778,8 @@ export async function probeChatgptUnlock(
     supported: true,
     level: "full",
     region: loc,
-    status: `网页：可用 · 手机 App：可用（粗检，${locTag}）`,
-    lines: ["网页：可用", "手机 App：可用（粗检）"],
+    status: `网页：可用（${locTag}）`,
+    lines: ["网页：可用"],
     probed,
     notProbed,
   };
@@ -856,7 +808,7 @@ function unlockCard(
     probed ? `测了什么：${probed}` : "",
     notProbed ? `没测什么：${notProbed}` : "",
     result.region ? `出口提示地区：${result.region}` : "",
-    "换节点时一次对照用，不能替代你自己打开网站或 App。",
+    "换节点时一次对照用，不能替代你自己打开网站。",
   ].filter(Boolean);
 
   let suggestion: string | undefined;
