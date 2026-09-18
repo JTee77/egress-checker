@@ -18,7 +18,7 @@ import type { ControllerConfig } from "../mihomo/types";
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
 
-const PROBE_TIMEOUT_MS = 9000;
+const PROBE_TIMEOUT_MS = 6000;
 
 async function fetchTextBrowser(
   url: string,
@@ -109,7 +109,7 @@ export async function checkReachability(
       level: "fail",
       conclusion: "无法访问境外 HTTPS 探测点",
       process: results.map((r) => `${r.url} → HTTP ${r.status || "超时"}`).join("\n"),
-      suggestion: "请确认 Clash Verge Rev 已连接，且系统代理 / TUN 已开启；并检查设置中的 mixed-port。",
+      suggestion: "请确认代理软件已打开、已连上节点，并开启系统代理或 TUN，然后重试。",
     };
   }
   const level: CheckLevel = ok.length === results.length ? "pass" : "warn";
@@ -435,7 +435,7 @@ export async function checkIpv6Leak(
       level: "pass",
       conclusion: `仅代理侧有 IPv6（${proxiedV6}），直连无 — 未见直连旁路`,
       process: lines.join("\n"),
-      suggestion: "说明当前探测下 IPv6 更像走 mixed-port；仍非内核级证明。",
+      suggestion: "当前探测下 IPv6 更像走代理；仍非内核级证明。",
     };
   }
 
@@ -445,10 +445,10 @@ export async function checkIpv6Leak(
     title: "IPv6 泄漏",
     level: "unknown",
     conclusion: directV6
-      ? `直连 IPv6 可达（${directV6}）；未配置 mixed-port，无法对照代理`
+      ? `直连 IPv6 可达（${directV6}）；尚未连上代理口，无法对照代理`
       : "IPv6 状态不明",
     process: lines.join("\n"),
-    suggestion: "在设置中填写 mixed-port 后再测，才能判断是否存在「直连 IPv6 旁路」。",
+    suggestion: "请先点「刷新连接」确保已连上软件，再重测。",
   };
 }
 
@@ -641,7 +641,7 @@ export async function probeGeminiUnlock(
   const r = await fetchTextViaProxy("https://gemini.google.com/app", {
     mixedPort: mixedPort ?? null,
     userAgent: UA,
-    timeoutMs: 6000,
+    timeoutMs: 5000,
   });
   const out = r.text;
   const blocked = [
@@ -921,7 +921,7 @@ export async function sampleLatency(
         level: "fail",
         conclusion: "采样失败",
         process: `目标: ${url} → HTTP ${r.status || "超时"}`,
-        suggestion: "请确认 mixed-port 与系统代理 / TUN 可用。",
+        suggestion: "请确认代理软件已连接，并开启系统代理或 TUN，然后重试。",
       },
     };
   }
@@ -992,7 +992,7 @@ export async function checkSplitRouting(
 ): Promise<CheckCard> {
   const port = mixedPort ?? null;
   const expectProxy = port != null && port > 0;
-  const timeoutMs = 5500;
+  const timeoutMs = 4000;
 
   const cnTargets: { label: string; host: string; url: string }[] = [
     { label: "百度", host: "www.baidu.com", url: "https://www.baidu.com/" },
@@ -1099,10 +1099,10 @@ export async function checkSplitRouting(
       title: "分流抽检",
       level: cnDirectOk > 0 ? "unknown" : "fail",
       conclusion: cnDirectOk > 0
-        ? "仅完成直连国内基线；未配置 mixed-port，无法判断分流"
-        : "国内直连基线失败，且未配置 mixed-port",
+        ? "仅完成直连国内基线；尚未连上代理口，无法判断分流"
+        : "国内直连基线失败，且尚未连上代理口",
       process,
-      suggestion: "在设置中填写 mixed-port 并确保 Clash 已连接后重测，才能对照「国内 DIRECT / 境外走代理」。",
+      suggestion: "请先点「刷新连接」确保已连上软件，再重测分流。",
     };
   }
 
@@ -1143,7 +1143,7 @@ export async function checkBareEgress(
 ): Promise<CheckCard> {
   const port = mixedPort ?? null;
   const expectProxy = port != null && port > 0;
-  const timeoutMs = 6000;
+  const timeoutMs = 4000;
   const targets = [
     {
       label: "Google 204",
@@ -1215,10 +1215,10 @@ export async function checkBareEgress(
       title: "裸奔粗检",
       level: "unknown",
       conclusion: directOk
-        ? "直连境外可达；未配置 mixed-port，无法判断是否裸奔"
-        : "直连境外不可达；未配置 mixed-port",
+        ? "直连境外可达；尚未连上代理口，无法判断是否裸奔"
+        : "直连境外不可达；尚未连上代理口",
       process: lines.join("\n"),
-      suggestion: "填写 mixed-port 后重测：若代理路径失败而直连境外仍通，会提示「可能裸奔」。",
+      suggestion: "请先点「刷新连接」确保已连上软件，再重测。",
     };
   }
 
@@ -1226,7 +1226,7 @@ export async function checkBareEgress(
   let conclusion: string;
   if (!mixedOk && directOk) {
     level = "warn";
-    conclusion = "可能裸奔：mixed-port 失败但直连境外仍通";
+    conclusion = "可能裸奔：代理路径失败但直连境外仍通";
   } else if (!mixedOk && !directOk) {
     level = "unknown";
     conclusion = "代理与直连境外均失败 — 可能离线或探测点不可达";
@@ -1245,7 +1245,7 @@ export async function checkBareEgress(
     level,
     conclusion,
     process: lines.join("\n"),
-    suggestion: "若提示可能裸奔：检查 Clash 是否断连、mixed-port/TUN/系统代理是否关掉；本卡不能替代系统级抓包。",
+    suggestion: "若提示可能裸奔：检查代理软件是否断连，以及系统代理 / TUN 是否关掉。",
   };
 }
 
@@ -1254,7 +1254,7 @@ const BW_DOWN_URL = "https://speed.cloudflare.com/__down?bytes=524288";
 const BW_DOWN_EXPECT = 524288;
 const BW_UP_URL = "https://speed.cloudflare.com/__up";
 const BW_UP_BYTES = 512 * 1024;
-const BW_TIMEOUT_MS = 20000;
+const BW_TIMEOUT_MS = 12000;
 
 function bytesToMbps(bytes: number, elapsedMs: number): number | null {
   if (bytes <= 0 || elapsedMs <= 0) return null;
@@ -1380,7 +1380,7 @@ async function probeNetflixLine(
 ): Promise<ProbeLine> {
   // Common Clash unlock title used for region redirect hints
   const url = "https://www.netflix.com/title/80018499";
-  const timeoutMs = 5500;
+  const timeoutMs = 4000;
   const t0 = performance.now();
   const r = await probeText(url, {
     mixedPort,
@@ -1460,7 +1460,7 @@ async function probeDisneyLine(
   mixedPort?: number | null,
 ): Promise<ProbeLine> {
   const url = "https://www.disneyplus.com/";
-  const timeoutMs = 5500;
+  const timeoutMs = 4000;
   const t0 = performance.now();
   const r = await probeText(url, {
     mixedPort,
@@ -1535,7 +1535,7 @@ async function probeYoutubeLine(
   mixedPort?: number | null,
 ): Promise<ProbeLine> {
   const url = "https://www.youtube.com/premium";
-  const timeoutMs = 5500;
+  const timeoutMs = 4000;
   const t0 = performance.now();
   const r = await probeText(url, {
     mixedPort,
@@ -1630,7 +1630,7 @@ async function probeAppleStoreLine(
   mixedPort?: number | null,
 ): Promise<ProbeLine> {
   const url = "https://apps.apple.com/";
-  const timeoutMs = 5000;
+  const timeoutMs = 4000;
   const t0 = performance.now();
   const r = await probeText(url, {
     mixedPort,
@@ -1699,7 +1699,7 @@ async function probeGooglePlayLine(
   mixedPort?: number | null,
 ): Promise<ProbeLine> {
   const url = "https://play.google.com/store/games";
-  const timeoutMs = 5000;
+  const timeoutMs = 4000;
   const t0 = performance.now();
   const r = await probeText(url, {
     mixedPort,
@@ -1848,6 +1848,67 @@ export async function checkGooglePlayUnlock(
 }
 
 
+function timeoutCard(
+  id: string,
+  title: string,
+): CheckCard {
+  return {
+    id,
+    title,
+    level: "unknown",
+    conclusion: "这次没测出来",
+    process: "探测超时或卡住，已按截止时间结束本项。",
+    suggestion: "请再试一次或换节点",
+  };
+}
+
+async function withCardDeadline(
+  title: string,
+  id: string,
+  work: () => Promise<CheckCard>,
+  deadlineMs: number,
+): Promise<CheckCard> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work(),
+      new Promise<CheckCard>((resolve) => {
+        timer = setTimeout(() => resolve(timeoutCard(id, title)), deadlineMs);
+      }),
+    ]);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      id,
+      title,
+      level: "unknown",
+      conclusion: "这次没测出来",
+      process: msg,
+      suggestion: "请再试一次或换节点",
+    };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (true) {
+      const i = next++;
+      if (i >= items.length) return;
+      results[i] = await worker(items[i]);
+    }
+  });
+  await Promise.all(runners);
+  return results;
+}
+
 export async function runEgressDiagnostics(
   onCard?: (card: CheckCard) => void,
   options?: {
@@ -1859,59 +1920,195 @@ export async function runEgressDiagnostics(
   const mihomoConfig = options?.mihomoConfig ?? null;
   const note =
     mixedPort != null && mixedPort > 0
-      ? `探针优先经 mixed-port（${mixedPort}）发出。结果用来换节点时对照线路，不是替代你自己打开 chatgpt.com / Gemini。请确保 Clash Verge Rev 已连接。`
-      : "未配置 mixed-port 时部分探针可能走窗口直连。建议在设置里填写 mixed-port，并开启系统代理或 TUN。结果用于换节点对照，不是「必须测完才能上网」。";
+      ? "探针优先经代理口发出。结果用来换节点时对照线路，不是替代你自己打开网站。请确保代理软件已连接。"
+      : "部分探针可能走窗口直连。建议先「刷新连接」并开启系统代理或 TUN。结果用于换节点对照。";
 
   const push = (c: CheckCard) => {
     onCard?.(c);
     return c;
   };
 
-  const reach = push(await checkReachability(mixedPort));
-  const exit = await fetchExitIp(mixedPort);
+  // Fast path first so the UI starts settling quickly.
+  const reach = push(
+    await withCardDeadline("连通性", "reachability", () => checkReachability(mixedPort), 14000),
+  );
+
+  let exit = await Promise.race([
+    fetchExitIp(mixedPort),
+    new Promise<ExitIpInfo>((resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            ip: null,
+            country: null,
+            countryCode: null,
+            org: null,
+            isp: null,
+            hosting: null,
+            ipTypeLabel: "--",
+          }),
+        5000,
+      ),
+    ),
+  ]);
   const exitCard = push(exitIpCard(exit));
-  const dns = push(await checkDnsResolvers(exit, mixedPort));
-  const ipv6 = push(await checkIpv6Leak(mixedPort));
-  const rtc = push(await checkWebRtcLeak());
-  const gemini = await probeGeminiUnlock(mixedPort);
-  const gemCard = push(unlockCard("gemini", "Gemini（换节点对照）", gemini));
-  const chatgpt = await probeChatgptUnlock(mixedPort);
-  const gptCard = push(unlockCard("chatgpt", "ChatGPT（换节点对照）", chatgpt));
-  const { ms, card: latCard } = await sampleLatency(mixedPort);
-  push(latCard);
-  const bwCard = push(await sampleBandwidth(mixedPort));
-  const splitCard = push(await checkSplitRouting(mixedPort, mihomoConfig));
-  const bareCard = push(await checkBareEgress(mixedPort));
-  const netflixCard = push(await checkNetflixUnlock(mixedPort));
-  const disneyCard = push(await checkDisneyUnlock(mixedPort));
-  const youtubeCard = push(await checkYoutubeUnlock(mixedPort));
-  const appStoreCard = push(await checkAppStoreUnlock(mixedPort));
-  const googlePlayCard = push(await checkGooglePlayUnlock(mixedPort));
+
+  type Job = {
+    id: string;
+    title: string;
+    deadlineMs: number;
+    run: () => Promise<CheckCard>;
+    after?: (card: CheckCard) => void;
+  };
+
+  let gemini: UnlockResult = {
+    supported: false,
+    level: "unknown",
+    region: null,
+    status: "未完成",
+  };
+  let chatgpt: UnlockResult = {
+    supported: false,
+    level: "unknown",
+    region: null,
+    status: "未完成",
+  };
+  let latencyMs: number | null = null;
+
+  const jobs: Job[] = [
+    {
+      id: "dns-leak",
+      title: "DNS 解析器",
+      deadlineMs: 12000,
+      run: () => checkDnsResolvers(exit, mixedPort),
+    },
+    {
+      id: "ipv6-leak",
+      title: "IPv6 泄漏",
+      deadlineMs: 12000,
+      run: () => checkIpv6Leak(mixedPort),
+    },
+    {
+      id: "webrtc",
+      title: "WebRTC",
+      deadlineMs: 6000,
+      run: () => checkWebRtcLeak(),
+    },
+    {
+      id: "gemini",
+      title: "Gemini（换节点对照）",
+      deadlineMs: 10000,
+      run: async () => {
+        gemini = await probeGeminiUnlock(mixedPort);
+        return unlockCard("gemini", "Gemini（换节点对照）", gemini);
+      },
+    },
+    {
+      id: "chatgpt",
+      title: "ChatGPT（换节点对照）",
+      deadlineMs: 14000,
+      run: async () => {
+        chatgpt = await probeChatgptUnlock(mixedPort);
+        return unlockCard("chatgpt", "ChatGPT（换节点对照）", chatgpt);
+      },
+    },
+    {
+      id: "latency",
+      title: "延迟采样",
+      deadlineMs: 10000,
+      run: async () => {
+        const { ms, card } = await sampleLatency(mixedPort);
+        latencyMs = ms;
+        return card;
+      },
+    },
+    {
+      id: "bandwidth",
+      title: "抽样带宽",
+      deadlineMs: 28000,
+      run: () => sampleBandwidth(mixedPort),
+    },
+    {
+      id: "split-routing",
+      title: "分流抽检",
+      deadlineMs: 22000,
+      run: () => checkSplitRouting(mixedPort, mihomoConfig),
+    },
+    {
+      id: "bare-egress",
+      title: "裸奔粗检",
+      deadlineMs: 14000,
+      run: () => checkBareEgress(mixedPort),
+    },
+    {
+      id: "netflix",
+      title: "Netflix",
+      deadlineMs: 10000,
+      run: () => checkNetflixUnlock(mixedPort),
+    },
+    {
+      id: "disney",
+      title: "Disney+",
+      deadlineMs: 10000,
+      run: () => checkDisneyUnlock(mixedPort),
+    },
+    {
+      id: "youtube",
+      title: "YouTube",
+      deadlineMs: 10000,
+      run: () => checkYoutubeUnlock(mixedPort),
+    },
+    {
+      id: "app-store",
+      title: "App Store",
+      deadlineMs: 10000,
+      run: () => checkAppStoreUnlock(mixedPort),
+    },
+    {
+      id: "google-play",
+      title: "Google Play",
+      deadlineMs: 10000,
+      run: () => checkGooglePlayUnlock(mixedPort),
+    },
+  ];
+
+  const settled = await mapPool(jobs, 3, async (job) => {
+    const card = await withCardDeadline(job.title, job.id, job.run, job.deadlineMs);
+    return push(card);
+  });
+
+  const byId = new Map(settled.map((c) => [c.id, c]));
+  const order = [
+    "reachability",
+    "dns-leak",
+    "ipv6-leak",
+    "webrtc",
+    "exit-ip",
+    "gemini",
+    "chatgpt",
+    "latency",
+    "bandwidth",
+    "split-routing",
+    "bare-egress",
+    "netflix",
+    "disney",
+    "youtube",
+    "app-store",
+    "google-play",
+  ];
+  const cards = order.map((id) => {
+    if (id === "reachability") return reach;
+    if (id === "exit-ip") return exitCard;
+    return byId.get(id) ?? timeoutCard(id, id);
+  });
 
   return {
     ranAt: new Date().toISOString(),
-    cards: [
-      reach,
-      dns,
-      ipv6,
-      rtc,
-      exitCard,
-      gemCard,
-      gptCard,
-      latCard,
-      bwCard,
-      splitCard,
-      bareCard,
-      netflixCard,
-      disneyCard,
-      youtubeCard,
-      appStoreCard,
-      googlePlayCard,
-    ],
+    cards,
     exitIp: exit,
     gemini,
     chatgpt,
-    latencyMs: ms,
+    latencyMs,
     note,
   };
 }

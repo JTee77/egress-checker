@@ -482,11 +482,11 @@ async function probeWithConfig(
 function unauthorizedState(config: ControllerConfig): ConnectionState {
   return {
     status: "unauthorized",
-    message: "连接被拒绝，请到设置（高级）核对密钥后重试",
+    message: "连接被拒绝，请展开「高级」核对密钥后重试",
     config,
     currentProxy: null,
     usingMock: false,
-    proxiesError: "密钥不正确或未配置（高级设置）",
+    proxiesError: "密钥不正确或未配置，请展开「高级」核对",
   };
 }
 
@@ -562,22 +562,22 @@ export async function getProxies(config: ControllerConfig): Promise<GetProxiesRe
   // Fallback: full /proxies via TCP/unix/browser (dev / non-Tauri).
   const res = await httpApi(config, "GET", "/proxies", undefined, 18000);
   if (!res) {
-    return empty("无法拉取 /proxies（超时或网络失败），请到设置检查连接后刷新");
+    return empty("暂时读不到节点列表，请确认软件已打开并点「刷新连接」");
   }
   if (res.status === 401 || res.status === 403) {
     return empty(
-      "拉取节点未授权（401/403），请到设置检查 Secret / 刷新",
+      "连接被拒绝，请展开「高级」核对密钥后重试",
       true,
     );
   }
   if (!is2xx(res.status) || !res.json) {
     if (is2xx(res.status) && !res.json) {
       return empty(
-        `拉取 /proxies 失败（HTTP ${res.status}）：响应不是合法 JSON（可能解压/分块失败），raw ${res.raw.length} 字节`,
+        `读节点列表失败（响应异常），请再点「刷新连接」`,
       );
     }
     return empty(
-      `拉取 /proxies 失败（HTTP ${res.status}），请到设置检查 Secret / 刷新`,
+      `读节点列表失败，请确认软件已打开并点「刷新连接」`,
     );
   }
 

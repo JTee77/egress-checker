@@ -43,7 +43,7 @@ Clash Verge Rev 常在本地暴露 Unix 套接字 `/tmp/verge/verge-mihomo.sock`
 
 因此即使 TCP 端口 Connection refused，只要套接字存在且 secret 正确，仍可列出真实节点。mixed-port（如 `7897`）与控制器通道无关，仍用于经代理的出口探针。
 
-也可在应用「设置」页手动填写 host / port / secret / mixed-port，或开启 **Mock** 演示模式（无需真实 Clash）。
+也可在应用底部「高级」面板手动填写 host / port / secret / mixed-port，或开启 **Mock** 演示模式（无需真实 Clash）。
 
 ## 警告（开发必读）
 
@@ -82,6 +82,7 @@ pnpm tauri dev
 | `bash scripts/smoke-mihomo-api.sh` | 仅测 Unix `/proxies`（sock 缺失时 SKIP，不失败） |
 | `pnpm tauri dev` | Tauri 开发模式（推荐） |
 | `pnpm tauri build` | 打包 Mac `.app` / `.dmg`（需在 Apple Silicon Mac 上） |
+| `bash scripts/build-dmg-macos.sh` | Apple Silicon 上一键 `pnpm tauri build` 产出 arm64 `.app` / `.dmg`（须在 macOS 上跑；Linux 会直接退出） |
 
 > 在非 macOS（如 Linux CI）上，前端 `pnpm build` / `typecheck` 可正常跑通；原生 `tauri build` 面向 Mac 可能失败，属预期。
 
@@ -111,14 +112,35 @@ curl --unix-socket /tmp/verge/verge-mihomo.sock \
   http://localhost/proxies
 ```
 
-应用内：`pnpm tauri dev` 后点首页「刷新连接」；若 TCP 死掉应显示「已连接 Unix 套接字 …」并列出真实节点（不会静默 Mock）。
+应用内：`pnpm tauri dev` 后选软件并点「刷新连接」；连上后状态应显示已连上对应软件（不会静默 Mock）。
 
-## 功能概览（v1）
+## 功能概览（v0.1.3）
 
-- **首页**：一键出口诊断（连通性、DNS 启发式、WebRTC 占位、出口 IP、Gemini、ChatGPT、延迟采样）
-- **节点**：列表 + 地区分组规则 + **快速延迟**（多轮 Google/CF `generate_204`，延迟 / 抖动 / 丢包）；深度 / Top-N / AI 专项为 UI 占位
-- **设置**：自动探测或手动 API；Mock 演示开关
-- **关于**：免责声明与 MIT
+- **单一主界面**：选软件 → 刷新连接 → 开始检测；结果卡片（结论 / 建议默认展示，过程可展开）
+- **高级**（默认折叠）：Host / Port / Secret / mixed-port、Mock 演示 — 普通用户一般不用
+- **说明**（默认折叠）：产品边界与版本
+- **已移除**：多页侧栏、独立「节点」页（换节点请在代理软件内完成）
+
+
+## 打包（Apple Silicon DMG）
+
+在 **Apple Silicon Mac** 上：
+
+```bash
+bash scripts/build-dmg-macos.sh
+# 或：pnpm tauri build
+```
+
+产物通常在：
+
+- `src-tauri/target/release/bundle/macos/Egress Checker.app`
+- `src-tauri/target/release/bundle/dmg/*.dmg`
+
+**注意：**
+
+- **仅 Apple Silicon（arm64）**；不承诺 Intel Mac
+- 默认 **未签名 / 未公证**：首次打开可能需 **右键 → 打开**
+- **DMG 必须在 macOS 上构建**；本仓库在 Linux 上只保证前端 `pnpm typecheck` / `pnpm build`
 
 ## 免责声明
 

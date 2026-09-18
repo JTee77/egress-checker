@@ -67,8 +67,8 @@ select {
 }
 
 .app-shell {
-  display: grid;
-  grid-template-columns: 168px 1fr;
+  display: flex;
+  flex-direction: column;
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -123,10 +123,13 @@ select {
 }
 
 .main {
+  flex: 1;
   min-height: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 6px 10px 8px;
+  padding: 8px 14px 12px;
+  width: 100%;
+  max-width: 100%;
 }
 
 .page-header {
@@ -588,4 +591,44 @@ table.data tr:last-child td {
 }
 .about-check-notes code {
   font-size: 12px;
+}
+
+
+.fold-panel {
+  margin-top: 10px;
+  padding: 8px 12px;
+}
+
+.fold-toggle {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.fold-toggle:hover {
+  color: var(--accent);
+}
+
+.fold-body {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.fold-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.home-page {
+  max-width: 1200px;
+  margin: 0 auto;
 }
