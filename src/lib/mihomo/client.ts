@@ -620,6 +620,38 @@ export async function probeDelay(
   return delay && delay > 0 ? delay : null;
 }
 
+
+/**
+ * 查找包含该节点的选择器组名（优先 Proxy / GLOBAL）。
+ * 仅用于用户明确确认后的切换；默认测评路径不要调用 switchProxy。
+ */
+export async function findSelectorGroup(
+  config: ControllerConfig,
+  nodeName: string,
+): Promise<string | null> {
+  const res = await httpApi(config, "GET", "/proxies", undefined, 18000);
+  if (!res || !is2xx(res.status) || !res.json) return null;
+  const obj = res.json as { proxies?: Record<string, ProxyInfo> };
+  const proxies = obj.proxies ?? {};
+  const prefer = ["Proxy", "GLOBAL", "proxy", "SELECT", "节点选择"];
+  const candidates: string[] = [];
+  for (const name of prefer) {
+    const p = proxies[name];
+    if (p?.all?.includes(nodeName)) candidates.push(name);
+  }
+  for (const [name, p] of Object.entries(proxies)) {
+    if (prefer.includes(name)) continue;
+    const t = (p.type || "").toLowerCase();
+    if (
+      (t === "selector" || t === "urltest" || t === "fallback") &&
+      p.all?.includes(nodeName)
+    ) {
+      candidates.push(name);
+    }
+  }
+  return candidates[0] ?? null;
+}
+
 export async function switchProxy(
   config: ControllerConfig,
   group: string,

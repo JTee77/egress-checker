@@ -5,6 +5,7 @@ import "./styles/app.css";
 function App() {
   const {
     state,
+    nodes,
     busy,
     manual,
     forceMock,
@@ -22,6 +23,7 @@ function App() {
         <HomePage
           connection={state}
           busy={busy}
+          nodes={nodes}
           clientId={clientId}
           onClientIdChange={setClientId}
           onRefresh={() => refresh()}
