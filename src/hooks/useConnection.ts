@@ -4,8 +4,8 @@ import {
   defaultConfig,
   discoverAndProbe,
   getProxies,
-  isClientId,
   mockNodes,
+  normalizeClientId,
   type ClientId,
   type ConnectionState,
   type ControllerConfig,
@@ -27,7 +27,15 @@ export function useConnection() {
   const [clientId, setClientIdState] = useState<ClientId | null>(() => {
     try {
       const v = localStorage.getItem(CLIENT_STORAGE_KEY);
-      return isClientId(v) ? v : null;
+      const id = normalizeClientId(v);
+      if (!id && v) {
+        try {
+          localStorage.removeItem(CLIENT_STORAGE_KEY);
+        } catch {
+          /* ignore */
+        }
+      }
+      return id;
     } catch {
       return null;
     }
@@ -90,7 +98,7 @@ export function useConnection() {
         if (!clientId) {
           const next: ConnectionState = {
             status: "unknown",
-            message: "请先选择客户端",
+            message: "请先选择软件",
             config: { ...defaultConfig(), ...manual, ...override },
             currentProxy: null,
             usingMock: false,

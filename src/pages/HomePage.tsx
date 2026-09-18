@@ -3,6 +3,7 @@ import { CheckCardView } from "../components/CheckCardView";
 import { runEgressDiagnostics, type CheckCard, type EgressReport } from "../lib/egress";
 import {
   CLIENT_OPTIONS,
+  normalizeClientId,
   type ClientId,
   type ConnectionState,
 } from "../lib/mihomo";
@@ -29,14 +30,12 @@ export function HomePage({
   clientId,
   onClientIdChange,
   onRefresh,
-  onNavigateToSettings,
 }: {
   connection: ConnectionState;
   busy?: boolean;
   clientId: ClientId | null;
   onClientIdChange: (id: ClientId) => void;
   onRefresh?: () => Promise<unknown> | void;
-  onNavigateToSettings?: () => void;
 }) {
   const [cards, setCards] = useState<CheckCard[]>(PLACEHOLDERS);
   const [report, setReport] = useState<EgressReport | null>(null);
@@ -45,11 +44,9 @@ export function HomePage({
   const clientUnset = !clientId;
 
   const onSelectClient = (raw: string) => {
-    if (raw !== "verge" && raw !== "mihomo" && raw !== "manual") return;
-    onClientIdChange(raw);
-    if (raw === "manual") {
-      onNavigateToSettings?.();
-    }
+    const id = normalizeClientId(raw);
+    if (!id) return;
+    onClientIdChange(id);
   };
 
   const run = async () => {
@@ -80,7 +77,7 @@ export function HomePage({
         level: "fail",
         summary: "本轮检测失败",
         detail: msg,
-        tip: "请确认 Clash Verge Rev 已连接；若刚崩溃过，退出全部窗口后只开一个 pnpm tauri dev 再试。",
+        tip: "请确认代理软件已打开并已连接，然后重新检测。",
       }));
       setCards(failCards);
       setReport({
@@ -119,7 +116,7 @@ export function HomePage({
     <div className="home-page">
       <div className="client-picker">
         <label className="client-picker-label" htmlFor="home-client-select">
-          客户端
+          你在用哪款软件？
         </label>
         <select
           id="home-client-select"
@@ -128,7 +125,7 @@ export function HomePage({
           onChange={(e) => onSelectClient(e.target.value)}
         >
           <option value="" disabled>
-            请选择客户端…
+            请选择…
           </option>
           {CLIENT_OPTIONS.map((o) => (
             <option key={o.id} value={o.id}>
@@ -138,7 +135,7 @@ export function HomePage({
         </select>
         <span className="client-picker-hint muted">
           {clientUnset
-            ? "先选客户端再刷新连接"
+            ? "先选软件，再点刷新"
             : CLIENT_OPTIONS.find((o) => o.id === clientId)?.hint}
         </span>
       </div>
@@ -158,7 +155,7 @@ export function HomePage({
             className="btn btn-sm"
             type="button"
             disabled={!!busy || running || clientUnset}
-            title={clientUnset ? "请先选择客户端" : undefined}
+            title={clientUnset ? "请先选择软件" : undefined}
             onClick={() => void onRefresh?.()}
           >
             {busy ? "刷新中…" : "刷新连接"}
@@ -173,8 +170,8 @@ export function HomePage({
         <div className="note note-compact">
           <span className="note-line">
             {clientUnset
-              ? "请先选择客户端，再「刷新连接」，然后「开始检测」。"
-              : "先「刷新连接」，再「开始检测」。AI 卡片只作换节点对照。"}
+              ? "打开你的代理软件并连上节点 → 在这里选同名软件 → 点「刷新连接」，再「开始检测」。"
+              : "先「刷新连接」，再「开始检测」。一般不用改设置。"}
           </span>
         </div>
       ) : (

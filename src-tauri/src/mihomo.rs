@@ -145,6 +145,183 @@ pub fn discover_controller() -> DiscoverResult {
     }
 }
 
+
+pub const PARTY_SOCK: &str = "/tmp/mihomo-party.sock";
+
+fn expand_home(path: &str) -> PathBuf {
+    if let Some(rest) = path.strip_prefix("~/") {
+        return dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("/"))
+            .join(rest);
+    }
+    if path == "~" {
+        return dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+    }
+    PathBuf::from(path)
+}
+
+/// Parse external-controller / secret / mixed-port from yaml text with given defaults.
+pub fn parse_controller_yaml(content: &str, default_port: u16, default_mixed: u16) -> (u16, String, u16) {
+    let mut port = default_port;
+    let mut secret = String::new();
+    let mut mixed = default_mixed;
+
+    if let Ok(re) = Regex::new(r#"external-controller:\s*['"]?([^:'"\s]+):(\d+)['"]?"#) {
+        if let Some(c) = re.captures(content) {
+            if let Ok(p) = c[2].parse() {
+                port = p;
+            }
+        }
+    }
+    if let Ok(re) = Regex::new(r#"(?m)^secret:\s*['"]?([^\s'"]+)['"]?"#) {
+        if let Some(c) = re.captures(content) {
+            secret = c[1].to_string();
+        }
+    }
+    if let Ok(re) = Regex::new(r"mixed-port:\s*(\d+)") {
+        if let Some(c) = re.captures(content) {
+            if let Ok(p) = c[1].parse() {
+                mixed = p;
+            }
+        }
+    }
+    (port, secret, mixed)
+}
+
+/// Read first readable yaml among `paths`; set sock_path only from sock_candidates that exist.
+/// Never injects Verge DEFAULT_SOCK unless that path is explicitly in sock_candidates.
+pub fn read_controller_yaml(
+    paths: &[String],
+    default_port: u16,
+    default_mixed: u16,
+    sock_candidates: &[String],
+    source_prefix: &str,
+) -> DiscoverResult {
+    let mut sock_path: Option<String> = None;
+    for cand in sock_candidates {
+        let p = expand_home(cand);
+        if p.exists() {
+            sock_path = Some(p.to_string_lossy().into_owned());
+            break;
+        }
+    }
+
+    for raw in paths {
+        let path = expand_home(raw);
+        if !path.exists() {
+            continue;
+        }
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let (port, secret, mixed) = parse_controller_yaml(&content, default_port, default_mixed);
+            return DiscoverResult {
+                host: "127.0.0.1".into(),
+                port,
+                secret,
+                mixed_port: mixed,
+                source: format!("{source_prefix}:{}", path.display()),
+                sock_path,
+            };
+        }
+    }
+
+    // Also try scanning directories for any *.yaml / *.yml (FlClash / Nyanpasu)
+    for raw in paths {
+        let path = expand_home(raw);
+        if path.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(&path) {
+                let mut yamls: Vec<PathBuf> = entries
+                    .filter_map(|e| e.ok().map(|e| e.path()))
+                    .filter(|p| {
+                        p.extension()
+                            .and_then(|x| x.to_str())
+                            .map(|ext| ext == "yaml" || ext == "yml")
+                            .unwrap_or(false)
+                    })
+                    .collect();
+                yamls.sort();
+                for y in yamls {
+                    if let Ok(content) = std::fs::read_to_string(&y) {
+                        let (port, secret, mixed) =
+                            parse_controller_yaml(&content, default_port, default_mixed);
+                        return DiscoverResult {
+                            host: "127.0.0.1".into(),
+                            port,
+                            secret,
+                            mixed_port: mixed,
+                            source: format!("{source_prefix}:{}", y.display()),
+                            sock_path: sock_path.clone(),
+                        };
+                    }
+                }
+            }
+        }
+    }
+
+    DiscoverResult {
+        host: "127.0.0.1".into(),
+        port: default_port,
+        secret: String::new(),
+        mixed_port: default_mixed,
+        source: format!("{source_prefix}:defaults"),
+        sock_path,
+    }
+}
+
+/// Client-scoped discovery. Non-Verge clients never get Verge DEFAULT_SOCK.
+pub fn discover_for_client(client_id: &str) -> DiscoverResult {
+    match client_id {
+        "verge" => discover_controller(),
+        "clashx_meta" => read_controller_yaml(
+            &["~/.config/clash/config.yaml".into()],
+            9090,
+            7890,
+            &[], // no fixed public sock
+            "clashx_meta",
+        ),
+        "flclash" => read_controller_yaml(
+            &[
+                "~/Library/Application Support/com.follow.clash".into(),
+                "~/Library/Application Support/FlClash".into(),
+            ],
+            9090,
+            7890,
+            &[], // internal IPC is not Mihomo REST — never inject Verge/Party sock
+            "flclash",
+        ),
+        "mihomo_party" => read_controller_yaml(
+            &[
+                "~/Library/Application Support/mihomo-party".into(),
+            ],
+            9090, // TCP EC often empty; sock is primary
+            7890,
+            &[PARTY_SOCK.into()],
+            "mihomo_party",
+        ),
+        "nyanpasu" => read_controller_yaml(
+            &[
+                "~/Library/Application Support/Clash Nyanpasu/clash-runtime.yaml".into(),
+                "~/Library/Application Support/Clash Nyanpasu/clash.yaml".into(),
+                "~/Library/Application Support/clash-nyanpasu/clash-runtime.yaml".into(),
+                "~/Library/Application Support/clash-nyanpasu/clash.yaml".into(),
+                "~/Library/Application Support/Clash Nyanpasu".into(),
+                "~/Library/Application Support/clash-nyanpasu".into(),
+            ],
+            17650, // default EC; debug builds may use 9872
+            7890,
+            &[],
+            "nyanpasu",
+        ),
+        _ => DiscoverResult {
+            host: "127.0.0.1".into(),
+            port: 9090,
+            secret: String::new(),
+            mixed_port: 7890,
+            source: format!("unknown-client:{client_id}"),
+            sock_path: None,
+        },
+    }
+}
+
 async fn read_body_capped(res: reqwest::Response) -> Result<(u16, String), String> {
     let status = res.status().as_u16();
     let bytes = res
@@ -208,7 +385,9 @@ pub fn http_via_unix(
     sock_path: Option<&str>,
     timeout_ms: u64,
 ) -> Result<UnixHttpResult, String> {
-    let sock = sock_path.unwrap_or(DEFAULT_SOCK);
+    let sock = sock_path.ok_or_else(|| {
+        "unix socket path not provided (refusing Verge default for non-Verge clients)".to_string()
+    })?;
     if !std::path::Path::new(sock).exists() {
         return Err(format!("unix socket not found: {sock}"));
     }
@@ -733,9 +912,11 @@ pub async fn list_nodes_async(
         }
     }
 
-    let sock = sock_path
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| DEFAULT_SOCK.to_string());
+    let Some(sock) = sock_path.map(|s| s.to_string()).filter(|s| !s.is_empty()) else {
+        return Err(format!(
+            "TCP {host}:{port} 不可用，且未配置 Unix 套接字（不会回退到 Verge 默认 sock）"
+        ));
+    };
     let secret_owned = secret.to_string();
     let sock_for_err = sock.clone();
     let unix_timeout = timeout_ms.max(tcp_timeout);
@@ -1223,4 +1404,56 @@ mod tests {
             "unexpected error: {err}"
         );
     }
+
+    #[test]
+    fn parse_controller_yaml_reads_sample() {
+        let sample = r#"
+mixed-port: 7890
+external-controller: 127.0.0.1:9090
+secret: "test-secret"
+"#;
+        let (port, secret, mixed) = parse_controller_yaml(sample, 1, 2);
+        assert_eq!(port, 9090);
+        assert_eq!(secret, "test-secret");
+        assert_eq!(mixed, 7890);
+    }
+
+    #[test]
+    fn non_verge_discover_never_returns_verge_sock_when_absent() {
+        // Ensure Verge DEFAULT_SOCK is not present or we still must not inject it for other clients.
+        let clashx = discover_for_client("clashx_meta");
+        assert!(
+            clashx.sock_path.is_none(),
+            "clashx_meta sock must be None (never Verge), got {:?}",
+            clashx.sock_path
+        );
+
+        let fl = discover_for_client("flclash");
+        assert!(fl.sock_path.is_none(), "flclash sock must be None, got {:?}", fl.sock_path);
+
+        let ny = discover_for_client("nyanpasu");
+        assert!(ny.sock_path.is_none(), "nyanpasu sock must be None, got {:?}", ny.sock_path);
+
+        let party = discover_for_client("mihomo_party");
+        if let Some(ref s) = party.sock_path {
+            assert_ne!(s, DEFAULT_SOCK, "party must never use Verge sock");
+            assert!(s.contains("mihomo-party"), "party sock unexpected: {s}");
+        }
+    }
+
+    #[test]
+    fn read_controller_yaml_only_sets_existing_sock_candidates() {
+        let missing = format!("/tmp/egress-checker-no-sock-{}.sock", std::process::id());
+        let _ = std::fs::remove_file(&missing);
+        let r = read_controller_yaml(
+            &[],
+            9090,
+            7890,
+            &[missing],
+            "test",
+        );
+        assert!(r.sock_path.is_none());
+        assert_ne!(r.sock_path.as_deref(), Some(DEFAULT_SOCK));
+    }
+
 }

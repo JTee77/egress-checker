@@ -14,6 +14,9 @@ export function AboutPage() {
         解锁 / 延迟 / 分流与裸奔粗检），面向已自备 Mihomo / Clash Meta 兼容客户端的用户。默认适配
         Clash Verge Rev。
       </p>
+      <p>
+        仅列 macOS 常见 Mihomo/Clash Meta GUI；无开放控制 API 的（如 Shadowrocket）不在列。
+      </p>
 
       <h2>非目标</h2>
       <ul>

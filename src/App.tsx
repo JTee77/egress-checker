@@ -34,7 +34,6 @@ function App() {
             clientId={clientId}
             onClientIdChange={setClientId}
             onRefresh={() => refresh()}
-            onNavigateToSettings={() => setPage("settings")}
           />
         ) : null}
         {page === "nodes" ? (

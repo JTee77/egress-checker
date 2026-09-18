@@ -3,9 +3,9 @@ mod mihomo;
 
 use dns::DnsResolversResult;
 use mihomo::{
-    discover_controller, http_via_tcp_async, http_via_unix, list_nodes_async, proxy_fetch_async,
-    proxy_timed_transfer_async, DiscoverResult, ListNodesResult, TimedTransferResult,
-    UnixHttpResult,
+    discover_controller, discover_for_client, http_via_tcp_async, http_via_unix, list_nodes_async,
+    proxy_fetch_async, proxy_timed_transfer_async, DiscoverResult, ListNodesResult,
+    TimedTransferResult, UnixHttpResult,
 };
 use serde::{Deserialize, Serialize};
 
@@ -39,6 +39,26 @@ async fn discover_mihomo() -> Result<ControllerConfig, String> {
     tauri::async_runtime::spawn_blocking(|| {
         catch_disk(|| {
             let d: DiscoverResult = discover_controller();
+            Ok(ControllerConfig {
+                host: d.host,
+                port: d.port,
+                secret: d.secret,
+                mixed_port: d.mixed_port,
+                source: d.source,
+                sock_path: d.sock_path,
+            })
+        })
+    })
+    .await
+    .map_err(join_err)?
+}
+
+
+#[tauri::command]
+async fn discover_mihomo_for_client(client_id: String) -> Result<ControllerConfig, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        catch_disk(|| {
+            let d: DiscoverResult = discover_for_client(&client_id);
             Ok(ControllerConfig {
                 host: d.host,
                 port: d.port,
@@ -339,6 +359,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             discover_mihomo,
+            discover_mihomo_for_client,
             read_verge_config_raw,
             mihomo_http,
             mihomo_list_nodes,

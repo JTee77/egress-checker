@@ -19,8 +19,9 @@ import { detectRegion } from "./regions";
 import { mockProxiesRaw } from "./mock";
 import {
   type ClientId,
+  clientLabel,
   clientPreset,
-  MIHOMO_ALT_PORTS,
+  clientUnreachableHint,
   vergeLikeDefault,
 } from "./clients";
 
@@ -32,6 +33,19 @@ async function discoverViaRust(): Promise<ControllerConfig | null> {
   if (!isTauri()) return null;
   try {
     return await invoke<ControllerConfig>("discover_mihomo");
+  } catch {
+    return null;
+  }
+}
+
+async function discoverViaRustForClient(
+  clientId: ClientId,
+): Promise<ControllerConfig | null> {
+  if (!isTauri()) return null;
+  try {
+    return await invoke<ControllerConfig>("discover_mihomo_for_client", {
+      clientId,
+    });
   } catch {
     return null;
   }
@@ -244,89 +258,96 @@ export async function discoverAndProbe(
   manual?: Partial<ControllerConfig>,
   clientId: ClientId = "verge",
 ): Promise<ConnectionState> {
+  const label = clientLabel(clientId);
   const preset = clientPreset(clientId);
   let config: ControllerConfig = { ...defaultConfig(), ...preset };
 
-  if (clientId === "manual") {
-    const m = manual ?? {};
-    const host = m.host?.trim() || "";
-    const port = m.port;
-    const hasPort = typeof port === "number" && Number.isFinite(port) && port > 0;
-    if (!host || !hasPort) {
-      return {
-        status: "unreachable",
-        message: "请先在设置中填写 Host / Port（手动模式不会自动探测）",
-        config: {
-          ...config,
-          ...m,
-          source: "manual",
-        },
-        currentProxy: null,
-        usingMock: false,
-        proxiesError: "手动模式：请到设置填写完整连接参数后保存并测试",
-      };
-    }
-    config = {
-      ...config,
-      ...m,
-      host,
-      port: port!,
-      secret: m.secret ?? "",
-      mixedPort: m.mixedPort ?? config.mixedPort,
-      source: "manual",
-      sockPath: m.sockPath ?? null,
-    };
-    return probeWithConfig(config);
-  }
-
+  // Auto-discover per selected client — never silently use Verge sock for others.
   if (clientId === "verge") {
     const discovered = await discoverViaRust();
     if (discovered) {
       config = { ...config, ...discovered };
     }
-    if (manual && Object.keys(manual).length > 0) {
+  } else {
+    const discovered = await discoverViaRustForClient(clientId);
+    if (discovered) {
+      config = { ...config, ...discovered };
+    }
+    // Hard-clear any Verge sock that presets/defaults might have left behind.
+    if (clientId !== "mihomo_party") {
+      config = { ...config, sockPath: null };
+    } else if (
+      config.sockPath &&
+      config.sockPath.includes("verge-mihomo")
+    ) {
+      config = {
+        ...config,
+        sockPath: "/tmp/mihomo-party.sock",
+      };
+    }
+  }
+
+  // Optional advanced override from Settings (never required for main path).
+  if (manual && Object.keys(manual).length > 0) {
+    const src = manual.source;
+    // Ignore "auto" reset sentinel — discovery already ran.
+    if (src !== "auto") {
       config = mergeManual(config, manual);
     }
-    return probeWithConfig(config);
-  }
-
-  // mihomo: TCP defaults 9090 (+ alt 9091); no Verge yaml / sock required
-  if (manual && Object.keys(manual).length > 0) {
-    config = mergeManual(config, manual);
-  }
-  // Clear Verge sock unless user explicitly set one in manual
-  if (!manual?.sockPath) {
-    config = { ...config, sockPath: null };
-  }
-
-  const primary = await probeWithConfig(config);
-  if (primary.status === "connected" || primary.status === "unauthorized") {
-    return primary;
-  }
-
-  // Try alternate ports if primary unreachable and port not manually forced
-  const portForced = manual?.port !== undefined;
-  if (!portForced) {
-    for (const alt of MIHOMO_ALT_PORTS) {
-      if (alt === config.port) continue;
-      const altCfg = {
-        ...config,
-        port: alt,
-        source: `${config.source}+port-${alt}`,
-      };
-      const altResult = await probeWithConfig(altCfg);
-      if (altResult.status === "connected" || altResult.status === "unauthorized") {
-        return altResult;
+    // After merge, still never keep Verge sock for non-Verge unless user set sockPath.
+    if (clientId !== "verge" && !manual.sockPath) {
+      if (clientId === "mihomo_party") {
+        const party = "/tmp/mihomo-party.sock";
+        config = {
+          ...config,
+          sockPath: config.sockPath?.includes("verge") ? party : (config.sockPath ?? party),
+        };
+      } else {
+        config = { ...config, sockPath: null };
       }
     }
   }
 
+  // mihomo_party: prefer unix sock first when present
+  if (clientId === "mihomo_party") {
+    const partySock = config.sockPath || "/tmp/mihomo-party.sock";
+    config = { ...config, sockPath: partySock };
+    const sockFirst = await probeWithConfig(config, clientId, { preferSock: true });
+    if (sockFirst.status === "connected" || sockFirst.status === "unauthorized") {
+      return sockFirst;
+    }
+    // Then TCP if any
+    const tcp = await probeWithConfig({ ...config }, clientId, { preferSock: false });
+    if (tcp.status === "connected" || tcp.status === "unauthorized") {
+      return tcp;
+    }
+    return {
+      ...sockFirst,
+      message: clientUnreachableHint(clientId),
+      proxiesError: "请确认 Mihomo Party 已打开并已连接节点",
+    };
+  }
+
+  const result = await probeWithConfig(config, clientId);
+  if (result.status === "connected" || result.status === "unauthorized") {
+    return result;
+  }
+
+  // Nyanpasu debug builds may listen on 9872 instead of default 17650.
+  if (clientId === "nyanpasu" && config.port !== 9872 && !manual?.port) {
+    const alt = await probeWithConfig(
+      { ...config, port: 9872, source: `${config.source}+port-9872` },
+      clientId,
+    );
+    if (alt.status === "connected" || alt.status === "unauthorized") {
+      return alt;
+    }
+  }
+
   return {
-    ...primary,
-    message:
-      primary.message.includes("无法连接")
-        ? "无法连接 Mihomo API（已试 9090/9091），请检查客户端是否运行，或到设置覆盖端口/Secret"
-        : primary.message,
+    ...result,
+    message: clientUnreachableHint(clientId),
+    proxiesError: `请确认【${label}】已打开并已连接节点`,
   };
 }
 
@@ -350,26 +371,65 @@ function mergeManual(
   };
 }
 
-async function probeWithConfig(config: ControllerConfig): Promise<ConnectionState> {
-  const sockLabel = config.sockPath ?? "/tmp/verge/verge-mihomo.sock";
+async function probeWithConfig(
+  config: ControllerConfig,
+  clientId?: ClientId,
+  opts?: { preferSock?: boolean },
+): Promise<ConnectionState> {
   const trySock = !!config.sockPath;
+  const label = clientId ? clientLabel(clientId) : "客户端";
+  const preferSock = opts?.preferSock === true && trySock;
 
-  // Prefer brief TCP probe; on failure try Unix when sock configured.
-  const viaTcp = await rustHttp(config, "GET", "/version", undefined, 1500);
-  if (viaTcp && (viaTcp.status === 401 || viaTcp.status === 403)) {
-    return {
-      status: "unauthorized",
-      message: "Secret 不正确或未配置",
-      config,
-      currentProxy: null,
-      usingMock: false,
-      proxiesError: "API 返回未授权（401/403），请到设置检查 Secret",
-    };
+  const runTcp = async () => rustHttp(config, "GET", "/version", undefined, 1500);
+  const runSock = async () =>
+    trySock ? unixHttp(config, "GET", "/version", undefined, 2000) : null;
+
+  let viaTcp: HttpResult | null = null;
+  let viaSock: HttpResult | null = null;
+
+  if (preferSock) {
+    viaSock = await runSock();
+    if (viaSock && (viaSock.status === 401 || viaSock.status === 403)) {
+      return unauthorizedState(config);
+    }
+    if (viaSock && is2xx(viaSock.status)) {
+      return {
+        status: "connected",
+        message: `已连上 ${label}`,
+        config,
+        currentProxy: null,
+        usingMock: false,
+        proxiesError: null,
+      };
+    }
+    viaTcp = await runTcp();
+  } else {
+    viaTcp = await runTcp();
+    if (viaTcp && (viaTcp.status === 401 || viaTcp.status === 403)) {
+      return unauthorizedState(config);
+    }
+    if (viaTcp && is2xx(viaTcp.status)) {
+      return {
+        status: "connected",
+        message: `已连上 ${label}`,
+        config,
+        currentProxy: null,
+        usingMock: false,
+        proxiesError: null,
+      };
+    }
+    if (trySock) {
+      viaSock = await runSock();
+    }
   }
-  if (viaTcp && is2xx(viaTcp.status)) {
+
+  if (viaSock && (viaSock.status === 401 || viaSock.status === 403)) {
+    return unauthorizedState(config);
+  }
+  if (viaSock && is2xx(viaSock.status)) {
     return {
       status: "connected",
-      message: `已连接 ${config.host}:${config.port}（${config.source}）`,
+      message: `已连上 ${label}`,
       config,
       currentProxy: null,
       usingMock: false,
@@ -377,47 +437,15 @@ async function probeWithConfig(config: ControllerConfig): Promise<ConnectionStat
     };
   }
 
-  let viaSock: HttpResult | null = null;
-  if (trySock) {
-    viaSock = await unixHttp(config, "GET", "/version", undefined, 2000);
-    if (viaSock && (viaSock.status === 401 || viaSock.status === 403)) {
-      return {
-        status: "unauthorized",
-        message: "Secret 不正确或未配置",
-        config,
-        currentProxy: null,
-        usingMock: false,
-        proxiesError: "API 返回未授权（401/403），请到设置检查 Secret",
-      };
-    }
-    if (viaSock && is2xx(viaSock.status)) {
-      return {
-        status: "connected",
-        message: `已连接 Unix 套接字 ${sockLabel}（${config.source}）`,
-        config,
-        currentProxy: null,
-        usingMock: false,
-        proxiesError: null,
-      };
-    }
-  }
-
   // Dev / non-Tauri browser fallback
   const viaBrowser = await browserFetch(config, "GET", "/version", undefined, 2000);
   if (viaBrowser && (viaBrowser.status === 401 || viaBrowser.status === 403)) {
-    return {
-      status: "unauthorized",
-      message: "Secret 不正确或未配置",
-      config,
-      currentProxy: null,
-      usingMock: false,
-      proxiesError: "API 返回未授权（401/403），请到设置检查 Secret",
-    };
+    return unauthorizedState(config);
   }
   if (viaBrowser && is2xx(viaBrowser.status)) {
     return {
       status: "connected",
-      message: `已连接 ${config.host}:${config.port}（${config.source}）`,
+      message: `已连上 ${label}`,
       config,
       currentProxy: null,
       usingMock: false,
@@ -429,7 +457,9 @@ async function probeWithConfig(config: ControllerConfig): Promise<ConnectionStat
     const status = (viaSock ?? viaTcp ?? viaBrowser)!.status;
     return {
       status: "unreachable",
-      message: `API 返回 HTTP ${status}`,
+      message: clientId
+        ? clientUnreachableHint(clientId)
+        : `连接失败（HTTP ${status}）`,
       config,
       currentProxy: null,
       usingMock: false,
@@ -439,13 +469,24 @@ async function probeWithConfig(config: ControllerConfig): Promise<ConnectionStat
 
   return {
     status: "unreachable",
-    message: trySock
-      ? "无法连接 Mihomo API（TCP 与 Unix 均失败），请检查 Clash Verge Rev 是否运行"
-      : `无法连接 Mihomo API（${config.host}:${config.port}），请检查客户端是否运行`,
+    message: clientId
+      ? clientUnreachableHint(clientId)
+      : "请先打开并连上你的代理软件，再点刷新",
     config,
     currentProxy: null,
     usingMock: false,
     proxiesError: null,
+  };
+}
+
+function unauthorizedState(config: ControllerConfig): ConnectionState {
+  return {
+    status: "unauthorized",
+    message: "连接被拒绝，请到设置（高级）核对密钥后重试",
+    config,
+    currentProxy: null,
+    usingMock: false,
+    proxiesError: "密钥不正确或未配置（高级设置）",
   };
 }
 
@@ -475,7 +516,7 @@ async function getProxiesViaSlimCommand(
         port: config.port,
         secret: config.secret,
         timeoutMs: 18000,
-        sockPath: config.sockPath ?? "/tmp/verge/verge-mihomo.sock",
+        sockPath: config.sockPath ?? null,
       },
     });
     const nodes: ProxyNode[] = (res.nodes ?? []).map((n) =>
