@@ -1317,7 +1317,7 @@ async function probeNetflixLine(
     return {
       name: "Netflix",
       level: "unknown",
-      conclusion: "探测超时或不可达",
+      conclusion: "这次没测出来，标题页暂时打不开。",
       process: `${url} → 超时/无响应（${ms}ms）。短超时粗检；失败≠节点一定不可用。`,
     };
   }
@@ -1330,7 +1330,7 @@ async function probeNetflixLine(
     return {
       name: "Netflix",
       level: "fail",
-      conclusion: "当前节点下 Netflix 标题页疑似被墙或地区拦截。",
+      conclusion: "当前节点下疑似打不开或被地区限制。",
       process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：NSEZ-403 / 403 / 地区拦截文案。\n边界：粗检 ≠ 会员权益/片库/画质。`,
     };
   }
@@ -1347,7 +1347,7 @@ async function probeNetflixLine(
     return {
       name: "Netflix",
       level: "warn",
-      conclusion: "标题页能打开，但内容异常（可能仅自制剧）。",
+      conclusion: "标题页能打开，但内容看起来不正常（可能只能看自制剧）。",
       process: `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B\n信号：Oh no! / page-404 / 404。\n边界：粗检 ≠ 完整片库解锁。`,
     };
   }
@@ -1357,8 +1357,8 @@ async function probeNetflixLine(
       name: "Netflix",
       level: region ? "pass" : "warn",
       conclusion: region
-        ? `标题页可达。地区线索：${region}。`
-        : "标题页可达。地区线索未解析。",
+        ? `标题页能打开。地区线索：${region}。`
+        : "标题页能打开。地区线索还看不清。",
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         region
@@ -1373,7 +1373,7 @@ async function probeNetflixLine(
   return {
     name: "Netflix",
     level: "unknown",
-    conclusion: "这次没测清楚（页面响应异常）。",
+    conclusion: "这次没测清楚，页面响应异常。",
     process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B。探针偏抖时标 unknown。`,
   };
 }
@@ -1397,7 +1397,7 @@ async function probeDisneyLine(
     return {
       name: "Disney+",
       level: "unknown",
-      conclusion: "探测超时或不可达",
+      conclusion: "这次没测出来，首页暂时打不开。",
       process: `${url} → 超时/无响应（${ms}ms）。未跑 bamgrid 多步注册（本版仅 GET 粗检）。`,
     };
   }
@@ -1420,7 +1420,7 @@ async function probeDisneyLine(
     return {
       name: "Disney+",
       level: "fail",
-      conclusion: "当前节点下 Disney+ 疑似不可用或被地区限制。",
+      conclusion: "当前节点下疑似打不开或被地区限制。",
       process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：unavailable / not available / 403。\n边界：粗检 ≠ 会员登录与片库。`,
     };
   }
@@ -1434,8 +1434,8 @@ async function probeDisneyLine(
       name: "Disney+",
       level: "pass",
       conclusion: region
-        ? `首页可达。地区线索：${region}。`
-        : `首页可达（HTTP ${r.status}）。`,
+        ? `首页能打开。地区线索：${region}。`
+        : "首页能打开。",
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         region ? `地区线索：${region}` : "未从 HTML 解析到稳定地区码（仍可能可用）。",
@@ -1448,7 +1448,7 @@ async function probeDisneyLine(
   return {
     name: "Disney+",
     level: "unknown",
-    conclusion: "这次没测清楚（页面响应异常）。",
+    conclusion: "这次没测清楚，页面响应异常。",
     process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
   };
 }
@@ -1472,7 +1472,7 @@ async function probeYoutubeLine(
     return {
       name: "YouTube",
       level: "unknown",
-      conclusion: "探测超时或不可达",
+      conclusion: "这次没测出来，网页暂时打不开。",
       process: `${url} → 超时/无响应（${ms}ms）`,
     };
   }
@@ -1496,7 +1496,7 @@ async function probeYoutubeLine(
     return {
       name: "YouTube",
       level: "fail",
-      conclusion: `疑似墙：页面提示地区不可用${country ? `（${country}）` : ""}。`,
+      conclusion: `当前节点下疑似打不开或被地区限制${country ? `（${country}）` : ""}。`,
       process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：not available in your country。\n边界：粗检 ≠ Premium 订阅/全家共享/画质。`,
     };
   }
@@ -1510,8 +1510,8 @@ async function probeYoutubeLine(
       name: "YouTube",
       level: "pass",
       conclusion: country
-        ? `页可达。地区线索：${country}。`
-        : "页可达（粗检）。",
+        ? `网页能打开。地区线索：${country}。`
+        : "网页能打开。",
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         country ? `country-code / GL：${country}` : "未解析到 country-code（页仍可达）。",
@@ -1525,7 +1525,7 @@ async function probeYoutubeLine(
     return {
       name: "YouTube",
       level: "warn",
-      conclusion: "页面能打开，但会员相关信号偏弱。",
+      conclusion: "网页能打开，但会员相关信号偏弱。",
       process: `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B。可能被改版/重定向稀释信号。`,
     };
   }
@@ -1533,7 +1533,7 @@ async function probeYoutubeLine(
   return {
     name: "YouTube",
     level: "unknown",
-    conclusion: "这次没测清楚（页面响应异常）。",
+    conclusion: "这次没测清楚，页面响应异常。",
     process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
   };
 }
@@ -1567,7 +1567,7 @@ async function probeAppleStoreLine(
     return {
       name: "App Store",
       level: "unknown",
-      conclusion: "探测超时或不可达",
+      conclusion: "这次没测出来，网页商店暂时打不开。",
       process: `${url} → 超时/无响应（${ms}ms）`,
     };
   }
@@ -1586,7 +1586,7 @@ async function probeAppleStoreLine(
     return {
       name: "App Store",
       level: "fail",
-      conclusion: "当前节点下商店页疑似不可用或被地区限制。",
+      conclusion: "当前节点下疑似打不开或被地区限制。",
       process: `${url} → HTTP ${r.status} · ${ms}ms\n边界：不是下载、支付、上架审核。`,
     };
   }
@@ -1596,8 +1596,8 @@ async function probeAppleStoreLine(
       name: "App Store",
       level: "pass",
       conclusion: sf
-        ? `网页店面可达。地区线索：${sf}。`
-        : `网页店面可达（HTTP ${r.status}）。`,
+        ? `网页商店能打开。地区线索：${sf}。`
+        : "网页商店能打开。",
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         sf
@@ -1612,7 +1612,7 @@ async function probeAppleStoreLine(
   return {
     name: "App Store",
     level: "unknown",
-    conclusion: "这次没测清楚（页面响应异常）。",
+    conclusion: "这次没测清楚，网页商店响应异常。",
     process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
   };
 }
@@ -1636,7 +1636,7 @@ async function probeGooglePlayLine(
     return {
       name: "Google Play",
       level: "unknown",
-      conclusion: "探测超时或不可达",
+      conclusion: "这次没测出来，网页商店暂时打不开。",
       process: `${url} → 超时/无响应（${ms}ms）`,
     };
   }
@@ -1660,7 +1660,7 @@ async function probeGooglePlayLine(
     return {
       name: "Google Play",
       level: "fail",
-      conclusion: "当前节点下商店页疑似不可用或被地区限制。",
+      conclusion: "当前节点下疑似打不开或被地区限制。",
       process: `${url} → HTTP ${r.status} · ${ms}ms\n边界：不是下载、支付、上架审核。`,
     };
   }
@@ -1670,8 +1670,8 @@ async function probeGooglePlayLine(
       name: "Google Play",
       level: "pass",
       conclusion: gl
-        ? `网页商店可达。地区线索：${gl}。`
-        : "网页商店可达。",
+        ? `网页商店能打开。地区线索：${gl}。`
+        : "网页商店能打开。",
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         gl ? `gl 线索：${gl}` : "未解析到 gl 参数（页仍可达）。",
@@ -1684,7 +1684,7 @@ async function probeGooglePlayLine(
   return {
     name: "Google Play",
     level: "unknown",
-    conclusion: "这次没测清楚（页面响应异常）。",
+    conclusion: "这次没测清楚，网页商店响应异常。",
     process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
   };
 }
