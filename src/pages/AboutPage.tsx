@@ -4,7 +4,7 @@ export function AboutPage() {
       <div className="page-header">
         <div>
           <h1>关于</h1>
-          <p>Egress Checker v0.1.1</p>
+          <p>Egress Checker v0.1.2</p>
         </div>
       </div>
 
@@ -98,9 +98,9 @@ export function AboutPage() {
         「快速延迟」几乎不消耗流量。抽样带宽与未来的深度 / 优选测速会下载测速文件并可能切换节点，请注意流量与费用。
       </p>
 
-      <h2>v0.1.1 说明</h2>
+      <h2>v0.1.2 说明</h2>
       <p className="muted">
-        v0.1.1 加强真实性：DNS（scutil）、IPv6 对照、WebRTC STUN、抽样带宽，以及分流抽检 / 裸奔粗检。
+        v0.1.2 加强真实性：DNS（scutil）、IPv6 对照、WebRTC STUN、抽样带宽，以及分流抽检 / 裸奔粗检。
         仍有 WebView / 超时 / 无法窥视 TUN 等边界；结果用于换节点对照，不是完整安全鉴定报告。
       </p>
 
