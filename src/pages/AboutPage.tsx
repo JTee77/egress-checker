@@ -72,11 +72,23 @@ export function AboutPage() {
           不测：TUN 内核状态、系统代理开关、各 App 是否各自走代理。
         </li>
         <li>
-          <strong>流媒体抽检</strong>：Netflix 标题页 / Disney+ 首页 / YouTube Premium 页经 mixed-port 的粗可达与地区线索。
-          不测：会员权益、片库、画质、账号可用性；未覆盖全部平台。
+          <strong>Netflix</strong>：标题页经 mixed-port 的粗可达与地区线索。
+          不测：会员权益、片库、画质、账号可用性。
         </li>
         <li>
-          <strong>商店抽检</strong>：Apple App Store / Google Play 网页店面粗可达与地区路径线索。
+          <strong>Disney+</strong>：首页经 mixed-port 的粗可达与地区线索。
+          不测：会员登录、片库、画质、bamgrid 完整解锁链。
+        </li>
+        <li>
+          <strong>YouTube</strong>：Premium 页经 mixed-port 的粗可达与国家码线索（卡片名仍为 YouTube）。
+          不测：Premium 订阅权益、画质、Music / Kids。
+        </li>
+        <li>
+          <strong>App Store</strong>：apps.apple.com 网页店面粗可达与地区路径线索。
+          不测：下载、支付、上架审核。
+        </li>
+        <li>
+          <strong>Google Play</strong>：play.google.com 网页店面粗可达与地区线索。
           不测：下载、支付、上架审核。
         </li>
       </ul>

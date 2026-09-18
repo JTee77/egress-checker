@@ -1359,15 +1359,6 @@ type ProbeLine = {
   detail: string;
 };
 
-/** fail > warn > pass; unknown ignored unless every line is unknown. */
-function worstMeaningful(levels: CheckLevel[]): CheckLevel {
-  const meaningful = levels.filter((l) => l !== "unknown" && l !== "running");
-  if (meaningful.length === 0) return "unknown";
-  if (meaningful.includes("fail")) return "fail";
-  if (meaningful.includes("warn")) return "warn";
-  return "pass";
-}
-
 function extractNetflixRegion(text: string): string | null {
   const patterns = [
     /"currentCountry"\s*:\s*"([A-Z]{2})"/i,
@@ -1415,7 +1406,7 @@ async function probeNetflixLine(
     return {
       name: "Netflix",
       level: "fail",
-      summary: `疑似地区/IP 拦截（HTTP ${r.status || "?"}）`,
+      summary: `疑似墙或地区拦截（HTTP ${r.status || "?"}）。`,
       detail: `${url} → HTTP ${r.status} · ${ms}ms\n信号：NSEZ-403 / 403 / 地区拦截文案。\n边界：粗检 ≠ 会员权益/片库/画质。`,
     };
   }
@@ -1432,22 +1423,23 @@ async function probeNetflixLine(
     return {
       name: "Netflix",
       level: "warn",
-      summary: `可达但标题页异常（可能仅自制剧 / HTTP ${r.status}）`,
+      summary: `可达，但标题页异常（可能仅自制剧，HTTP ${r.status}）。`,
       detail: `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B\n信号：Oh no! / page-404 / 404。\n边界：粗检 ≠ 完整片库解锁。`,
     };
   }
 
   if (reachable) {
-    const regionTag = region
-      ? `地区线索 ${region}`
-      : "地区线索未解析（跟随重定向后仅看状态/正文）";
     return {
       name: "Netflix",
       level: region ? "pass" : "warn",
-      summary: `标题页可达 · ${regionTag}`,
+      summary: region
+        ? `标题页可达。地区线索：${region}。`
+        : "标题页可达。地区线索未解析。",
       detail: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
-        regionTag,
+        region
+          ? `地区线索：${region}`
+          : "地区线索未解析（跟随重定向后仅看状态/正文）。",
         "测了什么：title/80018499 经 mixed-port（跟随重定向后看状态与正文线索）。",
         "没测：完整片库、账号登录、4K/HDR、CDN 线路质量。",
       ].join("\n"),
@@ -1504,7 +1496,7 @@ async function probeDisneyLine(
     return {
       name: "Disney+",
       level: "fail",
-      summary: `疑似地区墙 / 不可用（HTTP ${r.status || "?"}）`,
+      summary: `疑似墙或地区不可用（HTTP ${r.status || "?"}）。`,
       detail: `${url} → HTTP ${r.status} · ${ms}ms\n信号：unavailable / not available / 403。\n边界：粗检 ≠ 会员登录与片库。`,
     };
   }
@@ -1518,8 +1510,8 @@ async function probeDisneyLine(
       name: "Disney+",
       level: "pass",
       summary: region
-        ? `首页可达 · 地区线索 ${region}`
-        : `首页可达（HTTP ${r.status}）`,
+        ? `首页可达。地区线索：${region}。`
+        : `首页可达（HTTP ${r.status}）。`,
       detail: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         region ? `地区线索：${region}` : "未从 HTML 解析到稳定地区码（仍可能可用）。",
@@ -1580,7 +1572,7 @@ async function probeYoutubeLine(
     return {
       name: "YouTube",
       level: "fail",
-      summary: `Premium 页提示地区不可用${country ? `（${country}）` : ""}`,
+      summary: `疑似墙：Premium 页提示地区不可用${country ? `（${country}）` : ""}。`,
       detail: `${url} → HTTP ${r.status} · ${ms}ms\n信号：not available in your country。\n边界：粗检 ≠ Premium 订阅/全家共享/画质。`,
     };
   }
@@ -1594,8 +1586,8 @@ async function probeYoutubeLine(
       name: "YouTube",
       level: "pass",
       summary: country
-        ? `Premium 页可达 · 国家码线索 ${country}`
-        : `Premium 页可达（粗检）`,
+        ? `Premium 页可达。地区线索：${country}。`
+        : "Premium 页可达（粗检）。",
       detail: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         country ? `country-code / GL：${country}` : "未解析到 country-code（页仍可达）。",
@@ -1609,7 +1601,7 @@ async function probeYoutubeLine(
     return {
       name: "YouTube",
       level: "warn",
-      summary: `页可达但 Premium 信号弱（HTTP ${r.status}）`,
+      summary: `页可达，但 Premium 信号弱（HTTP ${r.status}）。`,
       detail: `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B。可能被改版/重定向稀释信号。`,
     };
   }
@@ -1619,38 +1611,6 @@ async function probeYoutubeLine(
     level: "unknown",
     summary: `状态不明（HTTP ${r.status || "超时"}）`,
     detail: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
-  };
-}
-
-/**
- * 流媒体抽检：Netflix / Disney+ / YouTube 经 mixed-port 的粗可达与地区线索。
- */
-export async function checkStreamingUnlock(
-  mixedPort?: number | null,
-): Promise<CheckCard> {
-  const lines = [
-    await probeNetflixLine(mixedPort),
-    await probeDisneyLine(mixedPort),
-    await probeYoutubeLine(mixedPort),
-  ];
-  const level = worstMeaningful(lines.map((l) => l.level));
-  const summary = lines.map((l) => `${l.name}：${l.summary}`).join(" · ");
-  const detail = [
-    ...lines.map((l) => `【${l.name} · ${l.level}】${l.summary}\n${l.detail}`),
-    "——",
-    "边界：粗检 ≠ 会员权益 / 片库 / 画质 / 账号可用性；未覆盖全部平台。",
-    mixedPort != null && mixedPort > 0
-      ? `路径：优先经 mixed-port(${mixedPort})。`
-      : "路径：未配置 mixed-port（可能走窗口直连，结果勿当代理出口）。",
-  ].join("\n\n");
-
-  return {
-    id: "streaming",
-    title: "流媒体抽检",
-    level,
-    summary,
-    detail,
-    tip: "粗检 ≠ 会员权益/片库/画质/账号可用性；未覆盖全部平台。换节点对照用。",
   };
 }
 
@@ -1681,7 +1641,7 @@ async function probeAppleStoreLine(
 
   if (!r.status && !body) {
     return {
-      name: "Apple App Store",
+      name: "App Store",
       level: "unknown",
       summary: "探测超时或不可达",
       detail: `${url} → 超时/无响应（${ms}ms）`,
@@ -1700,20 +1660,20 @@ async function probeAppleStoreLine(
 
   if (wall) {
     return {
-      name: "Apple App Store",
+      name: "App Store",
       level: "fail",
-      summary: `疑似地区墙（HTTP ${r.status || "?"}）`,
+      summary: `疑似墙或地区不可用（HTTP ${r.status || "?"}）。`,
       detail: `${url} → HTTP ${r.status} · ${ms}ms\n边界：不是下载、支付、上架审核。`,
     };
   }
 
   if (reachable) {
     return {
-      name: "Apple App Store",
+      name: "App Store",
       level: "pass",
       summary: sf
-        ? `网页店面可达 · 线索 ${sf}`
-        : `网页店面可达（HTTP ${r.status}）`,
+        ? `网页店面可达。地区线索：${sf}。`
+        : `网页店面可达（HTTP ${r.status}）。`,
       detail: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         sf
@@ -1726,7 +1686,7 @@ async function probeAppleStoreLine(
   }
 
   return {
-    name: "Apple App Store",
+    name: "App Store",
     level: "unknown",
     summary: `状态不明（HTTP ${r.status || "超时"}）`,
     detail: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
@@ -1776,7 +1736,7 @@ async function probeGooglePlayLine(
     return {
       name: "Google Play",
       level: "fail",
-      summary: `疑似地区墙（HTTP ${r.status || "?"}）`,
+      summary: `疑似墙或地区不可用（HTTP ${r.status || "?"}）。`,
       detail: `${url} → HTTP ${r.status} · ${ms}ms\n边界：不是下载、支付、上架审核。`,
     };
   }
@@ -1786,8 +1746,8 @@ async function probeGooglePlayLine(
       name: "Google Play",
       level: "pass",
       summary: gl
-        ? `网页商店可达 · gl=${gl}`
-        : `网页商店可达（HTTP ${r.status}）`,
+        ? `网页商店可达。地区线索：${gl}。`
+        : `网页商店可达（HTTP ${r.status}）。`,
       detail: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         gl ? `gl 线索：${gl}` : "未解析到 gl 参数（页仍可达）。",
@@ -1805,35 +1765,84 @@ async function probeGooglePlayLine(
   };
 }
 
-/**
- * 商店抽检：Apple App Store / Google Play 网页粗可达与地区线索。
- */
-export async function checkStoreUnlock(
+function mixedPortPathNote(mixedPort?: number | null): string {
+  return mixedPort != null && mixedPort > 0
+    ? `路径：优先经 mixed-port(${mixedPort})。`
+    : "路径：未配置 mixed-port（可能走窗口直连，结果勿当代理出口）。";
+}
+
+function serviceCardFromLine(
+  id: string,
+  title: string,
+  line: ProbeLine,
+  tip: string,
+  mixedPort?: number | null,
+): CheckCard {
+  return {
+    id,
+    title,
+    level: line.level,
+    summary: line.summary,
+    detail: [line.detail, mixedPortPathNote(mixedPort)].join("\n"),
+    tip,
+  };
+}
+
+const STREAM_TIP =
+  "粗检 ≠ 会员权益 / 片库 / 画质 / 账号可用性。换节点对照用。";
+const STORE_TIP =
+  "粗检 ≠ 下载、支付、上架审核。换节点对照用。";
+
+/** Netflix 单独卡：标题页粗可达与地区线索。 */
+export async function checkNetflixUnlock(
   mixedPort?: number | null,
 ): Promise<CheckCard> {
-  const lines = [
-    await probeAppleStoreLine(mixedPort),
-    await probeGooglePlayLine(mixedPort),
-  ];
-  const level = worstMeaningful(lines.map((l) => l.level));
-  const summary = lines.map((l) => `${l.name}：${l.summary}`).join(" · ");
-  const detail = [
-    ...lines.map((l) => `【${l.name} · ${l.level}】${l.summary}\n${l.detail}`),
-    "——",
-    "边界：不是下载、支付、上架审核；仅网页店面粗检。",
-    mixedPort != null && mixedPort > 0
-      ? `路径：优先经 mixed-port(${mixedPort})。`
-      : "路径：未配置 mixed-port（可能走窗口直连）。",
-  ].join("\n\n");
+  const line = await probeNetflixLine(mixedPort);
+  return serviceCardFromLine("netflix", "Netflix", line, STREAM_TIP, mixedPort);
+}
 
-  return {
-    id: "store",
-    title: "商店抽检",
-    level,
-    summary,
-    detail,
-    tip: "不是下载、支付、上架审核。换节点时粗看网页店面是否打开。",
-  };
+/** Disney+ 单独卡：首页粗可达与地区线索。 */
+export async function checkDisneyUnlock(
+  mixedPort?: number | null,
+): Promise<CheckCard> {
+  const line = await probeDisneyLine(mixedPort);
+  return serviceCardFromLine("disney", "Disney+", line, STREAM_TIP, mixedPort);
+}
+
+/** YouTube 单独卡（探测仍用 Premium 页）：粗可达与地区线索。 */
+export async function checkYoutubeUnlock(
+  mixedPort?: number | null,
+): Promise<CheckCard> {
+  const line = await probeYoutubeLine(mixedPort);
+  return serviceCardFromLine("youtube", "YouTube", line, STREAM_TIP, mixedPort);
+}
+
+/** App Store 单独卡：网页店面粗可达与地区路径线索。 */
+export async function checkAppStoreUnlock(
+  mixedPort?: number | null,
+): Promise<CheckCard> {
+  const line = await probeAppleStoreLine(mixedPort);
+  return serviceCardFromLine(
+    "app-store",
+    "App Store",
+    line,
+    STORE_TIP,
+    mixedPort,
+  );
+}
+
+/** Google Play 单独卡：网页店面粗可达与地区线索。 */
+export async function checkGooglePlayUnlock(
+  mixedPort?: number | null,
+): Promise<CheckCard> {
+  const line = await probeGooglePlayLine(mixedPort);
+  return serviceCardFromLine(
+    "google-play",
+    "Google Play",
+    line,
+    STORE_TIP,
+    mixedPort,
+  );
 }
 
 
@@ -1871,8 +1880,11 @@ export async function runEgressDiagnostics(
   const bwCard = push(await sampleBandwidth(mixedPort));
   const splitCard = push(await checkSplitRouting(mixedPort, mihomoConfig));
   const bareCard = push(await checkBareEgress(mixedPort));
-  const streamingCard = push(await checkStreamingUnlock(mixedPort));
-  const storeCard = push(await checkStoreUnlock(mixedPort));
+  const netflixCard = push(await checkNetflixUnlock(mixedPort));
+  const disneyCard = push(await checkDisneyUnlock(mixedPort));
+  const youtubeCard = push(await checkYoutubeUnlock(mixedPort));
+  const appStoreCard = push(await checkAppStoreUnlock(mixedPort));
+  const googlePlayCard = push(await checkGooglePlayUnlock(mixedPort));
 
   return {
     ranAt: new Date().toISOString(),
@@ -1888,8 +1900,11 @@ export async function runEgressDiagnostics(
       bwCard,
       splitCard,
       bareCard,
-      streamingCard,
-      storeCard,
+      netflixCard,
+      disneyCard,
+      youtubeCard,
+      appStoreCard,
+      googlePlayCard,
     ],
     exitIp: exit,
     gemini,

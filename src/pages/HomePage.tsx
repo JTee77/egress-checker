@@ -20,8 +20,11 @@ const PLACEHOLDERS: CheckCard[] = [
   { id: "bandwidth", title: "抽样带宽", level: "unknown", summary: "尚未检测" },
   { id: "split-routing", title: "分流抽检", level: "unknown", summary: "尚未检测" },
   { id: "bare-egress", title: "裸奔粗检", level: "unknown", summary: "尚未检测" },
-  { id: "streaming", title: "流媒体抽检", level: "unknown", summary: "尚未检测" },
-  { id: "store", title: "商店抽检", level: "unknown", summary: "尚未检测" },
+  { id: "netflix", title: "Netflix", level: "unknown", summary: "尚未检测" },
+  { id: "disney", title: "Disney+", level: "unknown", summary: "尚未检测" },
+  { id: "youtube", title: "YouTube", level: "unknown", summary: "尚未检测" },
+  { id: "app-store", title: "App Store", level: "unknown", summary: "尚未检测" },
+  { id: "google-play", title: "Google Play", level: "unknown", summary: "尚未检测" },
 ];
 
 export function HomePage({

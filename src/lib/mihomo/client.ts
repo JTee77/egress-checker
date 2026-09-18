@@ -593,7 +593,7 @@ export async function getProxies(config: ControllerConfig): Promise<GetProxiesRe
       currentProxy: filtered.currentProxy,
       usingMock: false,
       error:
-        "已连接但未解析到可用节点，请到设置检查 Secret / 刷新，或确认订阅已加载",
+        "已连上软件，但还没有可用节点，请确认该软件里订阅已加载",
       unauthorized: false,
     };
   }

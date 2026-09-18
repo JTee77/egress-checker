@@ -291,7 +291,7 @@ select {
   padding-bottom: 8px;
 }
 
-/* 首页：4 列密集布局 → 约三行装下多卡全文；11 卡时可纵向滚动（详情可见，不折叠） */
+/* 首页：4 列密集布局；卡多时纵向滚动（详情全文可见，不折叠隐藏） */
 .card-grid-home {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
