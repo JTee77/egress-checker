@@ -8,7 +8,7 @@ export interface CheckCard {
   conclusion: string;
   /** Technical detail (URLs, HTTP codes, timings…); collapsed by default in UI */
   process?: string;
-  /** Always-visible next-step / honesty-boundary tip */
+  /** Always-visible next-step tip (actionable; omit when nothing useful) */
   suggestion?: string;
   /** @deprecated Prefer `conclusion`. Kept for migration / older callers. */
   summary?: string;

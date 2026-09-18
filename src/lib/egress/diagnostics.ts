@@ -121,7 +121,7 @@ export async function checkReachability(
     process: results
       .map((r) => `${r.url}: ${r.status || "超时"} (${r.ms}ms)`)
       .join("\n"),
-    suggestion: "能通只说明代理路径大致可用，不代表所有网站都正常。",
+    suggestion: level === "warn" ? "换个节点再测一次" : undefined,
   };
 }
 
@@ -392,7 +392,7 @@ export async function checkIpv6Leak(
       level: "pass",
       conclusion: "本机当前探测不到可用 IPv6 出口（直连与代理均无）",
       process: lines.join("\n"),
-      suggestion: "无 IPv6 时通常不构成 IPv6 泄漏面；若你刻意开了 IPv6，请检查系统网络与节点是否支持。",
+      // no suggestion: pass with nothing actionable
     };
   }
 
@@ -424,7 +424,7 @@ export async function checkIpv6Leak(
       level: "warn",
       conclusion: `直连与代理看到相同 IPv6（${directV6}）— 请人工确认是否真经代理`,
       process: lines.join("\n"),
-      suggestion: "相同地址不一定等于泄漏，也可能是代理出口与本机碰巧一致；请结合出口 IP 卡核对。",
+      suggestion: "请结合出口 IP 卡核对。",
     };
   }
 
@@ -435,7 +435,7 @@ export async function checkIpv6Leak(
       level: "pass",
       conclusion: `仅代理侧有 IPv6（${proxiedV6}），直连无 — 未见直连旁路`,
       process: lines.join("\n"),
-      suggestion: "当前探测下 IPv6 更像走代理；仍非内核级证明。",
+      // no suggestion: pass path
     };
   }
 
@@ -668,7 +668,7 @@ export async function probeGeminiUnlock(
   ];
   const notProbed = [
     "Google 官方手机 App",
-    "Mac 桌面客户端（本版未单独检测）",
+    "Mac 桌面客户端",
   ];
 
   if (blocked) {
@@ -677,11 +677,7 @@ export async function probeGeminiUnlock(
       level: "blocked",
       region: "BLOCKED",
       status: "网页：不可用（地区限制）",
-      lines: [
-        "网页：不可用",
-        "手机 App：未测",
-        "Mac 桌面版：本版未单独检测",
-      ],
+      lines: ["网页：不可用"],
       probed,
       notProbed,
     };
@@ -693,11 +689,7 @@ export async function probeGeminiUnlock(
       level: "full",
       region: detectedCountry ?? "OK",
       status: `网页：可用（${tag}）`,
-      lines: [
-        "网页：可用",
-        "手机 App：未测",
-        "Mac 桌面版：本版未单独检测",
-      ],
+      lines: ["网页：可用"],
       probed,
       notProbed,
     };
@@ -708,11 +700,7 @@ export async function probeGeminiUnlock(
       level: "unknown",
       region: null,
       status: "网页：这次没测成（超时）",
-      lines: [
-        "网页：未测成",
-        "手机 App：未测",
-        "Mac 桌面版：本版未单独检测",
-      ],
+      lines: ["网页：未测成"],
       probed,
       notProbed,
     };
@@ -722,11 +710,7 @@ export async function probeGeminiUnlock(
     level: "blocked",
     region: null,
     status: "网页：不可用或打不开",
-    lines: [
-      "网页：不可用",
-      "手机 App：未测",
-      "Mac 桌面版：本版未单独检测",
-    ],
+    lines: ["网页：不可用"],
     probed,
     notProbed,
   };
@@ -798,10 +782,10 @@ export async function probeChatgptUnlock(
   const locTag = loc ?? "未知地区";
   const probed = [
     "网页相关：chatgpt.com/cdn-cgi/trace、OpenAI compliance 接口（必要时再看 chatgpt.com 首页）",
-    "手机 App 相关：ios.chat.openai.com（粗检，不等于你手机上的真实 App 体验）",
+    "手机 App 相关：ios.chat.openai.com（粗检）",
   ];
   const notProbed = [
-    "Mac 官方桌面版 ChatGPT（本版未单独检测）",
+    "Mac 官方桌面版 ChatGPT",
     "你浏览器里已经登录后的完整网页体验",
   ];
 
@@ -811,11 +795,7 @@ export async function probeChatgptUnlock(
       level: "blocked",
       region: loc,
       status: `网页：不可用 · 手机 App：可能不行（${locTag}）`,
-      lines: [
-        "网页：不可用",
-        "手机 App：可能不行",
-        "Mac 桌面版：本版未单独检测",
-      ],
+      lines: ["网页：不可用", "手机 App：可能不行"],
       probed,
       notProbed,
     };
@@ -826,11 +806,7 @@ export async function probeChatgptUnlock(
       level: "web_only",
       region: loc,
       status: `网页：可用 · 手机 App：可能不行（${locTag}）`,
-      lines: [
-        "网页：可用",
-        "手机 App：可能不行",
-        "Mac 桌面版：本版未单独检测",
-      ],
+      lines: ["网页：可用", "手机 App：可能不行"],
       probed,
       notProbed,
     };
@@ -841,11 +817,7 @@ export async function probeChatgptUnlock(
       level: "app_only",
       region: loc,
       status: `网页：不可用 · 手机 App：可用（粗检，${locTag}）`,
-      lines: [
-        "网页：不可用",
-        "手机 App：可用（粗检）",
-        "Mac 桌面版：本版未单独检测",
-      ],
+      lines: ["网页：不可用", "手机 App：可用（粗检）"],
       probed,
       notProbed,
     };
@@ -855,11 +827,7 @@ export async function probeChatgptUnlock(
     level: "full",
     region: loc,
     status: `网页：可用 · 手机 App：可用（粗检，${locTag}）`,
-    lines: [
-      "网页：可用",
-      "手机 App：可用（粗检）",
-      "Mac 桌面版：本版未单独检测",
-    ],
+    lines: ["网页：可用", "手机 App：可用（粗检）"],
     probed,
     notProbed,
   };
@@ -891,13 +859,20 @@ function unlockCard(
     "换节点时一次对照用，不能替代你自己打开网站或 App。",
   ].filter(Boolean);
 
+  let suggestion: string | undefined;
+  if (level === "fail" || level === "unknown") {
+    suggestion = "换个节点再测一次";
+  } else if (level === "warn") {
+    suggestion = "结果不一致时可换个节点再试";
+  }
+
   return {
     id,
     title,
     level,
     conclusion: result.status,
     process: processParts.join("\n"),
-    suggestion: "主要用 Mac 桌面版时，桌面项会写「未单独检测」——以官方客户端实际体验为准。",
+    suggestion,
   };
 }
 
@@ -933,8 +908,8 @@ export async function sampleLatency(
       title: "延迟采样",
       level,
       conclusion: `大约 ${ms} ms（轻量探测）`,
-      process: `目标: ${url}`,
-      suggestion: "这是单次轻量 HTTPS 抽样，不是面板延迟，也不是网页打开速度。",
+      process: `目标: ${url}\n边界：单次轻量 HTTPS 抽样，不是面板延迟。`,
+      suggestion: level === "pass" ? undefined : "换个节点再测一次",
     },
   };
 }
@@ -1131,7 +1106,7 @@ export async function checkSplitRouting(
     level,
     conclusion,
     process,
-    suggestion: "期望常见配置下国内偏 DIRECT、境外走代理。本卡只抽检少数域名，不能证明整份规则无误。",
+    suggestion: level === "fail" || level === "warn" ? "换个节点或检查分流规则后再测一次" : undefined,
   };
 }
 
@@ -1348,7 +1323,7 @@ export async function sampleBandwidth(
     level,
     conclusion,
     process,
-    suggestion: "结果随节点与负载波动较大，仅适合换节点时粗对比；勿当作全网测速或面板延迟。",
+    suggestion: level === "fail" ? "请确认代理已连接后再测一次" : level === "warn" ? "结果不好就换个节点再测一次" : undefined,
   };
 }
 
@@ -1780,20 +1755,27 @@ function serviceCardFromLine(
   suggestion: string,
   mixedPort?: number | null,
 ): CheckCard {
+  // Empty tip → no card suggestion; otherwise only show on non-pass.
+  const tip =
+    !suggestion
+      ? undefined
+      : line.level === "pass"
+        ? undefined
+        : suggestion;
   return {
     id,
     title,
     level: line.level,
     conclusion: line.conclusion,
     process: [line.process, mixedPortPathNote(mixedPort)].join("\n"),
-    suggestion,
+    suggestion: tip,
   };
 }
 
-const STREAM_TIP =
-  "粗检 ≠ 会员权益 / 片库 / 画质 / 账号可用性。换节点对照用。";
-const STORE_TIP =
-  "粗检 ≠ 下载、支付、上架审核。换节点对照用。";
+/** Short actionable tip for streaming cards; empty = no suggestion on pass. */
+const STREAM_TIP = "结果不好就换个节点再测一次";
+/** Short actionable tip for store cards; empty = no suggestion on pass. */
+const STORE_TIP = "结果不好就换个节点再测一次";
 
 /** Netflix 单独卡：标题页粗可达与地区线索。 */
 export async function checkNetflixUnlock(
