@@ -1574,7 +1574,7 @@ async function probeYoutubeLine(
     return {
       name: "YouTube",
       level: "fail",
-      conclusion: `疑似墙：Premium 页提示地区不可用${country ? `（${country}）` : ""}。`,
+      conclusion: `疑似墙：页面提示地区不可用${country ? `（${country}）` : ""}。`,
       process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：not available in your country。\n边界：粗检 ≠ Premium 订阅/全家共享/画质。`,
     };
   }
@@ -1588,8 +1588,8 @@ async function probeYoutubeLine(
       name: "YouTube",
       level: "pass",
       conclusion: country
-        ? `Premium 页可达。地区线索：${country}。`
-        : "Premium 页可达（粗检）。",
+        ? `页可达。地区线索：${country}。`
+        : "页可达（粗检）。",
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         country ? `country-code / GL：${country}` : "未解析到 country-code（页仍可达）。",
@@ -1603,7 +1603,7 @@ async function probeYoutubeLine(
     return {
       name: "YouTube",
       level: "warn",
-      conclusion: "页面能打开，但 Premium 相关信号偏弱。",
+      conclusion: "页面能打开，但会员相关信号偏弱。",
       process: `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B。可能被改版/重定向稀释信号。`,
     };
   }
@@ -1811,12 +1811,12 @@ export async function checkDisneyUnlock(
   return serviceCardFromLine("disney", "Disney+", line, STREAM_TIP, mixedPort);
 }
 
-/** YouTube 单独卡（探测仍用 Premium 页）：粗可达与地区线索。 */
+/** YouTube Premium 单独卡（探测 Premium 页）：粗可达与地区线索。 */
 export async function checkYoutubeUnlock(
   mixedPort?: number | null,
 ): Promise<CheckCard> {
   const line = await probeYoutubeLine(mixedPort);
-  return serviceCardFromLine("youtube", "YouTube", line, STREAM_TIP, mixedPort);
+  return serviceCardFromLine("youtube", "YouTube Premium", line, STREAM_TIP, mixedPort);
 }
 
 /** App Store 单独卡：网页店面粗可达与地区路径线索。 */
@@ -2054,7 +2054,7 @@ export async function runEgressDiagnostics(
     },
     {
       id: "youtube",
-      title: "YouTube",
+      title: "YouTube Premium",
       deadlineMs: 10000,
       run: () => checkYoutubeUnlock(mixedPort),
     },
