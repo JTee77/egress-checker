@@ -123,7 +123,7 @@ function blurbFor(
   exitNote: string,
 ): string {
   if (stars === "unavailable") {
-    return "连访问海外站点都失败了，先别指望用它上网。";
+    return "连海外站点都打不开，先别指望用它上网。";
   }
   if (stars === 5) return `表现很稳：${thrNote}；服务面也较齐。`;
   if (stars === 4) return `整体不错：${thrNote}。${svcNote}。`;
@@ -166,7 +166,7 @@ export function scoreNodeFromCards(
       nodeName,
       stars: "unavailable",
       totalScore: 0,
-      blurb: "连访问海外站点都失败了，先别指望用它上网。",
+      blurb: "连海外站点都打不开，先别指望用它上网。",
       breakdown,
       cards,
       ranAt,
