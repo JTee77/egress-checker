@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { CheckCardView } from "../components/CheckCardView";
 import {
   TestProgress,
@@ -100,7 +100,7 @@ export function HomePage({
   const [report, setReport] = useState<EgressReport | null>(null);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<ProgressInfo | null>(null);
-  const [nodesOpen, setNodesOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [mode, setMode] = useState<TestMode>("current");
   const [gate, setGate] = useState<GateResult | null>(null);
   const [gateDetailOpen, setGateDetailOpen] = useState(false);
@@ -127,26 +127,7 @@ export function HomePage({
 
   const clientUnset = !clientId;
 
-  /** 与 CSS 断点一致：宽 3 列 / ≤900 2 列 / ≤560 1 列；预览 = 列×2 行铺满 */
-  const [nodeCols, setNodeCols] = useState(3);
-  useEffect(() => {
-    const mq2 = window.matchMedia("(max-width: 900px)");
-    const mq1 = window.matchMedia("(max-width: 560px)");
-    const sync = () => {
-      if (mq1.matches) setNodeCols(1);
-      else if (mq2.matches) setNodeCols(2);
-      else setNodeCols(3);
-    };
-    sync();
-    mq1.addEventListener("change", sync);
-    mq2.addEventListener("change", sync);
-    return () => {
-      mq1.removeEventListener("change", sync);
-      mq2.removeEventListener("change", sync);
-    };
-  }, []);
-
-  const nodesPreview = useMemo(() => {
+  const orderedNodes = useMemo(() => {
     const current = connection.currentProxy;
     const ordered = [...nodes];
     if (current) {
@@ -156,11 +137,8 @@ export function HomePage({
         ordered.unshift(row);
       }
     }
-    const previewCount = nodeCols * 2;
-    const visible = ordered.slice(0, previewCount);
-    const hiddenCount = Math.max(0, ordered.length - visible.length);
-    return { ordered, visible, hiddenCount };
-  }, [nodes, connection.currentProxy, nodeCols]);
+    return ordered;
+  }, [nodes, connection.currentProxy]);
 
   const mixedPortNum = connection.config?.mixedPort ?? null;
 
@@ -212,14 +190,19 @@ export function HomePage({
   };
 
   const refreshAndGate = async () => {
-    const next = await onRefresh?.();
-    const conn =
-      next && typeof next === "object" && "status" in (next as object)
-        ? (next as ConnectionState)
-        : connection;
-    const g = await runLightGate(conn);
-    setGate(g);
-    setGateDetailOpen(!g.ok);
+    setRefreshing(true);
+    try {
+      const next = await onRefresh?.();
+      const conn =
+        next && typeof next === "object" && "status" in (next as object)
+          ? (next as ConnectionState)
+          : connection;
+      const g = await runLightGate(conn);
+      setGate(g);
+      setGateDetailOpen(!g.ok);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const ensureGate = async (): Promise<GateResult> => {
@@ -596,11 +579,11 @@ export function HomePage({
           <button
             className="btn btn-sm"
             type="button"
-            disabled={!!busy || running || clientUnset}
+            disabled={!!busy || refreshing || running || clientUnset}
             title={clientUnset ? "请先选择软件" : undefined}
             onClick={() => void refreshAndGate()}
           >
-            {busy ? "刷新中…" : "刷新连接"}
+            {busy || refreshing ? "刷新中…" : "刷新连接"}
           </button>
         </div>
       </div>
@@ -638,18 +621,18 @@ export function HomePage({
       )}
 
 
-      {gate?.ok && nodes.length > 0 ? (
+      {gate?.ok && orderedNodes.length > 0 ? (
         <div className="home-nodes card">
           <div className="home-nodes-summary">
             <span className="home-nodes-summary-text">
-              已识别 {nodes.length} 个节点 · 当前：
+              已识别 {orderedNodes.length} 个节点 · 当前：
               <strong className="home-nodes-current-mark">
                 {connection.currentProxy ?? "—"}
               </strong>
             </span>
           </div>
           <div className="home-nodes-list" role="list">
-            {(nodesOpen ? nodesPreview.ordered : nodesPreview.visible).map((n) => {
+            {orderedNodes.map((n) => {
               const isCurrent = n.name === connection.currentProxy;
               return (
                 <div
@@ -672,18 +655,10 @@ export function HomePage({
               );
             })}
           </div>
-          {nodesPreview.hiddenCount > 0 ? (
-            <button
-              type="button"
-              className="btn home-nodes-expand"
-              aria-expanded={nodesOpen}
-              onClick={() => setNodesOpen((v) => !v)}
-            >
-              {nodesOpen
-                ? "收起"
-                : `展开其余 ${nodesPreview.hiddenCount} 个节点`}
-            </button>
-          ) : null}
+        </div>
+      ) : refreshing && !clientUnset ? (
+        <div className="note note-compact">
+          <span className="note-line">正在检查…</span>
         </div>
       ) : null}
 

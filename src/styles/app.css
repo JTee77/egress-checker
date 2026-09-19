@@ -862,23 +862,11 @@ table.data tr:last-child td {
   padding-top: 6px;
   border-top: 1px solid var(--border);
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
   gap: 6px;
-  max-height: 168px;
+  max-height: 196px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-}
-
-@media (max-width: 900px) {
-  .home-nodes-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 560px) {
-  .home-nodes-list {
-    grid-template-columns: 1fr;
-  }
 }
 
 .home-nodes-row {
@@ -1006,13 +994,6 @@ table.data tr:last-child td {
 }
 
 
-.home-nodes-expand {
-  display: block;
-  width: 100%;
-  margin-top: 8px;
-  padding: 8px 12px;
-  font-weight: 600;
-}
 
 .home-nodes-summary {
   cursor: default;
