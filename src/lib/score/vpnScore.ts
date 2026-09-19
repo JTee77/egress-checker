@@ -77,8 +77,8 @@ function mainReason(
   node: ScoreBreakdownItem,
 ): string {
   const worst = [tunnel, dns, split, node].sort((a, b) => a.score - b.score)[0];
-  if (tier === "完美") return "难得一见。这轮几乎挑不出毛病。";
-  if (tier === "很好") return "隧道、解析和所选节点这轮都比较顺。";
+  if (tier === "完美") return "难得一见。几乎挑不出毛病。";
+  if (tier === "很好") return "隧道、解析和所选节点都比较顺。";
   if (worst.key === "dns" && dns.score < 60) {
     return "节点还行，但 DNS 仍像运营商解析，容易让人觉得「漏了」。";
   }
@@ -89,11 +89,11 @@ function mainReason(
     return "出口节点尚可，但分流表现偏怪，国内/国外路径可能不干净。";
   }
   if (worst.key === "node" && node.score < 60) {
-    return "整体环境还行，但你选中的这个节点这轮偏弱。";
+    return "整体环境还行，但你选中的这个节点偏弱。";
   }
   if (tier === "能用") return "能正常用，但仍有明显短板，换节点或检查 DNS 会更舒服。";
   if (tier === "勉强") return "勉强能用，建议优先处理得分最低的那一项。";
-  return "这轮问题较多，先确认客户端已连上且流量真走代理。";
+  return "问题较多，先确认客户端已连上且流量真走代理。";
 }
 
 /**
@@ -137,7 +137,7 @@ export function scoreVpn(
         selected.totalScore);
   const nodeNote =
     selected.stars === "unavailable"
-      ? "所选节点这轮不可用"
+      ? "所选节点不可用"
       : `${selected.nodeName}：${selected.blurb}`;
 
   const breakdown: ScoreBreakdownItem[] = [

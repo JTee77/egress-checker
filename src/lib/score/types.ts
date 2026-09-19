@@ -1,6 +1,6 @@
 import type { CheckCard } from "../egress/types";
 
-/** 节点星级：1–5，或不可用（本轮） */
+/** 节点星级：1–5，或不可用 */
 export type NodeStars = 1 | 2 | 3 | 4 | 5 | "unavailable";
 
 export type ScoreBreakdownItem = {

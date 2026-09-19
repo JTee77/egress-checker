@@ -132,7 +132,7 @@ export async function runNodeDiagnostics(
   const mixedPort = options?.mixedPort ?? null;
   const note =
     mixedPort != null && mixedPort > 0
-      ? "本轮只测「当前出口」相关项（连通、出口、带宽与服务粗检）。环境项请用「怀疑漏了再查」。"
+      ? "只测当前出口相关项（连通、出口、带宽与服务粗检）。环境项请用「怀疑漏了再查」。"
       : "未配置代理口时，部分探针可能走窗口直连。建议先刷新连接。";
 
   const push = (c: CheckCard) => {
@@ -283,7 +283,7 @@ export async function runNodeDeepLight(
   const mixedPort = options?.mixedPort ?? null;
   const note =
     mixedPort != null && mixedPort > 0
-      ? "本轮为「测全部」轻量深测（短连通、出口、小带宽抽样与关键服务）。环境项请用「怀疑漏了再查」。"
+      ? "测全部为轻量深测（短连通、出口、小带宽抽样与关键服务）。环境项请用「怀疑漏了再查」。"
       : "未配置代理口时，部分探针可能走窗口直连。建议先刷新连接。";
 
   const push = (c: CheckCard) => {

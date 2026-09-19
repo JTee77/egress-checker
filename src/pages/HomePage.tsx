@@ -242,7 +242,7 @@ export function HomePage({
         NODE_PLACEHOLDERS.map((c) => ({
           ...c,
           level: "fail",
-          conclusion: "本轮检测失败",
+          conclusion: "检测失败",
           process: msg,
           suggestion: "请确认代理软件已打开并已连接，然后重新检测。",
         })),
@@ -344,7 +344,7 @@ export function HomePage({
           if (row.skipped) continue;
           if (row.delay == null) {
             results.push(
-              scoreDeadNode(row.n.name, "这轮延迟探测失败，按不可用处理。"),
+              scoreDeadNode(row.n.name, "延迟探测失败，按不可用处理。"),
             );
           } else {
             alive.push(row.n);
@@ -371,7 +371,7 @@ export function HomePage({
             results.push(
               scoreDeadNode(
                 n.name,
-                "找不到可切换的策略组，这轮没法深测这个节点。",
+                "找不到可切换的策略组，没法深测这个节点。",
               ),
             );
             continue;
@@ -379,7 +379,7 @@ export function HomePage({
           const ok = await switchProxy(config!, group, n.name);
           if (!ok) {
             results.push(
-              scoreDeadNode(n.name, "切换失败，这轮没法深测这个节点。"),
+              scoreDeadNode(n.name, "切换失败，没法深测这个节点。"),
             );
             continue;
           }
@@ -398,7 +398,7 @@ export function HomePage({
       } else if (canSwitch) {
         // API 在，但读不到原先选中 / 策略组：仍尽量深测当前出口，并说明原因
         setSwitchHint(
-          "连上了代理软件，但读不到当前选中的节点或策略组，没法安全地临时切换。这轮只深测当前出口。",
+          "连上了代理软件，但读不到当前选中的节点或策略组，没法安全地临时切换。只深测当前出口。",
         );
         setProgress({ text: "深测当前出口（无法安全切换）…" });
         setNodeCards(asRunning(NODE_PLACEHOLDERS));
@@ -415,7 +415,7 @@ export function HomePage({
           results.push(
             scoreDeadNode(
               n.name,
-              "这轮没法切换到该节点做深测（读不到策略组或当前选中）。",
+              "没法切换到该节点做深测（读不到策略组或当前选中）。",
             ),
           );
         }
@@ -778,7 +778,7 @@ export function HomePage({
 
       {nodeScores.length > 0 ? (
         <div className="node-score-list">
-          <h2 className="section-title">节点星级（本轮）</h2>
+          <h2 className="section-title">节点星级</h2>
           <p className="muted section-hint">
             点选一个节点，用于计算上方的整份 VPN 总评。不会因此改动你在代理软件里的选择。
           </p>

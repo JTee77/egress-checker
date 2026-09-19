@@ -42,11 +42,11 @@ function scoreAvailability(cards: CheckCard[]): {
   if (reach?.level === "fail") {
     return {
       score: 0,
-      note: "境外探测都失败了，这轮按不可用处理",
+      note: "境外探测都失败了，按不可用处理",
       dead: true,
     };
   }
-  if (!reach) return { score: 40, note: "本轮没有连通性结果", dead: false };
+  if (!reach) return { score: 40, note: "没有连通性结果", dead: false };
   return {
     score: levelToScore(reach.level),
     note: reach.conclusion,
@@ -56,7 +56,7 @@ function scoreAvailability(cards: CheckCard[]): {
 
 function scoreThroughput(cards: CheckCard[]): { score: number; note: string } {
   const bw = card(cards, "bandwidth");
-  if (!bw) return { score: 35, note: "本轮未做带宽抽样" };
+  if (!bw) return { score: 35, note: "未做带宽抽样" };
   if (bw.level === "fail") return { score: 0, note: bw.conclusion };
   const mbps = parseDownMbps(bw);
   if (mbps == null) {
@@ -82,7 +82,7 @@ export const SERVICE_IDS = [
 
 function scoreServices(cards: CheckCard[]): { score: number; note: string } {
   const list = SERVICE_IDS.map((id) => card(cards, id)).filter(Boolean) as CheckCard[];
-  if (!list.length) return { score: 35, note: "本轮未测服务面" };
+  if (!list.length) return { score: 35, note: "未测服务面" };
   const avg = list.reduce((s, c) => s + levelToScore(c.level), 0) / list.length;
   const passN = list.filter((c) => c.level === "pass").length;
   const failN = list.filter((c) => c.level === "fail").length;
@@ -94,7 +94,7 @@ function scoreServices(cards: CheckCard[]): { score: number; note: string } {
 
 function scoreExit(cards: CheckCard[]): { score: number; note: string } {
   const exit = card(cards, "exit-ip");
-  if (!exit) return { score: 40, note: "本轮未拿到出口信息" };
+  if (!exit) return { score: 40, note: "未拿到出口信息" };
   if (exit.level === "fail") return { score: 0, note: exit.conclusion };
   const text = `${exit.conclusion} ${exit.process ?? ""}`;
   const hosting = /机房|DCH|hosting/i.test(text);
@@ -123,13 +123,13 @@ function blurbFor(
   exitNote: string,
 ): string {
   if (stars === "unavailable") {
-    return "这轮连基本出国访问都失败了，先别指望用它上网。";
+    return "连基本出国访问都失败了，先别指望用它上网。";
   }
-  if (stars === 5) return `这轮表现很稳：${thrNote}；服务面也较齐。`;
-  if (stars === 4) return `这轮整体不错：${thrNote}。${svcNote}。`;
-  if (stars === 3) return `这轮能用，但不算出众：${thrNote}。`;
-  if (stars === 2) return `这轮勉强能用：${thrNote}；${exitNote}`;
-  return `这轮偏弱：${availNote}；${thrNote}`;
+  if (stars === 5) return `表现很稳：${thrNote}；服务面也较齐。`;
+  if (stars === 4) return `整体不错：${thrNote}。${svcNote}。`;
+  if (stars === 3) return `能用，但不算出众：${thrNote}。`;
+  if (stars === 2) return `勉强能用：${thrNote}；${exitNote}`;
+  return `偏弱：${availNote}；${thrNote}`;
 }
 
 function fakeLowLatencyTip(cards: CheckCard[], thrScore: number): string | undefined {
@@ -145,7 +145,7 @@ function fakeLowLatencyTip(cards: CheckCard[], thrScore: number): string | undef
 }
 
 /**
- * 按本轮检测卡片给节点打星（不跨轮次比较）。
+ * 按检测卡片给节点打星（不跨次比较）。
  * 权重：可用性 25% · 吞吐 30% · 服务 30% · 出口质量 15%。
  * 延迟不进主权重。
  */
@@ -166,7 +166,7 @@ export function scoreNodeFromCards(
       nodeName,
       stars: "unavailable",
       totalScore: 0,
-      blurb: "这轮连基本出国访问都失败了，先别指望用它上网。",
+      blurb: "连基本出国访问都失败了，先别指望用它上网。",
       breakdown,
       cards,
       ranAt,
@@ -204,7 +204,7 @@ export function scoreDeadNode(nodeName: string, reason: string): NodeScoreResult
     nodeName,
     stars: "unavailable",
     totalScore: 0,
-    blurb: reason || "这轮延迟探测失败，按不可用处理。",
+    blurb: reason || "延迟探测失败，按不可用处理。",
     breakdown: [
       { key: "availability", label: "可用性", weight: 0.25, score: 0, note: reason },
       { key: "throughput", label: "吞吐抽样", weight: 0.3, score: 0, note: "未深测" },
