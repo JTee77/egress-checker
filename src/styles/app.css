@@ -179,9 +179,14 @@ select {
   margin-bottom: 6px;
   flex-wrap: wrap;
 }
+.home-ops-status {
+  flex: 1 1 160px;
+  min-width: 0;
+  margin-bottom: 0;
+}
 .home-ops-refresh {
   flex-shrink: 0;
-  margin-left: auto;
+  margin-left: 0;
 }
 .client-picker {
   display: flex;

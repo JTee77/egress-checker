@@ -562,6 +562,11 @@ export function HomePage({
             className="client-picker-select"
             value={clientId ?? ""}
             onChange={(e) => onSelectClient(e.target.value)}
+            title={
+              clientUnset
+                ? "先选软件，再点刷新"
+                : CLIENT_OPTIONS.find((o) => o.id === clientId)?.hint
+            }
           >
             <option value="" disabled>
               请选择…
@@ -572,11 +577,15 @@ export function HomePage({
               </option>
             ))}
           </select>
-          <span className="client-picker-hint muted">
-            {clientUnset
-              ? "先选软件，再点刷新"
-              : CLIENT_OPTIONS.find((o) => o.id === clientId)?.hint}
-          </span>
+        </div>
+        <div
+          className="status-pill status-pill-dense home-ops-status"
+          title={connection.message}
+        >
+          <span
+            className={`dot ${connection.status === "connected" ? "connected" : connection.usingMock ? "mock" : connection.status}`}
+          />
+          <span className="status-pill-text">{connection.message}</span>
         </div>
         <button
           className="btn btn-sm home-ops-refresh"
@@ -587,18 +596,6 @@ export function HomePage({
         >
           {busy || refreshing ? "刷新中…" : "刷新连接"}
         </button>
-      </div>
-
-      <div className="home-chrome">
-        <div className="home-chrome-left">
-          <h1>Egress Checker</h1>
-          <div className="status-pill status-pill-dense" title={connection.message}>
-            <span
-              className={`dot ${connection.status === "connected" ? "connected" : connection.usingMock ? "mock" : connection.status}`}
-            />
-            <span className="status-pill-text">{connection.message}</span>
-          </div>
-        </div>
       </div>
 
       {gate && !gate.ok ? (
@@ -773,9 +770,6 @@ export function HomePage({
       {nodeScores.length > 0 ? (
         <div className="node-score-list">
           <h2 className="section-title">节点星级</h2>
-          <p className="muted section-hint">
-            先点选一个节点，下方会给出按该节点的整体评价。不会因此改动你在代理软件里的选择。
-          </p>
           {nodeScores.map((s) => {
             const selected = selectedNodeName === s.nodeName;
             const open = expandedScore === s.nodeName;
