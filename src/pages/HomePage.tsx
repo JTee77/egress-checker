@@ -361,12 +361,17 @@ export function HomePage({
         }
       }
 
-      setProgress({ text: `剔死 0/${list.length}`, current: 0, total: list.length });
+      setProgress({ text: `剔死 0/${list.length}`, current: 0, total: list.length, testingNode: undefined });
       if (!canSwitch) {
         for (let i = 0; i < list.length; i++) {
           if (abortAllRef.current) break;
           const n = list[i];
-          setProgress({ text: `剔死 ${i + 1}/${list.length}`, current: i + 1, total: list.length });
+          setProgress({
+            text: `剔死 ${i + 1}/${list.length}`,
+            current: i + 1,
+            total: list.length,
+            testingNode: n.name,
+          });
           if (i === list.length - 1 && list.length > 1) {
             results.push(
               scoreDeadNode(n.name, "演示：延迟探测失败，按不可用处理。"),
@@ -383,7 +388,12 @@ export function HomePage({
           }
           const delay = await probeDelay(config!, n.name, DELAY_URL, 2500);
           cullDone += 1;
-          setProgress({ text: `剔死 ${cullDone}/${list.length}`, current: cullDone, total: list.length });
+          setProgress({
+            text: `剔死 ${cullDone}/${list.length}`,
+            current: cullDone,
+            total: list.length,
+            testingNode: n.name,
+          });
           return { n, delay, skipped: false };
         });
         for (const row of cullOut) {
@@ -410,7 +420,12 @@ export function HomePage({
             break;
           }
           const n = alive[i];
-          setProgress({ text: `深测 ${i + 1}/${alive.length}（${n.name}）`, current: i + 1, total: alive.length });
+          setProgress({
+            text: `深测 ${i + 1}/${alive.length}（${n.name}）`,
+            current: i + 1,
+            total: alive.length,
+            testingNode: n.name,
+          });
           const group =
             (await findSelectorGroup(config!, n.name)) ?? originalSnap.group;
           if (!group) {
@@ -446,7 +461,10 @@ export function HomePage({
         setSwitchHint(
           "连上了代理软件，但读不到当前选中的节点或策略组，没法安全地临时切换。只深测当前出口。",
         );
-        setProgress({ text: "深测当前出口（无法安全切换）…" });
+        setProgress({
+          text: "深测当前出口（无法安全切换）…",
+          testingNode: connection.currentProxy ?? undefined,
+        });
         setNodeCards(asRunning(NODE_PLACEHOLDERS));
         const r = await runNodeDeepLight(upsertNodeCard, {
           mixedPort: mixedPortNum,
@@ -470,7 +488,12 @@ export function HomePage({
         for (let i = 0; i < alive.length; i++) {
           if (abortAllRef.current) break;
           const n = alive[i];
-          setProgress({ text: `深测 ${i + 1}/${alive.length}（演示）`, current: i + 1, total: alive.length });
+          setProgress({
+            text: `深测 ${i + 1}/${alive.length}（演示）`,
+            current: i + 1,
+            total: alive.length,
+            testingNode: n.name,
+          });
           setNodeCards(asRunning(NODE_PLACEHOLDERS));
           const r = await runNodeDeepLight(upsertNodeCard, {
             mixedPort: mixedPortNum,
@@ -497,7 +520,7 @@ export function HomePage({
     } finally {
       // 成功 / 中止 / 出错：只要切过，就必须尝试切回；失败要明确报错
       if (didSwitch && config && originalSnap?.now && originalSnap.group) {
-        setProgress({ text: `正在切回原先节点：${originalSnap.now}…` });
+        setProgress({ text: `正在切回原先节点：${originalSnap.now}…`, testingNode: undefined });
         const restored = await restoreProxy(config, originalSnap);
         if (!restored) {
           const errMsg = `没法自动切回原先的节点「${originalSnap.now}」。请立刻到代理软件里手动选回去，否则你可能还停在别的节点上。`;
@@ -566,7 +589,7 @@ export function HomePage({
 
   const onAbortAll = () => {
     abortAllRef.current = true;
-    setProgress({ text: "正在停止…" });
+    setProgress({ text: "正在停止…", testingNode: undefined });
   };
 
   const selectedScore = useMemo(
@@ -676,13 +699,14 @@ export function HomePage({
               const isCurrent = n.name === connection.currentProxy;
               const scored = scoreByName.get(n.name);
               const selected = selectedNodeName === n.name;
+              const isTesting = progress?.testingNode === n.name;
               const clickable = !!scored;
               return (
                 <button
                   key={n.name}
                   type="button"
                   role="listitem"
-                  className={`home-nodes-row${isCurrent ? " current" : ""}${selected ? " selected" : ""}${clickable ? " scored" : ""}`}
+                  className={`home-nodes-row${isCurrent ? " current" : ""}${selected ? " selected" : ""}${clickable ? " scored" : ""}${isTesting ? " testing" : ""}`}
                   disabled={!clickable}
                   onClick={() => {
                     if (scored) onPickNode(n.name);
@@ -692,7 +716,15 @@ export function HomePage({
                     <span className="home-nodes-name" title={n.name}>
                       {n.name}
                     </span>
-                    {isCurrent ? (
+                    {isTesting ? (
+                      <span className="home-nodes-badge home-nodes-badge-testing">
+                        检测中
+                      </span>
+                    ) : null}
+                    {!isTesting && isCurrent ? (
+                      <span className="home-nodes-badge">当前</span>
+                    ) : null}
+                    {isTesting && isCurrent ? (
                       <span className="home-nodes-badge">当前</span>
                     ) : null}
                   </div>

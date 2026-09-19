@@ -906,6 +906,20 @@ table.data tr:last-child td {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
+.home-nodes-row.testing {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 80%, var(--bg-elevated));
+  animation: node-testing-pulse 1.4s ease-in-out infinite;
+}
+@keyframes node-testing-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
+  }
+}
 .home-nodes-row:disabled {
   opacity: 1;
 }
@@ -941,6 +955,20 @@ table.data tr:last-child td {
   font-weight: 700;
 }
 
+.home-nodes-badge-testing {
+  background: var(--accent);
+  color: var(--on-accent);
+  animation: node-testing-badge 1.4s ease-in-out infinite;
+}
+@keyframes node-testing-badge {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
 .home-nodes-badge {
   flex-shrink: 0;
   display: inline-flex;

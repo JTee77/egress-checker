@@ -5,6 +5,8 @@ export type ProgressInfo = {
   text: string;
   current?: number;
   total?: number;
+  /** Node currently under cull/deep test — drives home-nodes highlight. */
+  testingNode?: string;
 };
 
 export function TestProgress({ progress }: { progress: ProgressInfo }) {
