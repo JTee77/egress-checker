@@ -714,6 +714,28 @@ export function HomePage({
         </div>
       ) : null}
 
+      {selectedScore ? (
+        <div className="node-score-detail card">
+          <div className="node-score-detail-head">
+            <strong>{selectedScore.nodeName}</strong>
+            <StarRating stars={selectedScore.stars} size={15} />
+          </div>
+          <div className="score-breakdown">
+            {selectedScore.breakdown.map((b) => (
+              <div key={b.key} className="score-breakdown-row">
+                <strong>
+                  {b.label}（{Math.round(b.weight * 100)}%）
+                </strong>
+                ：{b.score} 分 — {b.note}
+              </div>
+            ))}
+            {selectedScore.fakeLowLatencyTip ? (
+              <div className="score-tip">{selectedScore.fakeLowLatencyTip}</div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       <div className="mode-toggle" role="group" aria-label="测评方式">
         <button
           type="button"
@@ -807,28 +829,6 @@ export function HomePage({
       ) : null}
       {switchHint && !restoreError ? (
         <div className="note note-compact">{switchHint}</div>
-      ) : null}
-
-      {selectedScore ? (
-        <div className="node-score-detail card">
-          <div className="node-score-detail-head">
-            <strong>{selectedScore.nodeName}</strong>
-            <StarRating stars={selectedScore.stars} size={15} />
-          </div>
-          <div className="score-breakdown">
-            {selectedScore.breakdown.map((b) => (
-              <div key={b.key} className="score-breakdown-row">
-                <strong>
-                  {b.label}（{Math.round(b.weight * 100)}%）
-                </strong>
-                ：{b.score} 分 — {b.note}
-              </div>
-            ))}
-            {selectedScore.fakeLowLatencyTip ? (
-              <div className="score-tip">{selectedScore.fakeLowLatencyTip}</div>
-            ) : null}
-          </div>
-        </div>
       ) : null}
 
       {(selectedScore && selectedScore.cards.length > 0) ||
