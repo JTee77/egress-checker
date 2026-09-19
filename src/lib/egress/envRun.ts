@@ -133,13 +133,13 @@ export async function runEnvDiagnostics(
     },
     {
       id: "split-routing",
-      title: "分流抽检",
+      title: "分流检查",
       deadlineMs: 22000,
       run: () => checkSplitRouting(mixedPort, mihomoConfig),
     },
     {
       id: "bare-egress",
-      title: "直连旁路粗检",
+      title: "直连旁路检查",
       deadlineMs: 14000,
       run: () => checkBareEgress(mixedPort),
     },

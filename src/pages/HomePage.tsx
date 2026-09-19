@@ -59,8 +59,8 @@ const ENV_PLACEHOLDERS: CheckCard[] = [
   { id: "dns-leak", title: "DNS 解析器", level: "unknown", conclusion: "尚未检测" },
   { id: "ipv6-leak", title: "IPv6 泄漏", level: "unknown", conclusion: "尚未检测" },
   { id: "webrtc", title: "WebRTC", level: "unknown", conclusion: "尚未检测" },
-  { id: "split-routing", title: "分流抽检", level: "unknown", conclusion: "尚未检测" },
-  { id: "bare-egress", title: "直连旁路粗检", level: "unknown", conclusion: "尚未检测" },
+  { id: "split-routing", title: "分流检查", level: "unknown", conclusion: "尚未检测" },
+  { id: "bare-egress", title: "直连旁路检查", level: "unknown", conclusion: "尚未检测" },
 ];
 
 const DELAY_URL = "http://www.gstatic.com/generate_204";
@@ -270,7 +270,7 @@ export function HomePage({
       if (!g.ok) return;
 
       setNodeCards(asRunning(NODE_PLACEHOLDERS));
-      setProgress({ text: "正在深测当前出口…" });
+      setProgress({ text: "正在检测当前节点…" });
       const r = await runNodeDiagnostics(upsertNodeCard, {
         mixedPort: mixedPortNum,
         mihomoConfig: connection.config,
@@ -361,13 +361,13 @@ export function HomePage({
         }
       }
 
-      setProgress({ text: `剔死 0/${list.length}`, current: 0, total: list.length, testingNode: undefined });
+      setProgress({ text: `连通性预检 0/${list.length}`, current: 0, total: list.length, testingNode: undefined });
       if (!canSwitch) {
         for (let i = 0; i < list.length; i++) {
           if (abortAllRef.current) break;
           const n = list[i];
           setProgress({
-            text: `剔死 ${i + 1}/${list.length}`,
+            text: `连通性预检 ${i + 1}/${list.length}`,
             current: i + 1,
             total: list.length,
             testingNode: n.name,
@@ -389,7 +389,7 @@ export function HomePage({
           const delay = await probeDelay(config!, n.name, DELAY_URL, 2500);
           cullDone += 1;
           setProgress({
-            text: `剔死 ${cullDone}/${list.length}`,
+            text: `连通性预检 ${cullDone}/${list.length}`,
             current: cullDone,
             total: list.length,
             testingNode: n.name,
@@ -421,7 +421,7 @@ export function HomePage({
           }
           const n = alive[i];
           setProgress({
-            text: `深测 ${i + 1}/${alive.length}（${n.name}）`,
+            text: `检测 ${i + 1}/${alive.length}（${n.name}）`,
             current: i + 1,
             total: alive.length,
             testingNode: n.name,
@@ -432,7 +432,7 @@ export function HomePage({
             results.push(
               scoreDeadNode(
                 n.name,
-                "找不到可切换的策略组，没法深测这个节点。",
+                "找不到可切换的策略组，没法检测这个节点。",
               ),
             );
             continue;
@@ -440,7 +440,7 @@ export function HomePage({
           const ok = await switchProxy(config!, group, n.name);
           if (!ok) {
             results.push(
-              scoreDeadNode(n.name, "切换失败，没法深测这个节点。"),
+              scoreDeadNode(n.name, "切换失败，没法检测这个节点。"),
             );
             continue;
           }
@@ -459,10 +459,10 @@ export function HomePage({
       } else if (canSwitch) {
         // API 在，但读不到原先选中 / 策略组：仍尽量深测当前出口，并说明原因
         setSwitchHint(
-          "连上了代理软件，但读不到当前选中的节点或策略组，没法安全地临时切换。只深测当前出口。",
+          "连上了代理软件，但读不到当前选中的节点或策略组，没法安全地临时切换。只检测当前节点。",
         );
         setProgress({
-          text: "深测当前出口（无法安全切换）…",
+          text: "正在检测当前节点（无法安全切换）…",
           testingNode: connection.currentProxy ?? undefined,
         });
         setNodeCards(asRunning(NODE_PLACEHOLDERS));
@@ -479,7 +479,7 @@ export function HomePage({
           results.push(
             scoreDeadNode(
               n.name,
-              "没法切换到该节点做深测（读不到策略组或当前选中）。",
+              "没法切换到该节点做检测（读不到策略组或当前选中）。",
             ),
           );
         }
@@ -489,7 +489,7 @@ export function HomePage({
           if (abortAllRef.current) break;
           const n = alive[i];
           setProgress({
-            text: `深测 ${i + 1}/${alive.length}（演示）`,
+            text: `检测 ${i + 1}/${alive.length}（演示）`,
             current: i + 1,
             total: alive.length,
             testingNode: n.name,
@@ -799,7 +799,7 @@ export function HomePage({
       {mode === "all" && !running && !allConfirmOpen ? (
         <div className="note note-compact switch-warn" role="status">
           <span className="note-line">
-            「测全部」会先并发剔死，再对存活节点做轻量深测（几分钟量级）。应用会临时切换你当前选中的节点，出口会跟着变；测完（或你中途停止）后会自动切回原来的节点。
+            「测全部」会先并行检查各节点能否连通，筛掉连不上的，再对能连通的节点做简要检测（大约几分钟）。检测时会临时切换你当前选中的节点，上网出口会跟着变；测完或中途停止后会自动切回原来的节点。
           </span>
         </div>
       ) : null}
@@ -866,7 +866,7 @@ export function HomePage({
       {(selectedScore && selectedScore.cards.length > 0) ||
       (running && mode === "current") ? (
         <>
-          <h2 className="section-title">当前深测卡片</h2>
+          <h2 className="section-title">当前节点检测结果</h2>
           <div className="card-grid card-grid-home">
             {nodeCards.map((c) => (
               <CheckCardView key={c.id} card={c} />

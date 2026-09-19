@@ -220,9 +220,9 @@ export function scoreDeadNode(nodeName: string, reason: string): NodeScoreResult
     blurb: reason || "延迟探测失败，按不可用处理。",
     breakdown: [
       { key: "availability", label: "可用性", weight: 0.25, score: 0, note: reason },
-      { key: "throughput", label: "吞吐抽样", weight: 0.3, score: 0, note: "未深测" },
-      { key: "services", label: "服务面", weight: 0.3, score: 0, note: "未深测" },
-      { key: "exit", label: "出口质量", weight: 0.15, score: 0, note: "未深测" },
+      { key: "throughput", label: "吞吐抽样", weight: 0.3, score: 0, note: "未检测" },
+      { key: "services", label: "服务面", weight: 0.3, score: 0, note: "未检测" },
+      { key: "exit", label: "出口质量", weight: 0.15, score: 0, note: "未检测" },
     ],
     cards: [],
     ranAt: new Date().toISOString(),

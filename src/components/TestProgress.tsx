@@ -1,7 +1,7 @@
 /** Fixed progress region for 测当前 / 测全部 — not only the primary button label. */
 
 export type ProgressInfo = {
-  /** Spoken phase, e.g.「剔死 3/40」or「深测 2/12（香港 01）」 */
+  /** Spoken phase, e.g.「连通性预检 3/40」or「检测 2/12（香港 01）」 */
   text: string;
   current?: number;
   total?: number;

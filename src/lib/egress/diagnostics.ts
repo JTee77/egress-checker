@@ -1050,7 +1050,7 @@ export async function checkSplitRouting(
     ...cnDirect.map((p) => `国内·直连 ${fmt(p)}`),
     "测了什么：少量国内/境外域名 HTTPS 抽样 + 可选 /rules 计数。",
     "没测：完整规则表逐条匹配、GEOIP 数据库正确性、UDP/QUIC、所有订阅域名。",
-    "边界：这是「分流抽检」不是完整规则审计；结果随节点与规则集变化。",
+    "边界：这是「分流检查」不是完整规则审计；结果随节点与规则集变化。",
   ]
     .filter(Boolean)
     .join("\n");
@@ -1058,7 +1058,7 @@ export async function checkSplitRouting(
   if (!expectProxy) {
     return {
       id: "split-routing",
-      title: "分流抽检",
+      title: "分流检查",
       level: cnDirectOk > 0 ? "unknown" : "fail",
       conclusion: cnDirectOk > 0
         ? "仅完成直连国内基线；尚未连上代理口，无法判断分流"
@@ -1089,7 +1089,7 @@ export async function checkSplitRouting(
 
   return {
     id: "split-routing",
-    title: "分流抽检",
+    title: "分流检查",
     level,
     conclusion,
     process,
@@ -1174,7 +1174,7 @@ export async function checkBareEgress(
   if (!expectProxy) {
     return {
       id: "bare-egress",
-      title: "直连旁路粗检",
+      title: "直连旁路检查",
       level: "unknown",
       conclusion: directOk
         ? "直连境外可达；尚未连上代理口，无法判断是否存在未走代理直连"
@@ -1203,7 +1203,7 @@ export async function checkBareEgress(
 
   return {
     id: "bare-egress",
-    title: "直连旁路粗检",
+    title: "直连旁路检查",
     level,
     conclusion,
     process: lines.join("\n"),
@@ -2201,13 +2201,13 @@ export async function runEgressDiagnostics(
     },
     {
       id: "split-routing",
-      title: "分流抽检",
+      title: "分流检查",
       deadlineMs: 22000,
       run: () => checkSplitRouting(mixedPort, mihomoConfig),
     },
     {
       id: "bare-egress",
-      title: "直连旁路粗检",
+      title: "直连旁路检查",
       deadlineMs: 14000,
       run: () => checkBareEgress(mixedPort),
     },

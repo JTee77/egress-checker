@@ -128,7 +128,7 @@ export function scoreVpn(
   const dnsAdjusted = ispDns ? Math.min(dnsScore, 45) : dnsScore;
 
   const splitScore = split ? levelScore(split.level) : 50;
-  const splitNote = split?.conclusion ?? "尚未做分流抽检";
+  const splitNote = split?.conclusion ?? "尚未做分流检查";
 
   const nodeAvail =
     selected.stars === "unavailable"
