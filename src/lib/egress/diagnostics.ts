@@ -705,8 +705,8 @@ export async function probeGeminiUnlock(
       supported: false,
       level: "unknown",
       region: null,
-      status: "这次没测成",
-      lines: ["未测成"],
+      status: "超时未响应",
+      lines: ["超时未响应"],
       probed,
       notProbed,
     };
@@ -1506,7 +1506,7 @@ async function probeNetflixLine(
     return {
       name: "Netflix",
       level: "unknown",
-      conclusion: "这次没测成",
+      conclusion: "超时未响应",
       process: `${url} → 超时/无响应（${ms}ms）。短超时粗检；失败≠节点一定不可用。`,
     };
   }
@@ -1560,7 +1560,7 @@ async function probeNetflixLine(
   return {
     name: "Netflix",
     level: "unknown",
-    conclusion: "这次没测成",
+    conclusion: "未能判定",
     process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B。探针偏抖时标 unknown。`,
   };
 }
@@ -1584,7 +1584,7 @@ async function probeDisneyLine(
     return {
       name: "Disney+",
       level: "unknown",
-      conclusion: "这次没测成",
+      conclusion: "超时未响应",
       process: `${url} → 超时/无响应（${ms}ms）。未跑 bamgrid 多步注册（本版仅 GET 粗检）。`,
     };
   }
@@ -1633,7 +1633,7 @@ async function probeDisneyLine(
   return {
     name: "Disney+",
     level: "unknown",
-    conclusion: "这次没测成",
+    conclusion: "未能判定",
     process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
   };
 }
@@ -1657,7 +1657,7 @@ async function probeYoutubeLine(
     return {
       name: "YouTube",
       level: "unknown",
-      conclusion: "这次没测成",
+      conclusion: "超时未响应",
       process: `${url} → 超时/无响应（${ms}ms）`,
     };
   }
@@ -1718,7 +1718,7 @@ async function probeYoutubeLine(
   return {
     name: "YouTube",
     level: "unknown",
-    conclusion: "这次没测成",
+    conclusion: "未能判定",
     process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
   };
 }
@@ -1752,7 +1752,7 @@ async function probeAppleStoreLine(
     return {
       name: "App Store",
       level: "unknown",
-      conclusion: "这次没测成",
+      conclusion: "超时未响应",
       process: `${url} → 超时/无响应（${ms}ms）`,
     };
   }
@@ -1795,7 +1795,7 @@ async function probeAppleStoreLine(
   return {
     name: "App Store",
     level: "unknown",
-    conclusion: "这次没测成",
+    conclusion: "未能判定",
     process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
   };
 }
@@ -1819,7 +1819,7 @@ async function probeGooglePlayLine(
     return {
       name: "Google Play",
       level: "unknown",
-      conclusion: "这次没测成",
+      conclusion: "超时未响应",
       process: `${url} → 超时/无响应（${ms}ms）`,
     };
   }
@@ -1865,7 +1865,7 @@ async function probeGooglePlayLine(
   return {
     name: "Google Play",
     level: "unknown",
-    conclusion: "这次没测成",
+    conclusion: "未能判定",
     process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
   };
 }
@@ -1905,16 +1905,16 @@ const STREAM_TIP = "";
 /** Store cards: no canned「换节点」suggestion. */
 const STORE_TIP = "";
 
-/** 可用（含「可用，…偏弱」）不重试；不可用 / 这次没测成 / unknown 超时族再试一次。 */
+/** 可用（含「可用，…偏弱」）不重试；不可用 / 超时未响应 / 未能判定 再试一次。 */
 function serviceNeedsRetry(card: CheckCard): boolean {
   const c = (card.conclusion ?? "").trim();
   if (/^可用/.test(c)) return false;
-  if (/不可用|这次没测成|这次没测出来|未测成/.test(c)) return true;
+  if (/不可用|超时未响应|未能判定|这次没测成|这次没测出来|未测成/.test(c)) return true;
   if (card.level === "unknown") return true;
   return false;
 }
 
-/** 失败/未测成类结论自动再探一次；用户可见结论取最后一次有意义结果。 */
+/** 失败/未成功类结论自动再探一次；用户可见结论取最后一次有意义结果。 */
 export async function withFailRetry(
   fn: () => Promise<CheckCard>,
 ): Promise<CheckCard> {
@@ -1930,11 +1930,11 @@ export async function withFailRetry(
   };
 }
 
-/** UnlockResult：可用不重试；不可用 / 这次没测成 / unknown 再试一次。 */
+/** UnlockResult：可用不重试；不可用 / 超时未响应 / 未能判定 再试一次。 */
 function unlockNeedsRetry(result: UnlockResult): boolean {
   const c = (result.status ?? "").trim();
   if (/^可用/.test(c)) return false;
-  if (/不可用|这次没测成|这次没测出来|未测成|未完成/.test(c)) return true;
+  if (/不可用|超时未响应|未能判定|这次没测成|这次没测出来|未测成|未完成/.test(c)) return true;
   if (result.level === "unknown") return true;
   return false;
 }
