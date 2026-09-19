@@ -16,6 +16,7 @@ import {
   probeGeminiUnlock,
   sampleBandwidth,
   sampleLatency,
+  withFailRetryUnlock,
 } from "./diagnostics";
 import type { CheckCard, EgressReport, UnlockResult } from "./types";
 
@@ -189,25 +190,25 @@ export async function runNodeDiagnostics(
     {
       id: "gemini",
       title: "Gemini（换节点对照）",
-      deadlineMs: 10000,
+      deadlineMs: 16000,
       run: async () => {
-        gemini = await probeGeminiUnlock(mixedPort);
+        gemini = await withFailRetryUnlock(() => probeGeminiUnlock(mixedPort));
         return unlockCard("gemini", "Gemini（换节点对照）", gemini);
       },
     },
     {
       id: "chatgpt",
       title: "ChatGPT（换节点对照）",
-      deadlineMs: 14000,
+      deadlineMs: 22000,
       run: async () => {
-        chatgpt = await probeChatgptUnlock(mixedPort);
+        chatgpt = await withFailRetryUnlock(() => probeChatgptUnlock(mixedPort));
         return unlockCard("chatgpt", "ChatGPT（换节点对照）", chatgpt);
       },
     },
     {
       id: "latency",
       title: "延迟采样",
-      deadlineMs: 10000,
+      deadlineMs: 22000,
       run: async () => {
         const { ms, card: c } = await sampleLatency(mixedPort);
         latencyMs = ms;
@@ -217,37 +218,37 @@ export async function runNodeDiagnostics(
     {
       id: "bandwidth",
       title: "抽样带宽",
-      deadlineMs: 28000,
-      run: () => sampleBandwidth(mixedPort),
+      deadlineMs: 42000,
+      run: () => sampleBandwidth(mixedPort, { mode: "full" }),
     },
     {
       id: "netflix",
       title: "Netflix",
-      deadlineMs: 10000,
+      deadlineMs: 16000,
       run: () => checkNetflixUnlock(mixedPort),
     },
     {
       id: "disney",
       title: "Disney+",
-      deadlineMs: 10000,
+      deadlineMs: 16000,
       run: () => checkDisneyUnlock(mixedPort),
     },
     {
       id: "youtube",
       title: "YouTube Premium",
-      deadlineMs: 10000,
+      deadlineMs: 16000,
       run: () => checkYoutubeUnlock(mixedPort),
     },
     {
       id: "app-store",
       title: "App Store",
-      deadlineMs: 10000,
+      deadlineMs: 16000,
       run: () => checkAppStoreUnlock(mixedPort),
     },
     {
       id: "google-play",
       title: "Google Play",
-      deadlineMs: 10000,
+      deadlineMs: 16000,
       run: () => checkGooglePlayUnlock(mixedPort),
     },
   ];
@@ -346,36 +347,36 @@ export async function runNodeDeepLight(
     {
       id: "bandwidth",
       title: "抽样带宽",
-      deadlineMs: 9000,
-      run: () => sampleBandwidth(mixedPort, { light: true }),
+      deadlineMs: 20000,
+      run: () => sampleBandwidth(mixedPort, { mode: "light" }),
     },
     {
       id: "netflix",
       title: "Netflix",
-      deadlineMs: 5500,
+      deadlineMs: 10000,
       run: () => checkNetflixUnlock(mixedPort),
     },
     {
       id: "youtube",
       title: "YouTube Premium",
-      deadlineMs: 5500,
+      deadlineMs: 10000,
       run: () => checkYoutubeUnlock(mixedPort),
     },
     {
       id: "chatgpt",
       title: "ChatGPT（换节点对照）",
-      deadlineMs: 6000,
+      deadlineMs: 12000,
       run: async () => {
-        chatgpt = await probeChatgptUnlock(mixedPort);
+        chatgpt = await withFailRetryUnlock(() => probeChatgptUnlock(mixedPort));
         return unlockCard("chatgpt", "ChatGPT（换节点对照）", chatgpt);
       },
     },
     {
       id: "gemini",
       title: "Gemini（换节点对照）",
-      deadlineMs: 5500,
+      deadlineMs: 10000,
       run: async () => {
-        gemini = await probeGeminiUnlock(mixedPort);
+        gemini = await withFailRetryUnlock(() => probeGeminiUnlock(mixedPort));
         return unlockCard("gemini", "Gemini（换节点对照）", gemini);
       },
     },
