@@ -591,7 +591,7 @@ export function HomePage({
       </div>
 
       <div className="home-ops">
-        <div className="client-picker">
+        <div className="home-ops-controls">
           <label className="client-picker-label" htmlFor="home-client-select">
             你在用哪款软件？
           </label>
@@ -615,16 +615,16 @@ export function HomePage({
               </option>
             ))}
           </select>
+          <button
+            className="btn btn-sm home-ops-refresh"
+            type="button"
+            disabled={!!busy || refreshing || running || clientUnset}
+            title={clientUnset ? "请先选择软件" : undefined}
+            onClick={() => void refreshAndGate()}
+          >
+            {busy || refreshing ? "刷新中…" : "刷新连接"}
+          </button>
         </div>
-        <button
-          className="btn btn-sm home-ops-refresh"
-          type="button"
-          disabled={!!busy || refreshing || running || clientUnset}
-          title={clientUnset ? "请先选择软件" : undefined}
-          onClick={() => void refreshAndGate()}
-        >
-          {busy || refreshing ? "刷新中…" : "刷新连接"}
-        </button>
         <div
           className="status-pill status-pill-dense home-ops-status"
           title={connection.message}
