@@ -538,32 +538,6 @@ export function HomePage({
 
   return (
     <div className="home-page">
-      <div className="client-picker">
-        <label className="client-picker-label" htmlFor="home-client-select">
-          你在用哪款软件？
-        </label>
-        <select
-          id="home-client-select"
-          className="client-picker-select"
-          value={clientId ?? ""}
-          onChange={(e) => onSelectClient(e.target.value)}
-        >
-          <option value="" disabled>
-            请选择…
-          </option>
-          {CLIENT_OPTIONS.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <span className="client-picker-hint muted">
-          {clientUnset
-            ? "先选软件，再点刷新"
-            : CLIENT_OPTIONS.find((o) => o.id === clientId)?.hint}
-        </span>
-      </div>
-
       <div className="about-block card home-about">
         <p>
           <strong>Egress Checker v0.1.4</strong>
@@ -578,6 +552,43 @@ export function HomePage({
         </p>
       </div>
 
+      <div className="home-ops">
+        <div className="client-picker">
+          <label className="client-picker-label" htmlFor="home-client-select">
+            你在用哪款软件？
+          </label>
+          <select
+            id="home-client-select"
+            className="client-picker-select"
+            value={clientId ?? ""}
+            onChange={(e) => onSelectClient(e.target.value)}
+          >
+            <option value="" disabled>
+              请选择…
+            </option>
+            {CLIENT_OPTIONS.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <span className="client-picker-hint muted">
+            {clientUnset
+              ? "先选软件，再点刷新"
+              : CLIENT_OPTIONS.find((o) => o.id === clientId)?.hint}
+          </span>
+        </div>
+        <button
+          className="btn btn-sm home-ops-refresh"
+          type="button"
+          disabled={!!busy || refreshing || running || clientUnset}
+          title={clientUnset ? "请先选择软件" : undefined}
+          onClick={() => void refreshAndGate()}
+        >
+          {busy || refreshing ? "刷新中…" : "刷新连接"}
+        </button>
+      </div>
+
       <div className="home-chrome">
         <div className="home-chrome-left">
           <h1>Egress Checker</h1>
@@ -587,17 +598,6 @@ export function HomePage({
             />
             <span className="status-pill-text">{connection.message}</span>
           </div>
-        </div>
-        <div className="toolbar home-chrome-actions">
-          <button
-            className="btn btn-sm"
-            type="button"
-            disabled={!!busy || refreshing || running || clientUnset}
-            title={clientUnset ? "请先选择软件" : undefined}
-            onClick={() => void refreshAndGate()}
-          >
-            {busy || refreshing ? "刷新中…" : "刷新连接"}
-          </button>
         </div>
       </div>
 
