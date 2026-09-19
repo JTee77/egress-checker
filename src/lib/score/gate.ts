@@ -44,7 +44,7 @@ export async function runLightGate(connection: ConnectionState): Promise<GateRes
     return {
       ok: false,
       message:
-        "代理软件看起来已连上，但境外访问探测都失败了。请确认节点真的能用，或先在客户端里换一个节点后再来。",
+        "代理软件看起来已连上，但访问海外站点的探测都失败了。请确认节点真的能用，或先在客户端里换一个节点后再来。",
       process: reach.process,
     };
   }
@@ -61,7 +61,7 @@ export async function runLightGate(connection: ConnectionState): Promise<GateRes
 
   return {
     ok: true,
-    message: "测试条件满足：客户端在线，境外访问大致正常，未见明显未走代理直连。可以开始测节点。",
+    message: "测试条件满足：客户端在线，访问海外站点大致正常，未见明显未走代理直连。可以开始测节点。",
     process: [reach.conclusion, bare.conclusion].join("\n"),
   };
 }
