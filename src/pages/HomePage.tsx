@@ -593,15 +593,6 @@ export function HomePage({
             ))}
           </select>
         </div>
-        <div
-          className="status-pill status-pill-dense home-ops-status"
-          title={connection.message}
-        >
-          <span
-            className={`dot ${connection.status === "connected" ? "connected" : connection.usingMock ? "mock" : connection.status}`}
-          />
-          <span className="status-pill-text">{connection.message}</span>
-        </div>
         <button
           className="btn btn-sm home-ops-refresh"
           type="button"
@@ -611,6 +602,15 @@ export function HomePage({
         >
           {busy || refreshing ? "刷新中…" : "刷新连接"}
         </button>
+        <div
+          className="status-pill status-pill-dense home-ops-status"
+          title={connection.message}
+        >
+          <span
+            className={`dot ${connection.status === "connected" ? "connected" : connection.usingMock ? "mock" : connection.status}`}
+          />
+          <span className="status-pill-text">{connection.message}</span>
+        </div>
       </div>
 
       {gate && !gate.ok ? (
@@ -635,15 +635,7 @@ export function HomePage({
         <div className="gate-banner gate-banner-ok" role="status">
           {gate.message}
         </div>
-      ) : (
-        <div className="note note-compact">
-          <span className="note-line">
-            {clientUnset
-              ? "打开你的代理软件并连上节点 → 在这里选同名软件 → 点「刷新连接」，再测节点。"
-              : "先「刷新连接」。测试条件满足后，再点「测当前节点」或「测全部节点」。"}
-          </span>
-        </div>
-      )}
+      ) : null}
 
 
       {gate?.ok && orderedNodes.length > 0 ? (
