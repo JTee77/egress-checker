@@ -343,8 +343,27 @@ export function HomePage({
       const alive: ProxyNode[] = [];
       const canSwitch =
         !!config && !connection.usingMock && !forceMock;
-      /** 并发剔死：对齐参考脚本 ThreadPool ~10，取 12 */
+      /** 并发连通性预检：对齐参考脚本 ThreadPool ~10，取 12 */
       const CULL_CONCURRENCY = 12;
+
+      const sortScores = (list: NodeScoreResult[]) =>
+        [...list].sort((a, b) => {
+          const byStar = starRank(b.stars) - starRank(a.stars);
+          if (byStar !== 0) return byStar;
+          return b.totalScore - a.totalScore;
+        });
+
+      /** Flush one score to the grid immediately (safe under concurrent cull). */
+      const upsertScore = (score: NodeScoreResult) => {
+        const i = results.findIndex((r) => r.nodeName === score.nodeName);
+        if (i >= 0) results[i] = score;
+        else results.push(score);
+        setNodeScores((prev) => {
+          const next = prev.filter((x) => x.nodeName !== score.nodeName);
+          next.push(score);
+          return sortScores(next);
+        });
+      };
 
       if (canSwitch) {
         originalSnap = await resolveSelectorSnapshot(
@@ -373,7 +392,7 @@ export function HomePage({
             testingNode: n.name,
           });
           if (i === list.length - 1 && list.length > 1) {
-            results.push(
+            upsertScore(
               scoreDeadNode(n.name, "演示：延迟探测失败，按不可用处理。"),
             );
           } else {
@@ -394,17 +413,17 @@ export function HomePage({
             total: list.length,
             testingNode: n.name,
           });
+          if (delay == null) {
+            upsertScore(
+              scoreDeadNode(n.name, "延迟探测失败，按不可用处理。"),
+            );
+          }
           return { n, delay, skipped: false };
         });
         for (const row of cullOut) {
           if (row.skipped) continue;
-          if (row.delay == null) {
-            results.push(
-              scoreDeadNode(row.n.name, "延迟探测失败，按不可用处理。"),
-            );
-          } else {
-            alive.push(row.n);
-          }
+          if (row.delay == null) continue;
+          alive.push(row.n);
         }
       }
 
@@ -429,7 +448,7 @@ export function HomePage({
           const group =
             (await findSelectorGroup(config!, n.name)) ?? originalSnap.group;
           if (!group) {
-            results.push(
+            upsertScore(
               scoreDeadNode(
                 n.name,
                 "找不到可切换的策略组，没法检测这个节点。",
@@ -439,7 +458,7 @@ export function HomePage({
           }
           const ok = await switchProxy(config!, group, n.name);
           if (!ok) {
-            results.push(
+            upsertScore(
               scoreDeadNode(n.name, "切换失败，没法检测这个节点。"),
             );
             continue;
@@ -454,7 +473,7 @@ export function HomePage({
           });
           setReport(r);
           setNodeCards(r.cards);
-          results.push(scoreNodeFromCards(n.name, r.cards, r.ranAt));
+          upsertScore(scoreNodeFromCards(n.name, r.cards, r.ranAt));
         }
       } else if (canSwitch) {
         // API 在，但读不到原先选中 / 策略组：仍尽量深测当前出口，并说明原因
@@ -473,10 +492,10 @@ export function HomePage({
         setReport(r);
         setNodeCards(r.cards);
         const currentName = connection.currentProxy ?? "当前节点";
-        results.push(scoreNodeFromCards(currentName, r.cards, r.ranAt));
+        upsertScore(scoreNodeFromCards(currentName, r.cards, r.ranAt));
         for (const n of alive) {
           if (n.name === currentName) continue;
-          results.push(
+          upsertScore(
             scoreDeadNode(
               n.name,
               "没法切换到该节点做检测（读不到策略组或当前选中）。",
@@ -501,16 +520,11 @@ export function HomePage({
           });
           setReport(r);
           setNodeCards(r.cards);
-          results.push(scoreNodeFromCards(n.name, r.cards, r.ranAt));
+          upsertScore(scoreNodeFromCards(n.name, r.cards, r.ranAt));
         }
       }
 
-      results.sort((a, b) => {
-        const byStar = starRank(b.stars) - starRank(a.stars);
-        if (byStar !== 0) return byStar;
-        return b.totalScore - a.totalScore;
-      });
-      setNodeScores(results);
+      setNodeScores(sortScores(results));
       setProgress(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
