@@ -973,3 +973,21 @@ table.data tr:last-child td {
     transform: translateX(320%);
   }
 }
+
+
+.home-nodes-expand {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  font-weight: 600;
+}
+
+.home-nodes-list {
+  max-height: 220px;
+  overflow: auto;
+}
+
+.home-nodes-summary {
+  cursor: default;
+}

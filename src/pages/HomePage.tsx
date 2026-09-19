@@ -126,6 +126,23 @@ export function HomePage({
   );
 
   const clientUnset = !clientId;
+
+  const NODE_PREVIEW = 5;
+  const nodesPreview = useMemo(() => {
+    const current = connection.currentProxy;
+    const ordered = [...nodes];
+    if (current) {
+      const i = ordered.findIndex((n) => n.name === current);
+      if (i > 0) {
+        const [row] = ordered.splice(i, 1);
+        ordered.unshift(row);
+      }
+    }
+    const visible = ordered.slice(0, NODE_PREVIEW);
+    const hiddenCount = Math.max(0, ordered.length - visible.length);
+    return { ordered, visible, hiddenCount };
+  }, [nodes, connection.currentProxy]);
+
   const mixedPortNum = connection.config?.mixedPort ?? null;
 
   const upsertNodeCard = (card: CheckCard) => {
@@ -603,48 +620,50 @@ export function HomePage({
 
 
       {gate?.ok && nodes.length > 0 ? (
-        <div className="home-nodes fold-panel card">
-          <button
-            type="button"
-            className="fold-toggle home-nodes-summary"
-            aria-expanded={nodesOpen}
-            onClick={() => setNodesOpen((v) => !v)}
-          >
+        <div className="home-nodes card">
+          <div className="home-nodes-summary">
             <span className="home-nodes-summary-text">
               已识别 {nodes.length} 个节点 · 当前：
               <strong className="home-nodes-current-mark">
                 {connection.currentProxy ?? "—"}
               </strong>
             </span>
-            <span className="home-nodes-chevron" aria-hidden>
-              {nodesOpen ? "▾" : "▸"}
-            </span>
-          </button>
-          {nodesOpen ? (
-            <div className="home-nodes-list" role="list">
-              {nodes.map((n) => {
-                const isCurrent = n.name === connection.currentProxy;
-                return (
-                  <div
-                    key={n.name}
-                    role="listitem"
-                    className={`home-nodes-row${isCurrent ? " current" : ""}`}
-                  >
-                    <span className="home-nodes-name" title={n.name}>
-                      {n.name}
-                    </span>
-                    {isCurrent ? (
-                      <span className="home-nodes-badge">当前</span>
-                    ) : null}
-                    {n.region && n.region !== "未知" ? (
-                      <span className="home-nodes-meta muted">{n.region}</span>
-                    ) : (
-                      <span className="home-nodes-meta muted">{n.type}</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+          </div>
+          <div className="home-nodes-list" role="list">
+            {(nodesOpen ? nodesPreview.ordered : nodesPreview.visible).map((n) => {
+              const isCurrent = n.name === connection.currentProxy;
+              return (
+                <div
+                  key={n.name}
+                  role="listitem"
+                  className={`home-nodes-row${isCurrent ? " current" : ""}`}
+                >
+                  <span className="home-nodes-name" title={n.name}>
+                    {n.name}
+                  </span>
+                  {isCurrent ? (
+                    <span className="home-nodes-badge">当前</span>
+                  ) : null}
+                  {n.region && n.region !== "未知" ? (
+                    <span className="home-nodes-meta muted">{n.region}</span>
+                  ) : (
+                    <span className="home-nodes-meta muted">{n.type}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {nodesPreview.hiddenCount > 0 ? (
+            <button
+              type="button"
+              className="btn home-nodes-expand"
+              aria-expanded={nodesOpen}
+              onClick={() => setNodesOpen((v) => !v)}
+            >
+              {nodesOpen
+                ? "收起"
+                : `展开其余 ${nodesPreview.hiddenCount} 个节点`}
+            </button>
           ) : null}
         </div>
       ) : null}
