@@ -674,7 +674,7 @@ export async function probeGeminiUnlock(
   }
 
   const probed = [
-    "网页路径：gemini.google.com/app（看页面是否地区拦截、内容是否正常返回）",
+    "gemini.google.com/app（看是否地区拦截、内容是否正常返回）",
   ];
   const notProbed: string[] = [];
 
@@ -683,20 +683,19 @@ export async function probeGeminiUnlock(
       supported: false,
       level: "blocked",
       region: "BLOCKED",
-      status: "网页：不可用（地区限制）",
-      lines: ["网页：不可用"],
+      status: "不可用（地区限制）",
+      lines: ["不可用"],
       probed,
       notProbed,
     };
   }
   if (out.length > 50000) {
-    const tag = detectedCountry ?? "可用";
     return {
       supported: true,
       level: "full",
       region: detectedCountry ?? "OK",
-      status: `网页：可用（${tag}）`,
-      lines: ["网页：可用"],
+      status: detectedCountry ? `可用（${detectedCountry}）` : "可用",
+      lines: ["可用"],
       probed,
       notProbed,
     };
@@ -706,8 +705,8 @@ export async function probeGeminiUnlock(
       supported: false,
       level: "unknown",
       region: null,
-      status: "网页：这次没测成（超时）",
-      lines: ["网页：未测成"],
+      status: "这次没测成",
+      lines: ["未测成"],
       probed,
       notProbed,
     };
@@ -716,8 +715,8 @@ export async function probeGeminiUnlock(
     supported: false,
     level: "blocked",
     region: null,
-    status: "网页：不可用或打不开",
-    lines: ["网页：不可用"],
+    status: "不可用",
+    lines: ["不可用"],
     probed,
     notProbed,
   };
@@ -769,7 +768,7 @@ export async function probeChatgptUnlock(
 
   const locTag = loc ?? "未知地区";
   const probed = [
-    "网页：chatgpt.com/cdn-cgi/trace、OpenAI compliance 接口（必要时再看 chatgpt.com 首页）",
+    "chatgpt.com/cdn-cgi/trace、OpenAI compliance 接口（必要时再看 chatgpt.com 首页）",
   ];
   const notProbed: string[] = [];
 
@@ -778,8 +777,8 @@ export async function probeChatgptUnlock(
       supported: false,
       level: "blocked",
       region: loc,
-      status: `网页：不可用（${locTag}）`,
-      lines: ["网页：不可用"],
+      status: loc ? `不可用（${locTag}）` : "不可用",
+      lines: ["不可用"],
       probed,
       notProbed,
     };
@@ -788,8 +787,8 @@ export async function probeChatgptUnlock(
     supported: true,
     level: "full",
     region: loc,
-    status: `网页：可用（${locTag}）`,
-    lines: ["网页：可用"],
+    status: loc ? `可用（${locTag}）` : "可用",
+    lines: ["可用"],
     probed,
     notProbed,
   };
@@ -1347,7 +1346,7 @@ async function probeNetflixLine(
     return {
       name: "Netflix",
       level: "unknown",
-      conclusion: "这次没测出来，标题页暂时打不开。",
+      conclusion: "这次没测成",
       process: `${url} → 超时/无响应（${ms}ms）。短超时粗检；失败≠节点一定不可用。`,
     };
   }
@@ -1360,7 +1359,7 @@ async function probeNetflixLine(
     return {
       name: "Netflix",
       level: "fail",
-      conclusion: "当前节点下疑似打不开或被地区限制。",
+      conclusion: "不可用（地区限制）",
       process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：NSEZ-403 / 403 / 地区拦截文案。\n边界：粗检 ≠ 会员权益/片库/画质。`,
     };
   }
@@ -1377,7 +1376,7 @@ async function probeNetflixLine(
     return {
       name: "Netflix",
       level: "warn",
-      conclusion: "标题页能打开，但内容看起来不正常（可能只能看自制剧）。",
+      conclusion: "可用，片库信号偏弱",
       process: `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B\n信号：Oh no! / page-404 / 404。\n边界：粗检 ≠ 完整片库解锁。`,
     };
   }
@@ -1386,9 +1385,7 @@ async function probeNetflixLine(
     return {
       name: "Netflix",
       level: region ? "pass" : "warn",
-      conclusion: region
-        ? `标题页能打开。地区线索：${region}。`
-        : "标题页能打开。地区线索还看不清。",
+      conclusion: region ? `可用（${region}）` : "可用",
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         region
@@ -1403,7 +1400,7 @@ async function probeNetflixLine(
   return {
     name: "Netflix",
     level: "unknown",
-    conclusion: "这次没测清楚，页面响应异常。",
+    conclusion: "这次没测成",
     process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B。探针偏抖时标 unknown。`,
   };
 }
@@ -1427,7 +1424,7 @@ async function probeDisneyLine(
     return {
       name: "Disney+",
       level: "unknown",
-      conclusion: "这次没测出来，首页暂时打不开。",
+      conclusion: "这次没测成",
       process: `${url} → 超时/无响应（${ms}ms）。未跑 bamgrid 多步注册（本版仅 GET 粗检）。`,
     };
   }
@@ -1450,7 +1447,7 @@ async function probeDisneyLine(
     return {
       name: "Disney+",
       level: "fail",
-      conclusion: "当前节点下疑似打不开或被地区限制。",
+      conclusion: "不可用（地区限制）",
       process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：unavailable / not available / 403。\n边界：粗检 ≠ 会员登录与片库。`,
     };
   }
@@ -1463,9 +1460,7 @@ async function probeDisneyLine(
     return {
       name: "Disney+",
       level: "pass",
-      conclusion: region
-        ? `首页能打开。地区线索：${region}。`
-        : "首页能打开。",
+      conclusion: region ? `可用（${region}）` : "可用",
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         region ? `地区线索：${region}` : "未从 HTML 解析到稳定地区码（仍可能可用）。",
@@ -1478,7 +1473,7 @@ async function probeDisneyLine(
   return {
     name: "Disney+",
     level: "unknown",
-    conclusion: "这次没测清楚，页面响应异常。",
+    conclusion: "这次没测成",
     process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
   };
 }
@@ -1502,7 +1497,7 @@ async function probeYoutubeLine(
     return {
       name: "YouTube",
       level: "unknown",
-      conclusion: "这次没测出来，网页暂时打不开。",
+      conclusion: "这次没测成",
       process: `${url} → 超时/无响应（${ms}ms）`,
     };
   }
@@ -1526,7 +1521,9 @@ async function probeYoutubeLine(
     return {
       name: "YouTube",
       level: "fail",
-      conclusion: `当前节点下疑似打不开或被地区限制${country ? `（${country}）` : ""}。`,
+      conclusion: country
+        ? `不可用（地区限制 · ${country}）`
+        : "不可用（地区限制）",
       process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：not available in your country。\n边界：粗检 ≠ Premium 订阅/全家共享/画质。`,
     };
   }
@@ -1539,9 +1536,7 @@ async function probeYoutubeLine(
     return {
       name: "YouTube",
       level: "pass",
-      conclusion: country
-        ? `网页能打开。地区线索：${country}。`
-        : "网页能打开。",
+      conclusion: country ? `可用（${country}）` : "可用",
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         country ? `country-code / GL：${country}` : "未解析到 country-code（页仍可达）。",
@@ -1555,7 +1550,7 @@ async function probeYoutubeLine(
     return {
       name: "YouTube",
       level: "warn",
-      conclusion: "网页能打开，但会员相关信号偏弱。",
+      conclusion: "可用，会员信号偏弱",
       process: `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B。可能被改版/重定向稀释信号。`,
     };
   }
@@ -1563,7 +1558,7 @@ async function probeYoutubeLine(
   return {
     name: "YouTube",
     level: "unknown",
-    conclusion: "这次没测清楚，页面响应异常。",
+    conclusion: "这次没测成",
     process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
   };
 }
@@ -1597,7 +1592,7 @@ async function probeAppleStoreLine(
     return {
       name: "App Store",
       level: "unknown",
-      conclusion: "这次没测出来，网页商店暂时打不开。",
+      conclusion: "这次没测成",
       process: `${url} → 超时/无响应（${ms}ms）`,
     };
   }
@@ -1616,7 +1611,7 @@ async function probeAppleStoreLine(
     return {
       name: "App Store",
       level: "fail",
-      conclusion: "当前节点下疑似打不开或被地区限制。",
+      conclusion: "不可用（地区限制）",
       process: `${url} → HTTP ${r.status} · ${ms}ms\n边界：不是下载、支付、上架审核。`,
     };
   }
@@ -1625,15 +1620,13 @@ async function probeAppleStoreLine(
     return {
       name: "App Store",
       level: "pass",
-      conclusion: sf
-        ? `网页商店能打开。地区线索：${sf}。`
-        : "网页商店能打开。",
+      conclusion: sf ? `可用（${sf}）` : "可用",
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         sf
           ? `storefront / 国家路径线索：${sf}`
           : "未解析到 /xx/ storefront 路径（跟随重定向后仍可能已是默认区）。",
-        "测了什么：apps.apple.com 网页是否打开、是否有粗地区路径。",
+        "测了什么：apps.apple.com 是否可达、是否有粗地区路径。",
         "没测：App 下载、内购支付、开发者上架审核、账号区。",
       ].join("\n"),
     };
@@ -1642,7 +1635,7 @@ async function probeAppleStoreLine(
   return {
     name: "App Store",
     level: "unknown",
-    conclusion: "这次没测清楚，网页商店响应异常。",
+    conclusion: "这次没测成",
     process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
   };
 }
@@ -1666,7 +1659,7 @@ async function probeGooglePlayLine(
     return {
       name: "Google Play",
       level: "unknown",
-      conclusion: "这次没测出来，网页商店暂时打不开。",
+      conclusion: "这次没测成",
       process: `${url} → 超时/无响应（${ms}ms）`,
     };
   }
@@ -1690,7 +1683,7 @@ async function probeGooglePlayLine(
     return {
       name: "Google Play",
       level: "fail",
-      conclusion: "当前节点下疑似打不开或被地区限制。",
+      conclusion: "不可用（地区限制）",
       process: `${url} → HTTP ${r.status} · ${ms}ms\n边界：不是下载、支付、上架审核。`,
     };
   }
@@ -1699,13 +1692,11 @@ async function probeGooglePlayLine(
     return {
       name: "Google Play",
       level: "pass",
-      conclusion: gl
-        ? `网页商店能打开。地区线索：${gl}。`
-        : "网页商店能打开。",
+      conclusion: gl ? `可用（${gl}）` : "可用",
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         gl ? `gl 线索：${gl}` : "未解析到 gl 参数（页仍可达）。",
-        "测了什么：play.google.com 网页是否打开。",
+        "测了什么：play.google.com 是否可达。",
         "没测：APK 下载、付款、Play 账号区、上架审核。",
       ].join("\n"),
     };
@@ -1714,7 +1705,7 @@ async function probeGooglePlayLine(
   return {
     name: "Google Play",
     level: "unknown",
-    conclusion: "这次没测清楚，网页商店响应异常。",
+    conclusion: "这次没测成",
     process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B`,
   };
 }
@@ -1754,7 +1745,7 @@ const STREAM_TIP = "";
 /** Store cards: no canned「换节点」suggestion. */
 const STORE_TIP = "";
 
-/** Netflix 单独卡：标题页粗可达与地区线索。 */
+/** Netflix 单独卡：粗可达与地区线索。 */
 export async function checkNetflixUnlock(
   mixedPort?: number | null,
 ): Promise<CheckCard> {
@@ -1778,7 +1769,7 @@ export async function checkYoutubeUnlock(
   return serviceCardFromLine("youtube", "YouTube Premium", line, STREAM_TIP, mixedPort);
 }
 
-/** App Store 单独卡：网页店面粗可达与地区路径线索。 */
+/** App Store 单独卡：粗可达与地区路径线索。 */
 export async function checkAppStoreUnlock(
   mixedPort?: number | null,
 ): Promise<CheckCard> {
@@ -1792,7 +1783,7 @@ export async function checkAppStoreUnlock(
   );
 }
 
-/** Google Play 单独卡：网页店面粗可达与地区线索。 */
+/** Google Play 单独卡：粗可达与地区线索。 */
 export async function checkGooglePlayUnlock(
   mixedPort?: number | null,
 ): Promise<CheckCard> {
