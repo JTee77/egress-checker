@@ -567,6 +567,18 @@ table.data tr:last-child td {
 .about-block {
   max-width: 640px;
 }
+.home-about {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+}
+.home-about p {
+  margin: 0 0 6px;
+  line-height: 1.45;
+  font-size: 13px;
+}
+.home-about p:last-child {
+  margin-bottom: 0;
+}
 
 .about-block h2 {
   font-size: 16px;
@@ -750,6 +762,10 @@ table.data tr:last-child td {
 .vpn-tier-perfect {
   color: var(--accent);
   letter-spacing: 0.02em;
+}
+.vpn-score-dep {
+  font-size: 12px;
+  flex-shrink: 0;
 }
 .vpn-reason {
   line-height: 1.5;

@@ -114,7 +114,6 @@ export function HomePage({
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const abortAllRef = useRef(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [aboutOpen, setAboutOpen] = useState(false);
   const [expandedScore, setExpandedScore] = useState<string | null>(null);
 
   const cfg = connection.config;
@@ -565,6 +564,20 @@ export function HomePage({
         </span>
       </div>
 
+      <div className="about-block card home-about">
+        <p>
+          <strong>Egress Checker v0.1.4</strong>
+        </p>
+        <p>帮你检查代理有没有生效，并给节点打分，方便换节点。</p>
+        <p>
+          请先打开 Clash Verge 等已支持的客户端并连上，再在本软件里选同名软件、点刷新。
+        </p>
+        <p>
+          本软件不提供节点；「测全部」会临时切换节点，测完会切回。密钥只存在本机。
+          仅支持 macOS Apple Silicon。
+        </p>
+      </div>
+
       <div className="home-chrome">
         <div className="home-chrome-left">
           <h1>Egress Checker</h1>
@@ -757,23 +770,11 @@ export function HomePage({
         <div className="note note-compact">{switchHint}</div>
       ) : null}
 
-      {vpnScore ? (
-        <div className="vpn-score-card card">
-          <div className="vpn-score-head">
-            <span className={`vpn-tier${vpnScore.tier === "完美" ? " vpn-tier-perfect" : ""}`}>{vpnScore.tier}</span>
-          </div>
-          <div className="vpn-reason">{vpnScore.reason}</div>
-          <div className="muted" style={{ marginTop: 6 }}>
-            基于节点：{vpnScore.selectedNodeName}
-          </div>
-        </div>
-      ) : null}
-
       {nodeScores.length > 0 ? (
         <div className="node-score-list">
           <h2 className="section-title">节点星级</h2>
           <p className="muted section-hint">
-            点选一个节点，用于计算上方的整份 VPN 总评。不会因此改动你在代理软件里的选择。
+            先点选一个节点，下方会给出按该节点的整体评价。不会因此改动你在代理软件里的选择。
           </p>
           {nodeScores.map((s) => {
             const selected = selectedNodeName === s.nodeName;
@@ -820,6 +821,19 @@ export function HomePage({
               </div>
             );
           })}
+        </div>
+      ) : null}
+
+      {vpnScore ? (
+        <div className="vpn-score-card card">
+          <div className="vpn-score-head">
+            <span className={`vpn-tier${vpnScore.tier === "完美" ? " vpn-tier-perfect" : ""}`}>{vpnScore.tier}</span>
+            <span className="muted vpn-score-dep">按你点选的节点</span>
+          </div>
+          <div className="vpn-reason">{vpnScore.reason}</div>
+          <div className="muted" style={{ marginTop: 6 }}>
+            基于节点：{vpnScore.selectedNodeName}
+          </div>
         </div>
       ) : null}
 
@@ -961,31 +975,6 @@ export function HomePage({
         ) : null}
       </div>
 
-      <div className="fold-panel card">
-        <button
-          type="button"
-          className="fold-toggle"
-          aria-expanded={aboutOpen}
-          onClick={() => setAboutOpen((v) => !v)}
-        >
-          {aboutOpen ? "收起说明" : "说明"}
-        </button>
-        {aboutOpen ? (
-          <div className="fold-body about-block">
-            <p>
-              <strong>Egress Checker v0.1.4</strong>
-            </p>
-            <p>帮你检查代理有没有生效，并给节点打分，方便换节点。</p>
-            <p>
-              请先打开 Clash Verge 等已支持的客户端并连上，再在本软件里选同名软件、点刷新。
-            </p>
-            <p>
-              本软件不提供节点；「测全部」会临时切换节点，测完会切回。密钥只存在本机。
-              仅支持 macOS Apple Silicon。
-            </p>
-          </div>
-        ) : null}
-      </div>
     </div>
   );
 }
