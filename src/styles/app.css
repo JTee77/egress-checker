@@ -864,9 +864,6 @@ table.data tr:last-child td {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
   gap: 6px;
-  max-height: 196px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 .home-nodes-row {
