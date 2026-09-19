@@ -108,10 +108,14 @@ function scoreExit(cards: CheckCard[]): { score: number; note: string } {
 
 function mapStars(total: number, dead: boolean): NodeStars {
   if (dead || total <= 0) return "unavailable";
-  if (total >= 90) return 5;
-  if (total >= 75) return 4;
-  if (total >= 60) return 3;
-  if (total >= 40) return 2;
+  if (total >= 92) return 5;
+  if (total >= 85) return 4.5;
+  if (total >= 78) return 4;
+  if (total >= 70) return 3.5;
+  if (total >= 62) return 3;
+  if (total >= 52) return 2.5;
+  if (total >= 42) return 2;
+  if (total >= 30) return 1.5;
   return 1;
 }
 
@@ -126,10 +130,19 @@ function blurbFor(
     return "连海外站点都打不开，先别指望用它上网。";
   }
   if (stars === 5) return `表现很稳：${thrNote}；服务面也较齐。`;
+  if (stars === 4.5) return `接近满分：${thrNote}；服务面大体齐。`;
   if (stars === 4) return `整体不错：${thrNote}。${svcNote}。`;
+  if (stars === 3.5) return `比较能打：${thrNote}；个别项还可更好。`;
   if (stars === 3) return `能用，但不算出众：${thrNote}。`;
+  if (stars === 2.5) return `勉强够用：${thrNote}；体验一般。`;
   if (stars === 2) return `勉强能用：${thrNote}；${exitNote}`;
+  if (stars === 1.5) return `偏弱，偶尔能通：${availNote}；${thrNote}`;
   return `偏弱：${availNote}；${thrNote}`;
+}
+
+/** Numeric rank for sorting; unavailable sorts last via -1. */
+export function starRank(stars: NodeStars): number {
+  return stars === "unavailable" ? -1 : stars;
 }
 
 function fakeLowLatencyTip(cards: CheckCard[], thrScore: number): string | undefined {
@@ -218,5 +231,8 @@ export function scoreDeadNode(nodeName: string, reason: string): NodeScoreResult
 
 export function formatStars(stars: NodeStars): string {
   if (stars === "unavailable") return "不可用";
-  return "★".repeat(stars) + "☆".repeat(5 - stars);
+  const full = Math.floor(stars);
+  const half = stars - full >= 0.5;
+  const empty = 5 - full - (half ? 1 : 0);
+  return "★".repeat(full) + (half ? "⯨" : "") + "☆".repeat(empty);
 }

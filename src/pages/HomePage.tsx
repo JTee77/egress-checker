@@ -29,6 +29,7 @@ import {
 } from "../lib/mihomo";
 import {
   formatStars,
+  starRank,
   runLightGate,
   scoreDeadNode,
   scoreNodeFromCards,
@@ -459,9 +460,8 @@ export function HomePage({
       }
 
       results.sort((a, b) => {
-        const aDead = a.stars === "unavailable" ? 1 : 0;
-        const bDead = b.stars === "unavailable" ? 1 : 0;
-        if (aDead !== bDead) return aDead - bDead;
+        const byStar = starRank(b.stars) - starRank(a.stars);
+        if (byStar !== 0) return byStar;
         return b.totalScore - a.totalScore;
       });
       setNodeScores(results);
@@ -790,7 +790,12 @@ export function HomePage({
                   className="node-score-main"
                   onClick={() => onPickNode(s.nodeName)}
                 >
-                  <span className="node-score-stars">{formatStars(s.stars)}</span>
+                  <span
+                    className="node-score-stars"
+                    title={s.stars === "unavailable" ? "不可用" : `${s.stars} 星`}
+                  >
+                    {formatStars(s.stars)}
+                  </span>
                   <span className="node-score-name">{s.nodeName}</span>
                   <span className="node-score-blurb">{s.blurb}</span>
                 </button>

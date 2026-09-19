@@ -1,7 +1,17 @@
 import type { CheckCard } from "../egress/types";
 
 /** 节点星级：1–5，或不可用 */
-export type NodeStars = 1 | 2 | 3 | 4 | 5 | "unavailable";
+export type NodeStars =
+  | 1
+  | 1.5
+  | 2
+  | 2.5
+  | 3
+  | 3.5
+  | 4
+  | 4.5
+  | 5
+  | "unavailable";
 
 export type ScoreBreakdownItem = {
   key: string;
