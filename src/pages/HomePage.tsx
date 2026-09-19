@@ -797,7 +797,6 @@ export function HomePage({
                     {formatStars(s.stars)}
                   </span>
                   <span className="node-score-name">{s.nodeName}</span>
-                  <span className="node-score-blurb">{s.blurb}</span>
                 </button>
                 <button
                   type="button"
