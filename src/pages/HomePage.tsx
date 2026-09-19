@@ -59,7 +59,7 @@ const ENV_PLACEHOLDERS: CheckCard[] = [
   { id: "ipv6-leak", title: "IPv6 泄漏", level: "unknown", conclusion: "尚未检测" },
   { id: "webrtc", title: "WebRTC", level: "unknown", conclusion: "尚未检测" },
   { id: "split-routing", title: "分流抽检", level: "unknown", conclusion: "尚未检测" },
-  { id: "bare-egress", title: "裸奔粗检", level: "unknown", conclusion: "尚未检测" },
+  { id: "bare-egress", title: "直连旁路粗检", level: "unknown", conclusion: "尚未检测" },
 ];
 
 const DELAY_URL = "http://www.gstatic.com/generate_204";
@@ -840,7 +840,7 @@ export function HomePage({
           <div>
             <strong>怀疑漏了再查</strong>
             <div className="muted">
-              DNS / IPv6 / WebRTC / 分流 / 裸奔细节（不默认每次强跑）
+              DNS / IPv6 / WebRTC / 分流 / 直连旁路（不默认每次强跑）
             </div>
           </div>
           <button

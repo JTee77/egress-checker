@@ -1067,7 +1067,7 @@ export async function checkSplitRouting(
 }
 
 /**
- * B6: 断线裸奔粗检 — mixed-port fail + direct foreign OK → 可能裸奔.
+ * B6: 直连旁路粗检 — mixed-port fail + direct foreign OK → 可能未走代理直连.
  */
 export async function checkBareEgress(
   mixedPort?: number | null,
@@ -1137,16 +1137,16 @@ export async function checkBareEgress(
     ),
     "测了什么：同一境外 HTTPS 探测点，分别走 mixed-port 与 Rust 真直连（不走系统代理）。",
     "没测：TUN 是否真正接管、系统代理开关、各 App 是否各自走代理、防火墙状态。",
-    "边界：本应用无法单独从进程内完整获知 Clash TUN 内核状态；「裸奔」仅为粗检告警。",
+    "边界：本应用无法单独从进程内完整获知 Clash TUN 内核状态；「未走代理直连」仅为粗检告警。",
   ];
 
   if (!expectProxy) {
     return {
       id: "bare-egress",
-      title: "裸奔粗检",
+      title: "直连旁路粗检",
       level: "unknown",
       conclusion: directOk
-        ? "直连境外可达；尚未连上代理口，无法判断是否裸奔"
+        ? "直连境外可达；尚未连上代理口，无法判断是否存在未走代理直连"
         : "直连境外不可达；尚未连上代理口",
       process: lines.join("\n"),
       suggestion: "请先点「刷新连接」确保已连上软件，再重测。",
@@ -1157,7 +1157,7 @@ export async function checkBareEgress(
   let conclusion: string;
   if (!mixedOk && directOk) {
     level = "warn";
-    conclusion = "可能裸奔：代理路径失败但直连境外仍通";
+    conclusion = "可能未走代理直连：代理路径失败但直连境外仍通";
   } else if (!mixedOk && !directOk) {
     level = "unknown";
     conclusion = "代理与直连境外均失败 — 可能离线或探测点不可达";
@@ -1172,11 +1172,11 @@ export async function checkBareEgress(
 
   return {
     id: "bare-egress",
-    title: "裸奔粗检",
+    title: "直连旁路粗检",
     level,
     conclusion,
     process: lines.join("\n"),
-    suggestion: "若提示可能裸奔：检查代理软件是否断连，以及系统代理 / TUN 是否关掉。",
+    suggestion: "若提示可能未走代理直连：检查代理软件是否断连，以及系统代理 / TUN 是否关掉。",
   };
 }
 
@@ -1986,7 +1986,7 @@ export async function runEgressDiagnostics(
     },
     {
       id: "bare-egress",
-      title: "裸奔粗检",
+      title: "直连旁路粗检",
       deadlineMs: 14000,
       run: () => checkBareEgress(mixedPort),
     },

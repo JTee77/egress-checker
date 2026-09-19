@@ -1,6 +1,6 @@
 /**
  * 节点向检测：连通性、出口、延迟/带宽抽样、流媒体与 AI 粗检。
- * 不跑 DNS / IPv6 / WebRTC / 分流 / 裸奔等环境项。
+ * 不跑 DNS / IPv6 / WebRTC / 分流 / 直连旁路等环境项。
  */
 import type { ControllerConfig } from "../mihomo/types";
 import {

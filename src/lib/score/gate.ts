@@ -3,7 +3,7 @@ import type { ConnectionState } from "../mihomo/types";
 import type { GateResult } from "./types";
 
 /**
- * 轻量自动门槛：客户端是否连上、隧道是否大致工作、是否明显裸奔。
+ * 轻量自动门槛：客户端是否连上、隧道是否大致工作、是否明显未走代理直连。
  * 失败则口语阻断，不进入节点测评。
  */
 export async function runLightGate(connection: ConnectionState): Promise<GateResult> {
@@ -44,24 +44,24 @@ export async function runLightGate(connection: ConnectionState): Promise<GateRes
     return {
       ok: false,
       message:
-        "代理软件看起来已连上，但出国访问探测都失败了。请确认节点真的能用，或先在客户端里换一个节点后再来。",
+        "代理软件看起来已连上，但境外访问探测都失败了。请确认节点真的能用，或先在客户端里换一个节点后再来。",
       process: reach.process,
     };
   }
 
   const bare = await checkBareEgress(mixedPort);
-  if (bare.level === "warn" && /可能裸奔|代理路径失败但直连/.test(bare.conclusion)) {
+  if (bare.level === "warn" && /可能未走代理直连|代理路径失败但直连/.test(bare.conclusion)) {
     return {
       ok: false,
       message:
-        "现在更像「代理没生效、流量在裸奔」。请到代理软件里打开系统代理或 TUN，确认连上后再测节点。",
+        "现在更像「代理没生效、流量可能未走代理」。请到代理软件里打开系统代理或 TUN，确认连上后再测节点。",
       process: bare.process,
     };
   }
 
   return {
     ok: true,
-    message: "测试条件满足：客户端在线，出国方向大致能通，未见明显裸奔。可以开始测节点。",
+    message: "测试条件满足：客户端在线，境外访问大致正常，未见明显未走代理直连。可以开始测节点。",
     process: [reach.conclusion, bare.conclusion].join("\n"),
   };
 }

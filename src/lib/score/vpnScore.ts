@@ -114,7 +114,7 @@ export function scoreVpn(
 
   let tunnelScore = reach ? levelScore(reach.level) : 40;
   let tunnelNote = reach?.conclusion ?? "缺少连通性结果";
-  if (bare?.level === "warn" || (bare && /裸奔|直连境外仍通/.test(bare.conclusion))) {
+  if (bare?.level === "warn" || (bare && /可能未走代理直连|未走代理|直连境外仍通/.test(bare.conclusion))) {
     tunnelScore = Math.min(tunnelScore, 35);
     tunnelNote = bare.conclusion;
   } else if (bare?.level === "pass") {

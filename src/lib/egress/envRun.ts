@@ -1,5 +1,5 @@
 /**
- * 环境向检测：DNS / IPv6 / WebRTC / 分流 / 裸奔细节。
+ * 环境向检测：DNS / IPv6 / WebRTC / 分流 / 直连旁路。
  * 作为第二入口「怀疑漏了再查」，不默认每次强跑。
  */
 import type { ControllerConfig } from "../mihomo/types";
@@ -139,7 +139,7 @@ export async function runEnvDiagnostics(
     },
     {
       id: "bare-egress",
-      title: "裸奔粗检",
+      title: "直连旁路粗检",
       deadlineMs: 14000,
       run: () => checkBareEgress(mixedPort),
     },
