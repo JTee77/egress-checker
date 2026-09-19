@@ -482,11 +482,11 @@ async function probeWithConfig(
 function unauthorizedState(config: ControllerConfig): ConnectionState {
   return {
     status: "unauthorized",
-    message: "连接被拒绝，请到设置（高级）核对密钥后重试",
+    message: "连接被拒绝，请展开「高级」核对密钥后重试",
     config,
     currentProxy: null,
     usingMock: false,
-    proxiesError: "密钥不正确或未配置（高级设置）",
+    proxiesError: "密钥不正确或未配置，请展开「高级」核对",
   };
 }
 
@@ -562,22 +562,22 @@ export async function getProxies(config: ControllerConfig): Promise<GetProxiesRe
   // Fallback: full /proxies via TCP/unix/browser (dev / non-Tauri).
   const res = await httpApi(config, "GET", "/proxies", undefined, 18000);
   if (!res) {
-    return empty("无法拉取 /proxies（超时或网络失败），请到设置检查连接后刷新");
+    return empty("暂时读不到节点列表，请确认软件已打开并点「刷新连接」");
   }
   if (res.status === 401 || res.status === 403) {
     return empty(
-      "拉取节点未授权（401/403），请到设置检查 Secret / 刷新",
+      "连接被拒绝，请展开「高级」核对密钥后重试",
       true,
     );
   }
   if (!is2xx(res.status) || !res.json) {
     if (is2xx(res.status) && !res.json) {
       return empty(
-        `拉取 /proxies 失败（HTTP ${res.status}）：响应不是合法 JSON（可能解压/分块失败），raw ${res.raw.length} 字节`,
+        `读节点列表失败（响应异常），请再点「刷新连接」`,
       );
     }
     return empty(
-      `拉取 /proxies 失败（HTTP ${res.status}），请到设置检查 Secret / 刷新`,
+      `读节点列表失败，请确认软件已打开并点「刷新连接」`,
     );
   }
 
@@ -620,6 +620,68 @@ export async function probeDelay(
   return delay && delay > 0 ? delay : null;
 }
 
+
+/**
+ * 查找包含该节点的选择器组名（优先 Proxy / GLOBAL）。
+ * 仅用于用户确认后的「测全部」临时切换；其它路径不要调用 switchProxy。
+ */
+export async function findSelectorGroup(
+  config: ControllerConfig,
+  nodeName: string,
+): Promise<string | null> {
+  const snap = await resolveSelectorSnapshot(config, nodeName);
+  return snap?.group ?? null;
+}
+
+export type SelectorSnapshot = {
+  group: string;
+  /** 该策略组当前选中的节点名 */
+  now: string | null;
+};
+
+/**
+ * 解析包含指定节点（或当前选中）的策略组，并读出组内 `now`。
+ * 用于「测全部」开始前记录、结束后强制切回。
+ */
+export async function resolveSelectorSnapshot(
+  config: ControllerConfig,
+  nodeName?: string | null,
+): Promise<SelectorSnapshot | null> {
+  const res = await httpApi(config, "GET", "/proxies", undefined, 18000);
+  if (!res || !is2xx(res.status) || !res.json) return null;
+  const obj = res.json as { proxies?: Record<string, ProxyInfo> };
+  const proxies = obj.proxies ?? {};
+  const prefer = ["Proxy", "GLOBAL", "proxy", "SELECT", "节点选择"];
+
+  const isSelectable = (p: ProxyInfo) => {
+    const t = (p.type || "").toLowerCase();
+    return t === "selector" || t === "urltest" || t === "fallback";
+  };
+
+  const candidates: string[] = [];
+  for (const name of prefer) {
+    const p = proxies[name];
+    if (!p) continue;
+    if (nodeName) {
+      if (p.all?.includes(nodeName)) candidates.push(name);
+    } else if (isSelectable(p) && p.now) {
+      candidates.push(name);
+    }
+  }
+  for (const [name, p] of Object.entries(proxies)) {
+    if (prefer.includes(name)) continue;
+    if (!isSelectable(p)) continue;
+    if (nodeName ? p.all?.includes(nodeName) : !!p.now) {
+      candidates.push(name);
+    }
+  }
+
+  const group = candidates[0];
+  if (!group) return null;
+  const now = proxies[group]?.now ?? nodeName ?? null;
+  return { group, now };
+}
+
 export async function switchProxy(
   config: ControllerConfig,
   group: string,
@@ -628,6 +690,15 @@ export async function switchProxy(
   const enc = encodeURIComponent(group);
   const res = await httpApi(config, "PUT", `/proxies/${enc}`, { name });
   return !!res && is2xx(res.status);
+}
+
+/** 切回原先节点；失败返回 false（调用方必须向用户报错，不可静默）。 */
+export async function restoreProxy(
+  config: ControllerConfig,
+  snapshot: SelectorSnapshot,
+): Promise<boolean> {
+  if (!snapshot.now) return false;
+  return switchProxy(config, snapshot.group, snapshot.now);
 }
 
 export async function closeConnections(config: ControllerConfig): Promise<boolean> {

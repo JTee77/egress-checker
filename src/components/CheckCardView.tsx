@@ -13,7 +13,7 @@ export function CheckCardView({ card }: { card: CheckCard }) {
     <article className="card card-dense">
       <div className="card-top">
         <h3>{card.title}</h3>
-        <StatusBadge level={card.level} />
+        <StatusBadge level={card.level} conclusion={conclusion} />
       </div>
       <div className="card-conclusion">{conclusion}</div>
       {suggestion ? <div className="card-suggestion">{suggestion}</div> : null}

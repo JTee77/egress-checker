@@ -83,7 +83,7 @@ export function useConnection() {
           const list = mockNodes();
           const next: ConnectionState = {
             status: "mock",
-            message: "已启用 Mock 演示模式（未请求真实 Mihomo API）",
+            message: "已启用 Mock 演示模式（未连接真实软件）",
             config: cfg,
             currentProxy: list[0]?.name ?? null,
             usingMock: true,
@@ -134,7 +134,7 @@ export function useConnection() {
           const unauthorized: ConnectionState = {
             ...next,
             status: "unauthorized",
-            message: "Secret 不正确或未配置",
+            message: "连接被拒绝，请展开「高级」核对密钥后重试",
             usingMock: false,
             currentProxy: null,
             proxiesError: list.error,

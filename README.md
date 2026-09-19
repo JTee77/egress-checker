@@ -43,7 +43,7 @@ Clash Verge Rev 常在本地暴露 Unix 套接字 `/tmp/verge/verge-mihomo.sock`
 
 因此即使 TCP 端口 Connection refused，只要套接字存在且 secret 正确，仍可列出真实节点。mixed-port（如 `7897`）与控制器通道无关，仍用于经代理的出口探针。
 
-也可在应用「设置」页手动填写 host / port / secret / mixed-port，或开启 **Mock** 演示模式（无需真实 Clash）。
+也可在应用底部「高级」面板手动填写 host / port / secret / mixed-port，或开启 **Mock** 演示模式（无需真实 Clash）。
 
 ## 警告（开发必读）
 
@@ -82,6 +82,7 @@ pnpm tauri dev
 | `bash scripts/smoke-mihomo-api.sh` | 仅测 Unix `/proxies`（sock 缺失时 SKIP，不失败） |
 | `pnpm tauri dev` | Tauri 开发模式（推荐） |
 | `pnpm tauri build` | 打包 Mac `.app` / `.dmg`（需在 Apple Silicon Mac 上） |
+| `bash scripts/build-dmg-macos.sh` | Apple Silicon 上一键 `pnpm tauri build` 产出 arm64 `.app` / `.dmg`（须在 macOS 上跑；Linux 会直接退出） |
 
 > 在非 macOS（如 Linux CI）上，前端 `pnpm build` / `typecheck` 可正常跑通；原生 `tauri build` 面向 Mac 可能失败，属预期。
 
@@ -111,14 +112,37 @@ curl --unix-socket /tmp/verge/verge-mihomo.sock \
   http://localhost/proxies
 ```
 
-应用内：`pnpm tauri dev` 后点首页「刷新连接」；若 TCP 死掉应显示「已连接 Unix 套接字 …」并列出真实节点（不会静默 Mock）。
+应用内：`pnpm tauri dev` 后选软件并点「刷新连接」；连上后状态应显示已连上对应软件（不会静默 Mock）。
 
-## 功能概览（v1）
+## 功能概览（v0.1.4）
 
-- **首页**：一键出口诊断（连通性、DNS 启发式、WebRTC 占位、出口 IP、Gemini、ChatGPT、延迟采样）
-- **节点**：列表 + 地区分组规则 + **快速延迟**（多轮 Google/CF `generate_204`，延迟 / 抖动 / 丢包）；深度 / Top-N / AI 专项为 UI 占位
-- **设置**：自动探测或手动 API；Mock 演示开关
-- **关于**：免责声明与 MIT
+- **轻量门槛**：刷新连接后先检查客户端是否连上、隧道是否大致可用、是否明显未走代理直连；不过门槛则口语提示，不进入节点测评
+- **测当前节点**：对当前出口做深测，给出本轮 1–5 星或「不可用」及短评（可展开构成）
+- **测全部节点**：先用延迟淘汰不通节点；确认后临时切换并对每个能连通的节点深测（开始前有中文提示；测完或中止后**强制切回**原节点，失败会明确报错）
+- **整份 VPN 四档总评**：在结果里点选一个节点后，给出「很好 / 能用 / 勉强 / 有问题」及一句话主因
+- **环境泄漏检查**：DNS / IPv6 / WebRTC / 分流 / 直连旁路作为第二入口，不默认每次强跑
+- **高级 / 说明**仍默认折叠；单一主界面，无多页侧栏
+
+
+## 打包（Apple Silicon DMG）
+
+在 **Apple Silicon Mac** 上：
+
+```bash
+bash scripts/build-dmg-macos.sh
+# 或：pnpm tauri build
+```
+
+产物通常在：
+
+- `src-tauri/target/release/bundle/macos/Egress Checker.app`
+- `src-tauri/target/release/bundle/dmg/*.dmg`
+
+**注意：**
+
+- **仅 Apple Silicon（arm64）**；不承诺 Intel Mac
+- 默认 **未签名 / 未公证**：首次打开可能需 **右键 → 打开**
+- **DMG 必须在 macOS 上构建**；本仓库在 Linux 上只保证前端 `pnpm typecheck` / `pnpm build`
 
 ## 免责声明
 
