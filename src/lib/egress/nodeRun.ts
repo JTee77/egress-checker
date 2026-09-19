@@ -66,7 +66,7 @@ function timeoutCard(id: string, title: string): CheckCard {
     id,
     title,
     level: "unknown",
-    conclusion: "这次没测出来",
+    conclusion: "超时未响应",
     process: "探测超时或卡住，已按截止时间结束本项。",
   };
 }
@@ -91,7 +91,7 @@ async function withDeadline(
       id,
       title,
       level: "unknown",
-      conclusion: "这次没测出来",
+      conclusion: "未能判定",
       process: msg,
     };
   } finally {
