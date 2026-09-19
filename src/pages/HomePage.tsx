@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCardView } from "../components/CheckCardView";
 import {
   TestProgress,
@@ -141,6 +141,28 @@ export function HomePage({
 
   const mixedPortNum = connection.config?.mixedPort ?? null;
 
+  const envReady = useMemo(
+    () =>
+      envCards.length > 0 &&
+      envCards.every(
+        (c) =>
+          c.conclusion !== "尚未检测" &&
+          c.conclusion !== "检测中…" &&
+          c.level !== "running",
+      ),
+    [envCards],
+  );
+
+  useEffect(() => {
+    if (!envReady || !selectedNodeName) {
+      setVpnScore(null);
+      return;
+    }
+    const scored = nodeScores.find((s) => s.nodeName === selectedNodeName);
+    if (scored) setVpnScore(scoreVpn(scored, envCards));
+    else setVpnScore(null);
+  }, [envReady, selectedNodeName, nodeScores, envCards]);
+
   const upsertNodeCard = (card: CheckCard) => {
     setNodeCards((prev) => {
       const idx = prev.findIndex((p) => p.id === card.id);
@@ -235,7 +257,6 @@ export function HomePage({
       const scored = scoreNodeFromCards(name, r.cards, r.ranAt);
       setNodeScores([scored]);
       setSelectedNodeName(name);
-      setVpnScore(scoreVpn(scored, envCards, r.ranAt));
       setProgress(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -477,8 +498,6 @@ export function HomePage({
 
   const onPickNode = (name: string) => {
     setSelectedNodeName(name);
-    const scored = nodeScores.find((s) => s.nodeName === name);
-    if (scored) setVpnScore(scoreVpn(scored, envCards));
   };
 
   const runEnv = async () => {
@@ -492,10 +511,6 @@ export function HomePage({
         exitIp: report?.exitIp ?? null,
       });
       setEnvCards(cards);
-      if (selectedNodeName) {
-        const scored = nodeScores.find((s) => s.nodeName === selectedNodeName);
-        if (scored) setVpnScore(scoreVpn(scored, cards));
-      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setEnvCards(
@@ -818,19 +833,6 @@ export function HomePage({
         </div>
       ) : null}
 
-      {vpnScore ? (
-        <div className="vpn-score-card card">
-          <div className="vpn-score-head">
-            <span className={`vpn-tier${vpnScore.tier === "完美" ? " vpn-tier-perfect" : ""}`}>{vpnScore.tier}</span>
-            <span className="muted vpn-score-dep">按你点选的节点</span>
-          </div>
-          <div className="vpn-reason">{vpnScore.reason}</div>
-          <div className="muted" style={{ marginTop: 6 }}>
-            基于节点：{vpnScore.selectedNodeName}
-          </div>
-        </div>
-      ) : null}
-
       {(selectedScore && selectedScore.cards.length > 0) ||
       (running && mode === "current") ? (
         <>
@@ -868,6 +870,19 @@ export function HomePage({
           </div>
         ) : null}
       </div>
+
+      {envReady && vpnScore ? (
+        <div className="vpn-score-card card">
+          <div className="vpn-score-head">
+            <span className={`vpn-tier${vpnScore.tier === "完美" ? " vpn-tier-perfect" : ""}`}>{vpnScore.tier}</span>
+            <span className="muted vpn-score-dep">按环境检查 + 你点选的节点</span>
+          </div>
+          <div className="vpn-reason">{vpnScore.reason}</div>
+          <div className="muted" style={{ marginTop: 6 }}>
+            基于节点：{vpnScore.selectedNodeName}
+          </div>
+        </div>
+      ) : null}
 
       <div className="fold-panel card">
         <button
