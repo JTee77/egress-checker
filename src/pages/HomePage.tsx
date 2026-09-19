@@ -182,7 +182,7 @@ export function HomePage({
   };
 
   const ensureGate = async (): Promise<GateResult> => {
-    setProgress("门槛检查中…");
+    setProgress("测试条件检查中…");
     const g = await runLightGate(connection);
     setGate(g);
     setGateDetailOpen(!g.ok);
@@ -591,7 +591,7 @@ export function HomePage({
           <span className="note-line">
             {clientUnset
               ? "打开你的代理软件并连上节点 → 在这里选同名软件 → 点「刷新连接」，再测节点。"
-              : "先「刷新连接」。通过门槛后，再选「测当前」或「测全部」。"}
+              : "先「刷新连接」。测试条件满足后，再点「测当前节点」或「测全部节点」。"}
           </span>
         </div>
       )}
@@ -600,10 +600,12 @@ export function HomePage({
         <button
           type="button"
           className={`mode-btn ${mode === "current" ? "active" : ""}`}
-          disabled={running}
+          disabled={running || clientUnset}
           onClick={() => {
             setMode("current");
             setAllConfirmOpen(false);
+            setRestoreError(null);
+            void testCurrent();
           }}
         >
           测当前节点
@@ -611,8 +613,12 @@ export function HomePage({
         <button
           type="button"
           className={`mode-btn ${mode === "all" ? "active" : ""}`}
-          disabled={running}
-          onClick={() => setMode("all")}
+          disabled={running || clientUnset}
+          onClick={() => {
+            setMode("all");
+            setRestoreError(null);
+            setAllConfirmOpen(true);
+          }}
         >
           测全部节点
         </button>
@@ -663,7 +669,7 @@ export function HomePage({
             {running
               ? (progress ?? "检测中…")
               : mode === "current"
-                ? "开始测当前节点"
+                ? "再测一次当前节点"
                 : "开始测全部（会切换节点）"}
           </button>
           {running && mode === "all" ? (
@@ -905,7 +911,7 @@ export function HomePage({
               <strong>Egress Checker v0.1.4</strong>
             </p>
             <p>
-              用于降低 VPN / 代理使用门槛：先做连接门槛，再给节点打星、给整份 VPN
+              用于降低 VPN / 代理使用难度：先确认测试条件，再给节点打星、给整份 VPN
               四档总评。面向已自备 Mihomo / Clash Meta 兼容客户端的用户。
             </p>
             <p className="muted">产品边界：</p>
@@ -918,7 +924,7 @@ export function HomePage({
               <li>除「测全部」经你确认外，不会偷偷切换你的代理节点；测完会强制切回</li>
             </ul>
             <p className="muted">
-              v0.1.4：轻量门槛 → 测当前 / 测全部节点星级 → 点选节点得 VPN
+              v0.1.4：确认测试条件 → 测当前 / 测全部节点星级 → 点选节点得 VPN
               总评；环境检查改为「怀疑漏了再查」。
             </p>
             <p className="muted">MIT License · 高级里的密钥仅保存在本机，不会上传。</p>

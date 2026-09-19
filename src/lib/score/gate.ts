@@ -61,7 +61,7 @@ export async function runLightGate(connection: ConnectionState): Promise<GateRes
 
   return {
     ok: true,
-    message: "门槛已通过：客户端在线，出国方向大致能通，未见明显裸奔。可以开始测节点。",
+    message: "测试条件满足：客户端在线，出国方向大致能通，未见明显裸奔。可以开始测节点。",
     process: [reach.conclusion, bare.conclusion].join("\n"),
   };
 }
