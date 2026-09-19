@@ -18,7 +18,7 @@ macOS **Apple Silicon (arm64)** 桌面应用：诊断代理**出口质量**（�
 - 不支持 Shadowrocket / Surge / 商业封闭 VPN 客户端（v1）
 - **仅支持 macOS Apple Silicon**；v1 **不承诺** Intel Mac
 
-许可证：**MIT**
+许可证：**PolyForm Noncommercial 1.0.0**（禁止商用）
 
 ## 启用 Clash Verge Rev / Mihomo API
 
@@ -150,6 +150,10 @@ bash scripts/build-dmg-macos.sh
 - 深度测速（后续版本）可能产生可观流量，请自行注意费用
 - DNS / WebRTC 检测在桌面 WebView 环境有诚实限制，结果为启发式，非实验室级证明
 
+## 贡献
+
+欢迎提 Issue / Pull Request。合入由维护者决定，详见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
+
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+本项目采用 [PolyForm Noncommercial License 1.0.0](./LICENSE)：允许个人学习、研究与非商业使用；**不允许商用**。此前以 MIT 发布的历史 tag（如 v0.1.4）仍按当时许可理解；自本变更合入 `main` 起，后续以本许可证为准。
