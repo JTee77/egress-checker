@@ -1,6 +1,6 @@
 /**
  * 环境向检测：DNS / IPv6 / WebRTC / 分流 / 直连旁路。
- * 作为第二入口「怀疑漏了再查」，不默认每次强跑。
+ * 作为第二入口「环境泄漏检查」，不默认每次强跑。
  */
 import type { ControllerConfig } from "../mihomo/types";
 import {

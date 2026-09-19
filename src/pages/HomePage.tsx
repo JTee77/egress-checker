@@ -892,7 +892,7 @@ export function HomePage({
       <div className="env-entry card">
         <div className="env-entry-head">
           <div>
-            <strong>怀疑漏了再查</strong>
+            <strong>环境泄漏检查</strong>
             <div className="muted">
               DNS / IPv6 / WebRTC / 分流 / 直连旁路（不默认每次强跑）
             </div>
