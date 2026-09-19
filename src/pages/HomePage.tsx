@@ -127,7 +127,7 @@ export function HomePage({
 
   const clientUnset = !clientId;
 
-  const NODE_PREVIEW = 5;
+  const NODE_PREVIEW = 6;
   const nodesPreview = useMemo(() => {
     const current = connection.currentProxy;
     const ordered = [...nodes];
@@ -638,17 +638,17 @@ export function HomePage({
                   role="listitem"
                   className={`home-nodes-row${isCurrent ? " current" : ""}`}
                 >
-                  <span className="home-nodes-name" title={n.name}>
-                    {n.name}
+                  <div className="home-nodes-row-top">
+                    <span className="home-nodes-name" title={n.name}>
+                      {n.name}
+                    </span>
+                    {isCurrent ? (
+                      <span className="home-nodes-badge">当前</span>
+                    ) : null}
+                  </div>
+                  <span className="home-nodes-meta">
+                    {n.region && n.region !== "未知" ? n.region : n.type}
                   </span>
-                  {isCurrent ? (
-                    <span className="home-nodes-badge">当前</span>
-                  ) : null}
-                  {n.region && n.region !== "未知" ? (
-                    <span className="home-nodes-meta muted">{n.region}</span>
-                  ) : (
-                    <span className="home-nodes-meta muted">{n.type}</span>
-                  )}
                 </div>
               );
             })}
