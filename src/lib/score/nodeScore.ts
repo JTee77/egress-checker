@@ -70,7 +70,7 @@ function scoreThroughput(cards: CheckCard[]): { score: number; note: string } {
   return { score: 10, note: `下行约 ${mbps} Mbps，几乎不好用` };
 }
 
-const SERVICE_IDS = [
+export const SERVICE_IDS = [
   "netflix",
   "disney",
   "youtube",

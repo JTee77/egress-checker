@@ -1,4 +1,5 @@
 import type { CheckCard, CheckLevel } from "../egress/types";
+import { parseDownMbps, SERVICE_IDS } from "./nodeScore";
 import type { NodeScoreResult, ScoreBreakdownItem, VpnScoreResult, VpnTier } from "./types";
 
 function levelScore(level: CheckLevel): number {
@@ -25,6 +26,49 @@ function tierFromScore(score: number): VpnTier {
   return "有问题";
 }
 
+/** 彩蛋级「完美」：显式门槛，默认几乎拿不到。 */
+export function qualifiesPerfect(
+  selected: NodeScoreResult,
+  envCards: CheckCard[],
+  breakdown: ScoreBreakdownItem[],
+  total: number,
+): boolean {
+  if (selected.stars !== 5 || selected.totalScore < 95) return false;
+  if (total < 95) return false;
+  if (!breakdown.every((b) => b.score >= 90)) return false;
+
+  const bare =
+    findCard(envCards, "bare-egress") ?? findCard(selected.cards, "bare-egress");
+  const dns = findCard(envCards, "dns-leak");
+  const split = findCard(envCards, "split-routing");
+  const ipv6 = findCard(envCards, "ipv6-leak");
+  const webrtc = findCard(envCards, "webrtc");
+
+  // 环境卡齐全且过关；缺卡则不能完美
+  if (!bare || bare.level !== "pass") return false;
+  if (!dns || dns.level !== "pass") return false;
+  if (!split || split.level !== "pass") return false;
+  const dnsText = `${dns.conclusion} ${dns.process ?? ""}`;
+  if (/运营商|ISP DNS|电信|联通|移动|宽带/.test(dnsText)) return false;
+  if (ipv6 && (ipv6.level === "fail" || ipv6.level === "warn")) return false;
+  if (webrtc && (webrtc.level === "fail" || webrtc.level === "warn")) return false;
+
+  const reach = findCard(selected.cards, "reachability");
+  if (!reach || reach.level !== "pass") return false;
+
+  const bw = findCard(selected.cards, "bandwidth");
+  const down = parseDownMbps(bw);
+  if (down == null || down < 15) return false;
+
+  for (const id of SERVICE_IDS) {
+    const c = findCard(selected.cards, id);
+    if (!c) continue; // 未跑不强制
+    if (c.level !== "pass") return false;
+  }
+
+  return true;
+}
+
 function mainReason(
   tier: VpnTier,
   tunnel: ScoreBreakdownItem,
@@ -33,6 +77,7 @@ function mainReason(
   node: ScoreBreakdownItem,
 ): string {
   const worst = [tunnel, dns, split, node].sort((a, b) => a.score - b.score)[0];
+  if (tier === "完美") return "难得一见。这轮几乎挑不出毛病。";
   if (tier === "很好") return "隧道、解析和所选节点这轮都比较顺。";
   if (worst.key === "dns" && dns.score < 60) {
     return "节点还行，但 DNS 仍像运营商解析，容易让人觉得「漏了」。";
@@ -52,8 +97,9 @@ function mainReason(
 }
 
 /**
- * 整份 VPN 四档总评（用户在 App 内选中某个节点结果之后）。
+ * 整份 VPN 总评（用户在 App 内选中某个节点结果之后）。
  * 权重：隧道有效 35% · DNS/旁路 25% · 分流 15% · 所选节点可用性 25%。
+ * 「完美」为额外显式门槛，不单靠抬高分数线。
  */
 export function scoreVpn(
   selected: NodeScoreResult,
@@ -104,7 +150,11 @@ export function scoreVpn(
   const total = Math.round(
     tunnelScore * 0.35 + dnsAdjusted * 0.25 + splitScore * 0.15 + nodeAvail * 0.25,
   );
-  const tier = tierFromScore(total);
+
+  let tier = tierFromScore(total);
+  if (qualifiesPerfect(selected, envCards, breakdown, total)) {
+    tier = "完美";
+  }
 
   return {
     tier,

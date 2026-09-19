@@ -25,7 +25,7 @@ export type NodeScoreResult = {
   ranAt: string;
 };
 
-export type VpnTier = "很好" | "能用" | "勉强" | "有问题";
+export type VpnTier = "完美" | "很好" | "能用" | "勉强" | "有问题";
 
 export type VpnScoreResult = {
   tier: VpnTier;

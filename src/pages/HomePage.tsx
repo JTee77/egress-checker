@@ -766,7 +766,7 @@ export function HomePage({
       {vpnScore ? (
         <div className="vpn-score-card card">
           <div className="vpn-score-head">
-            <span className="vpn-tier">{vpnScore.tier}</span>
+            <span className={`vpn-tier${vpnScore.tier === "完美" ? " vpn-tier-perfect" : ""}`}>{vpnScore.tier}</span>
             <span className="muted">整份 VPN · {vpnScore.totalScore} 分</span>
           </div>
           <div className="vpn-reason">{vpnScore.reason}</div>
@@ -984,7 +984,7 @@ export function HomePage({
             </p>
             <p>
               用于降低 VPN / 代理使用难度：先确认测试条件，再给节点打星、给整份 VPN
-              四档总评。面向已自备 Mihomo / Clash Meta 兼容客户端的用户。
+              总评（含极严彩蛋档「完美」）。面向已自备 Mihomo / Clash Meta 兼容客户端的用户。
             </p>
             <p className="muted">产品边界：</p>
             <ul>
@@ -997,7 +997,7 @@ export function HomePage({
             </ul>
             <p className="muted">
               v0.1.4：确认测试条件 → 测当前 / 测全部节点星级 → 点选节点得 VPN
-              总评；环境检查改为「怀疑漏了再查」。
+              总评（很好之上还有极严的「完美」）；环境检查改为「怀疑漏了再查」。
             </p>
             <p className="muted">MIT License · 高级里的密钥仅保存在本机，不会上传。</p>
           </div>
