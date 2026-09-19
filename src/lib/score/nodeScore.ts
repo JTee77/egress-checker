@@ -229,10 +229,8 @@ export function scoreDeadNode(nodeName: string, reason: string): NodeScoreResult
   };
 }
 
+/** Plain-text label for a11y / logs; UI should use <StarRating>. */
 export function formatStars(stars: NodeStars): string {
   if (stars === "unavailable") return "不可用";
-  const full = Math.floor(stars);
-  const half = stars - full >= 0.5;
-  const empty = 5 - full - (half ? 1 : 0);
-  return "★".repeat(full) + (half ? "⯨" : "") + "☆".repeat(empty);
+  return `${stars} 星`;
 }

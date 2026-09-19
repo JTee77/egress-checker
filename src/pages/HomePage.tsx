@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCardView } from "../components/CheckCardView";
+import { StarRating } from "../components/StarRating";
 import {
   TestProgress,
   type ProgressInfo,
@@ -28,7 +29,6 @@ import {
   type SelectorSnapshot,
 } from "../lib/mihomo";
 import {
-  formatStars,
   starRank,
   runLightGate,
   scoreDeadNode,
@@ -115,7 +115,6 @@ export function HomePage({
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const abortAllRef = useRef(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [expandedScore, setExpandedScore] = useState<string | null>(null);
 
   const cfg = connection.config;
   const [host, setHost] = useState(manual.host ?? cfg?.host ?? "127.0.0.1");
@@ -127,9 +126,33 @@ export function HomePage({
 
   const clientUnset = !clientId;
 
+  const scoreByName = useMemo(() => {
+    const m = new Map<string, (typeof nodeScores)[number]>();
+    for (const s of nodeScores) m.set(s.nodeName, s);
+    return m;
+  }, [nodeScores]);
+
   const orderedNodes = useMemo(() => {
     const current = connection.currentProxy;
     const ordered = [...nodes];
+    if (nodeScores.length > 0) {
+      ordered.sort((a, b) => {
+        const sa = scoreByName.get(a.name);
+        const sb = scoreByName.get(b.name);
+        const aHas = sa ? 1 : 0;
+        const bHas = sb ? 1 : 0;
+        if (aHas !== bHas) return bHas - aHas;
+        if (sa && sb) {
+          const byStar = starRank(sb.stars) - starRank(sa.stars);
+          if (byStar !== 0) return byStar;
+          return sb.totalScore - sa.totalScore;
+        }
+        if (a.name === current) return -1;
+        if (b.name === current) return 1;
+        return 0;
+      });
+      return ordered;
+    }
     if (current) {
       const i = ordered.findIndex((n) => n.name === current);
       if (i > 0) {
@@ -138,7 +161,7 @@ export function HomePage({
       }
     }
     return ordered;
-  }, [nodes, connection.currentProxy]);
+  }, [nodes, connection.currentProxy, nodeScores, scoreByName]);
 
   const mixedPortNum = connection.config?.mixedPort ?? null;
 
@@ -651,11 +674,19 @@ export function HomePage({
           <div className="home-nodes-list" role="list">
             {orderedNodes.map((n) => {
               const isCurrent = n.name === connection.currentProxy;
+              const scored = scoreByName.get(n.name);
+              const selected = selectedNodeName === n.name;
+              const clickable = !!scored;
               return (
-                <div
+                <button
                   key={n.name}
+                  type="button"
                   role="listitem"
-                  className={`home-nodes-row${isCurrent ? " current" : ""}`}
+                  className={`home-nodes-row${isCurrent ? " current" : ""}${selected ? " selected" : ""}${clickable ? " scored" : ""}`}
+                  disabled={!clickable}
+                  onClick={() => {
+                    if (scored) onPickNode(n.name);
+                  }}
                 >
                   <div className="home-nodes-row-top">
                     <span className="home-nodes-name" title={n.name}>
@@ -665,10 +696,14 @@ export function HomePage({
                       <span className="home-nodes-badge">当前</span>
                     ) : null}
                   </div>
-                  <span className="home-nodes-meta">
-                    {n.region && n.region !== "未知" ? n.region : n.type}
-                  </span>
-                </div>
+                  {scored ? (
+                    <StarRating stars={scored.stars} size={13} />
+                  ) : (
+                    <span className="home-nodes-meta">
+                      {n.region && n.region !== "未知" ? n.region : n.type}
+                    </span>
+                  )}
+                </button>
               );
             })}
           </div>
@@ -774,58 +809,25 @@ export function HomePage({
         <div className="note note-compact">{switchHint}</div>
       ) : null}
 
-      {nodeScores.length > 0 ? (
-        <div className="node-score-list">
-          <h2 className="section-title">节点星级</h2>
-          {nodeScores.map((s) => {
-            const selected = selectedNodeName === s.nodeName;
-            const open = expandedScore === s.nodeName;
-            return (
-              <div
-                key={s.nodeName}
-                className={`node-score-row card ${selected ? "selected" : ""}`}
-              >
-                <button
-                  type="button"
-                  className="node-score-main"
-                  onClick={() => onPickNode(s.nodeName)}
-                >
-                  <span
-                    className="node-score-stars"
-                    title={s.stars === "unavailable" ? "不可用" : `${s.stars} 星`}
-                  >
-                    {formatStars(s.stars)}
-                  </span>
-                  <span className="node-score-name">{s.nodeName}</span>
-                </button>
-                <button
-                  type="button"
-                  className="card-process-toggle"
-                  aria-expanded={open}
-                  onClick={() =>
-                    setExpandedScore((v) => (v === s.nodeName ? null : s.nodeName))
-                  }
-                >
-                  {open ? "收起构成" : "查看构成"}
-                </button>
-                {open ? (
-                  <div className="score-breakdown">
-                    {s.breakdown.map((b) => (
-                      <div key={b.key} className="score-breakdown-row">
-                        <strong>
-                          {b.label}（{Math.round(b.weight * 100)}%）
-                        </strong>
-                        ：{b.score} 分 — {b.note}
-                      </div>
-                    ))}
-                    {s.fakeLowLatencyTip ? (
-                      <div className="score-tip">{s.fakeLowLatencyTip}</div>
-                    ) : null}
-                  </div>
-                ) : null}
+      {selectedScore ? (
+        <div className="node-score-detail card">
+          <div className="node-score-detail-head">
+            <strong>{selectedScore.nodeName}</strong>
+            <StarRating stars={selectedScore.stars} size={15} />
+          </div>
+          <div className="score-breakdown">
+            {selectedScore.breakdown.map((b) => (
+              <div key={b.key} className="score-breakdown-row">
+                <strong>
+                  {b.label}（{Math.round(b.weight * 100)}%）
+                </strong>
+                ：{b.score} 分 — {b.note}
               </div>
-            );
-          })}
+            ))}
+            {selectedScore.fakeLowLatencyTip ? (
+              <div className="score-tip">{selectedScore.fakeLowLatencyTip}</div>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
