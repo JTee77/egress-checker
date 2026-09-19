@@ -767,7 +767,7 @@ export function HomePage({
         <div className="vpn-score-card card">
           <div className="vpn-score-head">
             <span className={`vpn-tier${vpnScore.tier === "完美" ? " vpn-tier-perfect" : ""}`}>{vpnScore.tier}</span>
-            <span className="muted">整份 VPN · {vpnScore.totalScore} 分</span>
+            <span className="muted">整份 VPN</span>
           </div>
           <div className="vpn-reason">{vpnScore.reason}</div>
           <div className="muted" style={{ marginTop: 6 }}>
