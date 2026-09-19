@@ -975,24 +975,14 @@ export function HomePage({
             <p>
               <strong>Egress Checker v0.1.4</strong>
             </p>
+            <p>帮你检查代理有没有生效，并给节点打分，方便换节点。</p>
             <p>
-              用于降低 VPN / 代理使用难度：先确认测试条件，再给节点打星、给整份 VPN
-              总评（含极严彩蛋档「完美」）。面向已自备 Mihomo / Clash Meta 兼容客户端的用户。
+              请先打开 Clash Verge 等已支持的客户端并连上，再在本软件里选同名软件、点刷新。
             </p>
-            <p className="muted">产品边界：</p>
-            <ul>
-              <li>不提供、不销售任何代理节点或 VPN 服务</li>
-              <li>不声称突破防火墙或「翻墙」</li>
-              <li>不支持 Shadowrocket / Surge / 商业封闭客户端</li>
-              <li>仅支持 macOS Apple Silicon（arm64）</li>
-              <li>结果用于换节点对照，不是完整安全鉴定报告</li>
-              <li>除「测全部」经你确认外，不会偷偷切换你的代理节点；测完会强制切回</li>
-            </ul>
-            <p className="muted">
-              v0.1.4：确认测试条件 → 测当前 / 测全部节点星级 → 点选节点得 VPN
-              总评（很好之上还有极严的「完美」）；环境检查改为「怀疑漏了再查」。
+            <p>
+              本软件不提供节点；「测全部」会临时切换节点，测完会切回。密钥只存在本机。
+              仅支持 macOS Apple Silicon。
             </p>
-            <p className="muted">MIT License · 高级里的密钥仅保存在本机，不会上传。</p>
           </div>
         ) : null}
       </div>
