@@ -1168,7 +1168,7 @@ export async function checkBareEgress(
     ),
     "测了什么：同一境外 HTTPS 探测点，分别走 mixed-port 与 Rust 真直连（不走系统代理）。",
     "没测：TUN 是否真正接管、系统代理开关、各 App 是否各自走代理、防火墙状态。",
-    "边界：本应用无法单独从进程内完整获知 Clash TUN 内核状态；「未走代理直连」仅为粗检告警。",
+    "边界：本应用无法单独从进程内完整获知 Clash TUN 内核状态；「未走代理直连」仅为抽样告警。",
   ];
 
   if (!expectProxy) {
@@ -1507,7 +1507,7 @@ async function probeNetflixLine(
       name: "Netflix",
       level: "unknown",
       conclusion: "超时未响应",
-      process: `${url} → 超时/无响应（${ms}ms）。短超时粗检；失败≠节点一定不可用。`,
+      process: `${url} → 超时/无响应（${ms}ms）。短超时抽样检查；失败≠节点一定不可用。`,
     };
   }
 
@@ -1520,7 +1520,7 @@ async function probeNetflixLine(
       name: "Netflix",
       level: "fail",
       conclusion: "不可用（地区限制）",
-      process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：NSEZ-403 / 403 / 地区拦截文案。\n边界：粗检 ≠ 会员权益/片库/画质。`,
+      process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：NSEZ-403 / 403 / 地区拦截文案。\n边界：本次检查不等于会员权益/片库/画质。`,
     };
   }
 
@@ -1537,7 +1537,7 @@ async function probeNetflixLine(
       name: "Netflix",
       level: "warn",
       conclusion: "可用，片库信号偏弱",
-      process: `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B\n信号：Oh no! / page-404 / 404。\n边界：粗检 ≠ 完整片库解锁。`,
+      process: `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B\n信号：Oh no! / page-404 / 404。\n边界：本次检查不等于完整片库解锁。`,
     };
   }
 
@@ -1585,7 +1585,7 @@ async function probeDisneyLine(
       name: "Disney+",
       level: "unknown",
       conclusion: "超时未响应",
-      process: `${url} → 超时/无响应（${ms}ms）。未跑 bamgrid 多步注册（本版仅 GET 粗检）。`,
+      process: `${url} → 超时/无响应（${ms}ms）。未跑 bamgrid 多步注册（本版只做一次页面请求检查）。`,
     };
   }
 
@@ -1608,7 +1608,7 @@ async function probeDisneyLine(
       name: "Disney+",
       level: "fail",
       conclusion: "不可用（地区限制）",
-      process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：unavailable / not available / 403。\n边界：粗检 ≠ 会员登录与片库。`,
+      process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：unavailable / not available / 403。\n边界：本次检查不等于会员登录与片库。`,
     };
   }
 
@@ -1684,7 +1684,7 @@ async function probeYoutubeLine(
       conclusion: country
         ? `不可用（地区限制 · ${country}）`
         : "不可用（地区限制）",
-      process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：not available in your country。\n边界：粗检 ≠ Premium 订阅/全家共享/画质。`,
+      process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：not available in your country。\n边界：本次检查不等于 Premium 订阅/全家共享/画质。`,
     };
   }
 
