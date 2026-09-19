@@ -1,6 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 import { CheckCardView } from "../components/CheckCardView";
 import {
+  TestProgress,
+  type ProgressInfo,
+} from "../components/TestProgress";
+import {
   mapPool,
   runEnvDiagnostics,
   runNodeDeepLight,
@@ -95,7 +99,8 @@ export function HomePage({
   const [envCards, setEnvCards] = useState<CheckCard[]>(ENV_PLACEHOLDERS);
   const [report, setReport] = useState<EgressReport | null>(null);
   const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState<string | null>(null);
+  const [progress, setProgress] = useState<ProgressInfo | null>(null);
+  const [nodesOpen, setNodesOpen] = useState(false);
   const [mode, setMode] = useState<TestMode>("current");
   const [gate, setGate] = useState<GateResult | null>(null);
   const [gateDetailOpen, setGateDetailOpen] = useState(false);
@@ -182,7 +187,7 @@ export function HomePage({
   };
 
   const ensureGate = async (): Promise<GateResult> => {
-    setProgress("测试条件检查中…");
+    setProgress({ text: "测试条件检查中…" });
     const g = await runLightGate(connection);
     setGate(g);
     setGateDetailOpen(!g.ok);
@@ -201,7 +206,7 @@ export function HomePage({
       if (!g.ok) return;
 
       setNodeCards(asRunning(NODE_PLACEHOLDERS));
-      setProgress("正在深测当前出口…");
+      setProgress({ text: "正在深测当前出口…" });
       const r = await runNodeDiagnostics(upsertNodeCard, {
         mixedPort: mixedPortNum,
         mihomoConfig: connection.config,
@@ -293,12 +298,12 @@ export function HomePage({
         }
       }
 
-      setProgress(`剔死 0/${list.length}`);
+      setProgress({ text: `剔死 0/${list.length}`, current: 0, total: list.length });
       if (!canSwitch) {
         for (let i = 0; i < list.length; i++) {
           if (abortAllRef.current) break;
           const n = list[i];
-          setProgress(`剔死 ${i + 1}/${list.length}`);
+          setProgress({ text: `剔死 ${i + 1}/${list.length}`, current: i + 1, total: list.length });
           if (i === list.length - 1 && list.length > 1) {
             results.push(
               scoreDeadNode(n.name, "演示：延迟探测失败，按不可用处理。"),
@@ -315,7 +320,7 @@ export function HomePage({
           }
           const delay = await probeDelay(config!, n.name, DELAY_URL, 2500);
           cullDone += 1;
-          setProgress(`剔死 ${cullDone}/${list.length}`);
+          setProgress({ text: `剔死 ${cullDone}/${list.length}`, current: cullDone, total: list.length });
           return { n, delay, skipped: false };
         });
         for (const row of cullOut) {
@@ -342,7 +347,7 @@ export function HomePage({
             break;
           }
           const n = alive[i];
-          setProgress(`深测 ${i + 1}/${alive.length}（${n.name}）`);
+          setProgress({ text: `深测 ${i + 1}/${alive.length}（${n.name}）`, current: i + 1, total: alive.length });
           const group =
             (await findSelectorGroup(config!, n.name)) ?? originalSnap.group;
           if (!group) {
@@ -378,7 +383,7 @@ export function HomePage({
         setSwitchHint(
           "连上了代理软件，但读不到当前选中的节点或策略组，没法安全地临时切换。这轮只深测当前出口。",
         );
-        setProgress("深测当前出口（无法安全切换）…");
+        setProgress({ text: "深测当前出口（无法安全切换）…" });
         setNodeCards(asRunning(NODE_PLACEHOLDERS));
         const r = await runNodeDeepLight(upsertNodeCard, {
           mixedPort: mixedPortNum,
@@ -402,7 +407,7 @@ export function HomePage({
         for (let i = 0; i < alive.length; i++) {
           if (abortAllRef.current) break;
           const n = alive[i];
-          setProgress(`深测 ${i + 1}/${alive.length}（演示）`);
+          setProgress({ text: `深测 ${i + 1}/${alive.length}（演示）`, current: i + 1, total: alive.length });
           setNodeCards(asRunning(NODE_PLACEHOLDERS));
           const r = await runNodeDeepLight(upsertNodeCard, {
             mixedPort: mixedPortNum,
@@ -430,7 +435,7 @@ export function HomePage({
     } finally {
       // 成功 / 中止 / 出错：只要切过，就必须尝试切回；失败要明确报错
       if (didSwitch && config && originalSnap?.now && originalSnap.group) {
-        setProgress(`正在切回原先节点：${originalSnap.now}…`);
+        setProgress({ text: `正在切回原先节点：${originalSnap.now}…` });
         const restored = await restoreProxy(config, originalSnap);
         if (!restored) {
           const errMsg = `没法自动切回原先的节点「${originalSnap.now}」。请立刻到代理软件里手动选回去，否则你可能还停在别的节点上。`;
@@ -505,7 +510,7 @@ export function HomePage({
 
   const onAbortAll = () => {
     abortAllRef.current = true;
-    setProgress("正在停止…");
+    setProgress({ text: "正在停止…" });
   };
 
   const selectedScore = useMemo(
@@ -596,6 +601,54 @@ export function HomePage({
         </div>
       )}
 
+
+      {gate?.ok && nodes.length > 0 ? (
+        <div className="home-nodes fold-panel card">
+          <button
+            type="button"
+            className="fold-toggle home-nodes-summary"
+            aria-expanded={nodesOpen}
+            onClick={() => setNodesOpen((v) => !v)}
+          >
+            <span className="home-nodes-summary-text">
+              已识别 {nodes.length} 个节点 · 当前：
+              <strong className="home-nodes-current-mark">
+                {connection.currentProxy ?? "—"}
+              </strong>
+            </span>
+            <span className="home-nodes-chevron" aria-hidden>
+              {nodesOpen ? "▾" : "▸"}
+            </span>
+          </button>
+          {nodesOpen ? (
+            <div className="home-nodes-list" role="list">
+              {nodes.map((n) => {
+                const isCurrent = n.name === connection.currentProxy;
+                return (
+                  <div
+                    key={n.name}
+                    role="listitem"
+                    className={`home-nodes-row${isCurrent ? " current" : ""}`}
+                  >
+                    <span className="home-nodes-name" title={n.name}>
+                      {n.name}
+                    </span>
+                    {isCurrent ? (
+                      <span className="home-nodes-badge">当前</span>
+                    ) : null}
+                    {n.region && n.region !== "未知" ? (
+                      <span className="home-nodes-meta muted">{n.region}</span>
+                    ) : (
+                      <span className="home-nodes-meta muted">{n.type}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="mode-toggle" role="group" aria-label="测评方式">
         <button
           type="button"
@@ -667,7 +720,7 @@ export function HomePage({
             onClick={onPrimary}
           >
             {running
-              ? (progress ?? "检测中…")
+              ? "检测中…"
               : mode === "current"
                 ? "再测一次当前节点"
                 : "开始测全部（会切换节点）"}
@@ -680,7 +733,7 @@ export function HomePage({
         </div>
       )}
 
-      {progress ? <div className="progress-line muted">{progress}</div> : null}
+      {progress ? <TestProgress progress={progress} /> : null}
       {restoreError ? (
         <div className="gate-banner gate-banner-block" role="alert">
           <div className="gate-banner-title">没能切回原先节点</div>
