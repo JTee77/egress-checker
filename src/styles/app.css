@@ -862,11 +862,23 @@ table.data tr:last-child td {
   padding-top: 6px;
   border-top: 1px solid var(--border);
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   max-height: 168px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 900px) {
+  .home-nodes-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .home-nodes-list {
+    grid-template-columns: 1fr;
+  }
 }
 
 .home-nodes-row {

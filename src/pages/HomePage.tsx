@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCardView } from "../components/CheckCardView";
 import {
   TestProgress,
@@ -127,7 +127,25 @@ export function HomePage({
 
   const clientUnset = !clientId;
 
-  const NODE_PREVIEW = 6;
+  /** 与 CSS 断点一致：宽 3 列 / ≤900 2 列 / ≤560 1 列；预览 = 列×2 行铺满 */
+  const [nodeCols, setNodeCols] = useState(3);
+  useEffect(() => {
+    const mq2 = window.matchMedia("(max-width: 900px)");
+    const mq1 = window.matchMedia("(max-width: 560px)");
+    const sync = () => {
+      if (mq1.matches) setNodeCols(1);
+      else if (mq2.matches) setNodeCols(2);
+      else setNodeCols(3);
+    };
+    sync();
+    mq1.addEventListener("change", sync);
+    mq2.addEventListener("change", sync);
+    return () => {
+      mq1.removeEventListener("change", sync);
+      mq2.removeEventListener("change", sync);
+    };
+  }, []);
+
   const nodesPreview = useMemo(() => {
     const current = connection.currentProxy;
     const ordered = [...nodes];
@@ -138,10 +156,11 @@ export function HomePage({
         ordered.unshift(row);
       }
     }
-    const visible = ordered.slice(0, NODE_PREVIEW);
+    const previewCount = nodeCols * 2;
+    const visible = ordered.slice(0, previewCount);
     const hiddenCount = Math.max(0, ordered.length - visible.length);
     return { ordered, visible, hiddenCount };
-  }, [nodes, connection.currentProxy]);
+  }, [nodes, connection.currentProxy, nodeCols]);
 
   const mixedPortNum = connection.config?.mixedPort ?? null;
 
