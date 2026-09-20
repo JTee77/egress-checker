@@ -129,7 +129,7 @@ export async function runEnvDiagnostics(
       id: "webrtc",
       title: "WebRTC",
       deadlineMs: 6000,
-      run: () => checkWebRtcLeak(),
+      run: () => checkWebRtcLeak(exit),
     },
     {
       id: "split-routing",

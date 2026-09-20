@@ -15,6 +15,59 @@ pub struct DnsResolversResult {
     pub error: Option<String>,
 }
 
+/// Result of a `dig TXT whoami.ds.akahelp.net` round-trip: the ground-truth of
+/// where DNS traffic actually egresses and which recursive resolver served it.
+/// Unlike `scutil --dns` (which only reads *configured* resolvers), this proves
+/// the *effective* path — the whole point of the deterministic DNS-leak check.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DnsWhoamiResult {
+    pub ok: bool,
+    /// Public IP the authoritative server saw (the `"ip"` field).
+    pub client_ip: Option<String>,
+    /// Recursive nameserver that forwarded the query (the `"ns"` field).
+    pub resolver_ns: Option<String>,
+    /// EDNS Client Subnet prefix if returned (the `"ecs"` field).
+    pub ecs: Option<String>,
+    /// Which upstream we forced the query through: "system" or an @resolver IP.
+    pub via: String,
+    pub raw: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+fn unquote(s: &str) -> String {
+    s.trim().trim_matches('"').trim_matches('\'').to_string()
+}
+
+/// Parse `dig +short TXT whoami.ds.akahelp.net` output into
+/// (client_ip, resolver_ns, ecs). Field lines look like `"ip" "1.2.3.4"`.
+/// A bare quoted IP line with no key is treated as the client ip fallback.
+pub fn parse_whoami_txt(raw: &str) -> (Option<String>, Option<String>, Option<String>) {
+    let mut ip = None;
+    let mut ns = None;
+    let mut ecs = None;
+    for line in raw.lines() {
+        let tokens: Vec<String> = line.split_whitespace().map(unquote).collect();
+        match tokens.as_slice() {
+            [k, v] => match k.to_ascii_lowercase().as_str() {
+                "ip" => ip = Some(v.clone()),
+                "ns" => ns = Some(v.clone()),
+                "ecs" => ecs = Some(v.clone()),
+                _ => {}
+            },
+            [only] => {
+                // Bare value (some whoami services echo just the client IP).
+                if ip.is_none() && looks_like_ip(only) {
+                    ip = Some(only.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+    (ip, ns, ecs)
+}
+
 #[derive(Debug, Default, Clone)]
 struct ResolverBlock {
     nameservers: Vec<String>,
@@ -135,6 +188,16 @@ pub fn parse_scutil_dns(raw: &str) -> (Vec<String>, String) {
     (resolvers, source)
 }
 
+/// Char-boundary-safe hint truncation: never slices inside a multi-byte
+/// UTF-8 char (a raw `&raw[..400]` could panic on multibyte output).
+fn truncate_hint(raw: &str, max_chars: usize) -> String {
+    if raw.chars().count() <= max_chars {
+        return raw.to_string();
+    }
+    let head: String = raw.chars().take(max_chars).collect();
+    format!("{head}… ({} bytes)", raw.len())
+}
+
 pub fn list_dns_resolvers_blocking() -> DnsResolversResult {
     #[cfg(not(target_os = "macos"))]
     {
@@ -180,11 +243,7 @@ pub fn list_dns_resolvers_blocking() -> DnsResolversResult {
 
         let raw = String::from_utf8_lossy(&output.stdout).into_owned();
         let (resolvers, source) = parse_scutil_dns(&raw);
-        let hint = if raw.len() > 400 {
-            format!("{}… ({} bytes)", &raw[..400], raw.len())
-        } else {
-            raw.clone()
-        };
+        let hint = truncate_hint(&raw, 400);
 
         if resolvers.is_empty() {
             return DnsResolversResult {
@@ -204,9 +263,129 @@ pub fn list_dns_resolvers_blocking() -> DnsResolversResult {
     }
 }
 
+#[cfg(not(unix))]
+fn unsupported_whoami(via: String) -> DnsWhoamiResult {
+    DnsWhoamiResult {
+        ok: false,
+        client_ip: None,
+        resolver_ns: None,
+        ecs: None,
+        via,
+        raw: String::new(),
+        error: Some(
+            "DNS whoami 实测依赖 `dig`（macOS/Linux）；当前平台不可用。".into(),
+        ),
+    }
+}
+
+/// Blocking `dig TXT whoami.ds.akahelp.net`. `resolver` = Some("@IP") to force the
+/// query through a specific recursive resolver; None uses the system default path.
+pub fn dns_whoami_blocking(resolver: Option<&str>, timeout_ms: u64) -> DnsWhoamiResult {
+    #[cfg(unix)]
+    {
+        use std::process::Command;
+
+        let host = "whoami.ds.akahelp.net";
+        let via = resolver.unwrap_or("system").to_string();
+        let secs = ((timeout_ms + 999) / 1000).max(1);
+
+        let mut cmd = Command::new("dig");
+        cmd.args([
+            "+short",
+            &format!("+time={secs}"),
+            "+tries=1",
+            "TXT",
+            host,
+        ]);
+        if let Some(r) = resolver {
+            cmd.arg(format!("@{r}"));
+        }
+
+        let output = match cmd.output() {
+            Ok(o) => o,
+            Err(e) => {
+                return DnsWhoamiResult {
+                    ok: false,
+                    client_ip: None,
+                    resolver_ns: None,
+                    ecs: None,
+                    via,
+                    raw: String::new(),
+                    error: Some(format!("执行 dig 失败: {e}")),
+                };
+            }
+        };
+
+        let raw = String::from_utf8_lossy(&output.stdout).into_owned();
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return DnsWhoamiResult {
+                ok: false,
+                client_ip: None,
+                resolver_ns: None,
+                ecs: None,
+                via,
+                raw: truncate_hint(&raw, 300),
+                error: Some(format!(
+                    "dig 退出码 {:?}: {}",
+                    output.status.code(),
+                    stderr.trim()
+                )),
+            };
+        }
+
+        let (client_ip, resolver_ns, ecs) = parse_whoami_txt(&raw);
+        let ok = client_ip.is_some() || resolver_ns.is_some();
+        DnsWhoamiResult {
+            ok,
+            client_ip,
+            resolver_ns,
+            ecs,
+            via,
+            raw: truncate_hint(&raw, 300),
+            error: if ok {
+                None
+            } else {
+                Some("dig 已执行但未解析到 ip/ns 字段".into())
+            },
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = (resolver, timeout_ms);
+        unsupported_whoami(resolver.unwrap_or("system").to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_whoami_full_fields() {
+        let raw = "\"ns\" \"172.68.41.102\"\n\"ip\" \"146.19.163.158\"\n\"ecs\" \"146.19.163.0/24/24\"\n";
+        let (ip, ns, ecs) = parse_whoami_txt(raw);
+        assert_eq!(ip.as_deref(), Some("146.19.163.158"));
+        assert_eq!(ns.as_deref(), Some("172.68.41.102"));
+        assert_eq!(ecs.as_deref(), Some("146.19.163.0/24/24"));
+    }
+
+    #[test]
+    fn parse_whoami_bare_ip_fallback() {
+        let (ip, ns, ecs) = parse_whoami_txt("\"203.0.113.7\"\n");
+        assert_eq!(ip.as_deref(), Some("203.0.113.7"));
+        assert_eq!(ns, None);
+        assert_eq!(ecs, None);
+    }
+
+    #[test]
+    fn parse_whoami_ignores_unknown_and_empty() {
+        let (ip, ns, ecs) = parse_whoami_txt("\"id\" \"1234\"\n\n");
+        assert_eq!(ip, None);
+        assert_eq!(ns, None);
+        assert_eq!(ecs, None);
+    }
 
     const FIXTURE: &str = r#"DNS configuration
 
@@ -298,5 +477,25 @@ resolver #1
     fn parse_empty_fixture() {
         let (resolvers, _) = parse_scutil_dns("DNS configuration\n");
         assert!(resolvers.is_empty());
+    }
+
+    #[test]
+    fn truncate_hint_is_char_boundary_safe() {
+        // Multibyte-heavy text must not panic on the 400-cut.
+        let raw: String = "解析器测试é".repeat(120);
+        let h = truncate_hint(&raw, 400);
+        assert!(
+            h.contains('…'),
+            "should be truncated, got {} chars",
+            h.chars().count()
+        );
+        assert!(h.ends_with("bytes)"));
+        assert!(h.chars().count() >= 400);
+
+        let short = "a".repeat(10);
+        assert_eq!(truncate_hint(&short, 400), short);
+
+        let exact = "b".repeat(400);
+        assert_eq!(truncate_hint(&exact, 400), exact);
     }
 }

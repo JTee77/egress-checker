@@ -1,7 +1,7 @@
 {
   "name": "egress-checker",
   "private": true,
-  "version": "0.1.4",
+  "version": "0.1.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,6 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "smoke:mac": "bash scripts/smoke-mac.sh"
   },
   "dependencies": {
@@ -22,6 +24,7 @@
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "~5.8.3",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vitest": "^5.0.1"
   }
 }

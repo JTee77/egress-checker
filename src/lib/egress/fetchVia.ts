@@ -33,6 +33,12 @@ export async function fetchTextViaProxy(
     }
   }
 
+  // Browser fallback is dev-only: in production a direct browser fetch would
+  // bypass the proxy (leaking the real IP) — must not happen silently.
+  if (!import.meta.env.DEV) {
+    return { ok: false, status: 0, text: "", via: "browser" };
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 5000);
   try {
@@ -83,6 +89,60 @@ export async function listDnsResolvers(): Promise<DnsResolversPayload> {
       resolvers: [],
       source: "invoke-error",
       error: `调用 egress_list_dns_resolvers 失败: ${msg}`,
+    };
+  }
+}
+
+export type DnsWhoamiPayload = {
+  ok: boolean;
+  clientIp?: string | null;
+  resolverNs?: string | null;
+  ecs?: string | null;
+  via: string;
+  raw: string;
+  error?: string;
+};
+
+/**
+ * Ground-truth DNS egress probe via Rust `dig TXT whoami.ds.akahelp.net`.
+ * `resolver` forces the query through a specific recursive resolver (e.g.
+ * "8.8.8.8"); omit to use the system default path. Returns who the query
+ * actually left from (clientIp) and which resolver served it (resolverNs).
+ */
+export async function dnsWhoami(
+  opts: { resolver?: string | null; timeoutMs?: number } = {},
+): Promise<DnsWhoamiPayload> {
+  if (!isTauri()) {
+    return {
+      ok: false,
+      via: "browser",
+      raw: "",
+      error: "非 Tauri 环境，无法执行 dig 实测。",
+    };
+  }
+  try {
+    const res = await invoke<DnsWhoamiPayload>("egress_dns_whoami", {
+      req: {
+        resolver: opts.resolver ?? null,
+        timeoutMs: opts.timeoutMs ?? 4000,
+      },
+    });
+    return {
+      ok: !!res.ok,
+      clientIp: res.clientIp ?? null,
+      resolverNs: res.resolverNs ?? null,
+      ecs: res.ecs ?? null,
+      via: res.via ?? "system",
+      raw: res.raw ?? "",
+      error: res.error,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return {
+      ok: false,
+      via: "invoke-error",
+      raw: "",
+      error: `调用 egress_dns_whoami 失败: ${msg}`,
     };
   }
 }

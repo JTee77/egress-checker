@@ -1,17 +1,14 @@
 //! Clash Verge Rev / Mihomo controller discovery + HTTP (TCP / Unix socket).
 //! Secrets are returned to the frontend for local API use only; never log secret values.
+//! OS-specific paths/sockets live in `crate::platform` (macOS behavior unchanged).
 
+use crate::platform;
 use regex::Regex;
 use serde::Serialize;
 use serde_json::Value;
-use std::io::{Read, Write};
-use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::time::Duration;
 
-pub const VERGE_REL_CONFIG: &str =
-    "Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/config.yaml";
-pub const DEFAULT_SOCK: &str = "/tmp/verge/verge-mihomo.sock";
 pub const DEFAULT_PORT: u16 = 9097;
 pub const DEFAULT_MIXED: u16 = 7897;
 
@@ -70,56 +67,27 @@ const IGNORE_PROXY_TYPES: &[&str] = &[
 
 const JUNK_NAME_KEYWORDS: &[&str] = &["剩余", "到期", "官网"];
 
-pub fn verge_config_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("/"))
-        .join(VERGE_REL_CONFIG)
-}
-
 pub fn read_verge_config() -> Result<String, String> {
-    let path = verge_config_path();
+    let path = platform::verge_config_path();
     std::fs::read_to_string(&path).map_err(|e| format!("read {}: {}", path.display(), e))
 }
 
-fn parse_config(content: &str) -> (u16, String, u16) {
-    let mut port = DEFAULT_PORT;
-    let mut secret = String::new();
-    let mut mixed = DEFAULT_MIXED;
-
-    if let Ok(re) = Regex::new(r#"external-controller:\s*['"]?([^:'"\s]+):(\d+)['"]?"#) {
-        if let Some(c) = re.captures(content) {
-            if let Ok(p) = c[2].parse() {
-                port = p;
-            }
-        }
-    }
-    if let Ok(re) = Regex::new(r#"(?m)^secret:\s*['"]?([^\s'"]+)['"]?"#) {
-        if let Some(c) = re.captures(content) {
-            secret = c[1].to_string();
-        }
-    }
-    if let Ok(re) = Regex::new(r"mixed-port:\s*(\d+)") {
-        if let Some(c) = re.captures(content) {
-            if let Ok(p) = c[1].parse() {
-                mixed = p;
-            }
-        }
-    }
-    (port, secret, mixed)
-}
-
 pub fn discover_controller() -> DiscoverResult {
-    let path = verge_config_path();
-    let sock_exists = std::path::Path::new(DEFAULT_SOCK).exists();
-    let sock_path = if sock_exists {
-        Some(DEFAULT_SOCK.to_string())
+    let path = platform::verge_config_path();
+    let default_sock = platform::default_controller_sock();
+    let sock_exists = default_sock
+        .map(|s| std::path::Path::new(s).exists())
+        .unwrap_or(false);
+    let sock_path: Option<String> = if sock_exists {
+        default_sock.map(|s| s.to_string())
     } else {
         None
     };
 
     if path.exists() {
         if let Ok(content) = std::fs::read_to_string(&path) {
-            let (port, secret, mixed) = parse_config(&content);
+            let (port, secret, mixed) =
+                parse_controller_yaml(&content, DEFAULT_PORT, DEFAULT_MIXED);
             return DiscoverResult {
                 host: "127.0.0.1".into(),
                 port,
@@ -145,8 +113,6 @@ pub fn discover_controller() -> DiscoverResult {
     }
 }
 
-
-pub const PARTY_SOCK: &str = "/tmp/mihomo-party.sock";
 
 fn expand_home(path: &str) -> PathBuf {
     if let Some(rest) = path.strip_prefix("~/") {
@@ -267,58 +233,29 @@ pub fn read_controller_yaml(
     }
 }
 
-/// Client-scoped discovery. Non-Verge clients never get Verge DEFAULT_SOCK.
+/// Client-scoped discovery. Verge goes through `discover_controller`; other
+/// clients read the per-OS path table in `crate::platform` (macOS keeps the
+/// historical hardcoded paths; non-Verge clients never get Verge's sock).
 pub fn discover_for_client(client_id: &str) -> DiscoverResult {
-    match client_id {
-        "verge" => discover_controller(),
-        "clashx_meta" => read_controller_yaml(
-            &["~/.config/clash/config.yaml".into()],
-            9090,
-            7890,
-            &[], // no fixed public sock
-            "clashx_meta",
-        ),
-        "flclash" => read_controller_yaml(
-            &[
-                "~/Library/Application Support/com.follow.clash".into(),
-                "~/Library/Application Support/FlClash".into(),
-            ],
-            9090,
-            7890,
-            &[], // internal IPC is not Mihomo REST — never inject Verge/Party sock
-            "flclash",
-        ),
-        "mihomo_party" => read_controller_yaml(
-            &[
-                "~/Library/Application Support/mihomo-party".into(),
-            ],
-            9090, // TCP EC often empty; sock is primary
-            7890,
-            &[PARTY_SOCK.into()],
-            "mihomo_party",
-        ),
-        "nyanpasu" => read_controller_yaml(
-            &[
-                "~/Library/Application Support/Clash Nyanpasu/clash-runtime.yaml".into(),
-                "~/Library/Application Support/Clash Nyanpasu/clash.yaml".into(),
-                "~/Library/Application Support/clash-nyanpasu/clash-runtime.yaml".into(),
-                "~/Library/Application Support/clash-nyanpasu/clash.yaml".into(),
-                "~/Library/Application Support/Clash Nyanpasu".into(),
-                "~/Library/Application Support/clash-nyanpasu".into(),
-            ],
-            17650, // default EC; debug builds may use 9872
-            7890,
-            &[],
-            "nyanpasu",
-        ),
-        _ => DiscoverResult {
-            host: "127.0.0.1".into(),
-            port: 9090,
-            secret: String::new(),
-            mixed_port: 7890,
-            source: format!("unknown-client:{client_id}"),
-            sock_path: None,
-        },
+    if client_id == "verge" {
+        return discover_controller();
+    }
+    if let Some(spec) = platform::client_discovery(client_id) {
+        return read_controller_yaml(
+            &spec.yaml_paths,
+            spec.default_port,
+            spec.default_mixed,
+            &spec.sock_candidates,
+            spec.source_prefix,
+        );
+    }
+    DiscoverResult {
+        host: "127.0.0.1".into(),
+        port: 9090,
+        secret: String::new(),
+        mixed_port: 7890,
+        source: format!("unknown-client:{client_id}"),
+        sock_path: None,
     }
 }
 
@@ -377,6 +314,8 @@ pub async fn http_via_tcp_async(
     Ok(UnixHttpResult { status, body })
 }
 
+/// HTTP over a Unix domain socket — the macOS/Linux local-IPC transport.
+#[cfg(unix)]
 pub fn http_via_unix(
     method: &str,
     path: &str,
@@ -385,6 +324,9 @@ pub fn http_via_unix(
     sock_path: Option<&str>,
     timeout_ms: u64,
 ) -> Result<UnixHttpResult, String> {
+    use std::io::{Read, Write};
+    use std::os::unix::net::UnixStream;
+
     let sock = sock_path.ok_or_else(|| {
         "unix socket path not provided (refusing Verge default for non-Verge clients)".to_string()
     })?;
@@ -433,6 +375,23 @@ pub fn http_via_unix(
     }
 
     parse_http_response_bytes(&raw)
+}
+
+/// Non-unix targets (e.g. Windows): local IPC would use a named pipe — not
+/// implemented yet. TCP (`http_via_tcp_async`) remains the supported transport.
+#[cfg(not(unix))]
+pub fn http_via_unix(
+    _method: &str,
+    _path: &str,
+    _body: Option<&str>,
+    _secret: &str,
+    _sock_path: Option<&str>,
+    _timeout_ms: u64,
+) -> Result<UnixHttpResult, String> {
+    Err(
+        "unix socket transport unavailable on this platform (use TCP external-controller)"
+            .into(),
+    )
 }
 
 /// Split HTTP response on bytes (headers/body), decode chunked by byte length, UTF-8 body.
@@ -1436,7 +1395,7 @@ secret: "test-secret"
 
         let party = discover_for_client("mihomo_party");
         if let Some(ref s) = party.sock_path {
-            assert_ne!(s, DEFAULT_SOCK, "party must never use Verge sock");
+            assert_ne!(s, platform::VERGE_SOCK_PATH, "party must never use Verge sock");
             assert!(s.contains("mihomo-party"), "party sock unexpected: {s}");
         }
     }
@@ -1453,7 +1412,7 @@ secret: "test-secret"
             "test",
         );
         assert!(r.sock_path.is_none());
-        assert_ne!(r.sock_path.as_deref(), Some(DEFAULT_SOCK));
+        assert_ne!(r.sock_path.as_deref(), Some(platform::VERGE_SOCK_PATH));
     }
 
 }

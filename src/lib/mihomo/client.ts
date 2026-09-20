@@ -1,7 +1,8 @@
 /**
  * Mihomo REST client.
  * Prefer Tauri Rust HTTP (reqwest) to 127.0.0.1 to avoid WebView CORS;
- * fall back to unix socket invoke, then browser fetch (dev only).
+ * fall back to unix socket invoke. Browser fetch is dev-only by design
+ * (production never sends the secret over plaintext HTTP from the WebView).
  * Never log secret values.
  * Never auto-fallback to mock nodes — Mock is Settings toggle only.
  */
@@ -131,6 +132,9 @@ async function browserFetch(
   body?: unknown,
   timeoutMs = 3000,
 ): Promise<HttpResult | null> {
+  // Dev-only transport: sends the controller secret as plaintext-HTTP Bearer
+  // from the WebView. Production must go through Rust (mihomo_http / mihomo_unix_http).
+  if (!import.meta.env.DEV) return null;
   const url = `http://${config.host}:${config.port}${path}`;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
