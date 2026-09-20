@@ -1,5 +1,6 @@
 mod dns;
 mod mihomo;
+mod platform;
 
 use dns::DnsResolversResult;
 use mihomo::{
@@ -213,15 +214,34 @@ async fn egress_list_dns_resolvers() -> Result<DnsResolversResult, String> {
     .map_err(join_err)?
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DnsWhoamiRequest {
+    /// Force the query through a specific recursive resolver (e.g. "8.8.8.8");
+    /// None/empty uses the system default path.
+    resolver: Option<String>,
+    timeout_ms: Option<u64>,
+}
 
-/// Append a line to ~/Library/Logs/EgressChecker/app.log (macOS). Best-effort.
+#[tauri::command]
+async fn egress_dns_whoami(req: DnsWhoamiRequest) -> Result<dns::DnsWhoamiResult, String> {
+    let resolver = req.resolver.filter(|s| !s.trim().is_empty());
+    let timeout_ms = req.timeout_ms.unwrap_or(4000);
+    tauri::async_runtime::spawn_blocking(move || {
+        catch_disk(|| Ok(dns::dns_whoami_blocking(resolver.as_deref(), timeout_ms)))
+    })
+    .await
+    .map_err(join_err)?
+}
+
+
+/// Append a line to the platform log dir (macOS: ~/Library/Logs/EgressChecker). Best-effort.
 fn append_app_log(msg: &str) {
     use std::io::Write;
 
-    let Some(home) = dirs::home_dir() else {
+    let Some(dir) = platform::app_log_dir() else {
         return;
     };
-    let dir = home.join("Library/Logs/EgressChecker");
     if std::fs::create_dir_all(&dir).is_err() {
         return;
     }
@@ -366,7 +386,8 @@ pub fn run() {
             mihomo_unix_http,
             egress_proxy_fetch,
             egress_proxy_timed_transfer,
-            egress_list_dns_resolvers
+            egress_list_dns_resolvers,
+            egress_dns_whoami
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

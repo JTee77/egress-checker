@@ -31,3 +31,7 @@ src-tauri/gen
 .env
 .env.*
 !.env.example
+
+# Local scratch / debug artifacts (screenshots, e2e drive scripts & logs)
+tmp-e2e/
+tmp-shots/

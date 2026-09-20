@@ -524,7 +524,20 @@ export function HomePage({
         }
       }
 
-      setNodeScores(sortScores(results));
+      const sorted = sortScores(results);
+      setNodeScores(sorted);
+      // 测完后自动选中一个合理节点（优先原先那台、否则首个有卡片的评分），
+      // 让结果网格与总评即时点亮，不必再手动点选。
+      const withCards = (s: NodeScoreResult) => s.cards.length > 0;
+      const origNow = originalSnap?.now ?? null;
+      const preferred =
+        (origNow
+          ? sorted.find((s) => s.nodeName === origNow && withCards(s))
+          : undefined) ?? sorted.find(withCards);
+      if (preferred) {
+        setSelectedNodeName(preferred.nodeName);
+        setNodeCards(preferred.cards);
+      }
       setProgress(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -610,6 +623,11 @@ export function HomePage({
     () => nodeScores.find((s) => s.nodeName === selectedNodeName) ?? null,
     [nodeScores, selectedNodeName],
   );
+
+  // 网格优先显示「选中节点」的卡片；未选中（如测当前进行中）才回落实时 nodeCards。
+  // 修复：以前网格恒渲染游离的 nodeCards，点选别的节点后不跟着换，停在最后测的节点上。
+  const gridCards =
+    selectedScore && selectedScore.cards.length > 0 ? selectedScore.cards : nodeCards;
 
   return (
     <div className="home-page">
@@ -708,7 +726,7 @@ export function HomePage({
               </strong>
             </span>
           </div>
-          <div className="home-nodes-list" role="list">
+          <div className="home-nodes-list">
             {orderedNodes.map((n) => {
               const isCurrent = n.name === connection.currentProxy;
               const scored = scoreByName.get(n.name);
@@ -719,7 +737,6 @@ export function HomePage({
                 <button
                   key={n.name}
                   type="button"
-                  role="listitem"
                   className={`home-nodes-row${isCurrent ? " current" : ""}${selected ? " selected" : ""}${clickable ? " scored" : ""}${isTesting ? " testing" : ""}`}
                   disabled={!clickable}
                   onClick={() => {
@@ -882,7 +899,7 @@ export function HomePage({
         <>
           <h2 className="section-title">当前节点检测结果</h2>
           <div className="card-grid card-grid-home">
-            {nodeCards.map((c) => (
+            {gridCards.map((c) => (
               <CheckCardView key={c.id} card={c} />
             ))}
           </div>
@@ -925,6 +942,13 @@ export function HomePage({
           <div className="muted" style={{ marginTop: 6 }}>
             基于节点：{vpnScore.selectedNodeName}
           </div>
+        </div>
+      ) : null}
+
+      {!vpnScore && !running && !envRunning && (envReady || nodeScores.length > 0) ? (
+        <div className="note note-compact">
+          「整份 VPN 总评」需要两步都有结果：环境检查完成 <strong>+</strong> 测过节点并在上方点选一个节点。
+          环境检查重跑期间总评会暂时消失，跑完自动回来。
         </div>
       ) : null}
 

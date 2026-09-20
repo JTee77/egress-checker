@@ -11,7 +11,9 @@ import type {
   ExitIpInfo,
   UnlockResult,
 } from "./types";
-import { fetchTextViaProxy, listDnsResolvers, timedTransferViaProxy } from "./fetchVia";
+import { fetchTextViaProxy, listDnsResolvers, timedTransferViaProxy, dnsWhoami } from "./fetchVia";
+import { classifyIpv6Leak, classifyWebRtc, candidateScope } from "./leakMatrix";
+import type { WebRtcCandidateType } from "./leakMatrix";
 import { getRulesSummary } from "../mihomo/client";
 import type { ControllerConfig } from "../mihomo/types";
 
@@ -135,67 +137,148 @@ export async function checkReachability(
   };
 }
 
+/** 统一的「获取失败」空结果（三次重复的字面量收敛为一个本地 helper）。 */
+function emptyExitIp(): ExitIpInfo {
+  return {
+    ip: null,
+    country: null,
+    countryCode: null,
+    org: null,
+    isp: null,
+    hosting: null,
+    ipTypeLabel: "--",
+  };
+}
+
+/**
+ * 由组织名/ISP 关键词推断是否机房（datacenter）IP。
+ * TLS IP 源（ipwho.is / ip.sb）不像 ip-api 那样提供 hosting 布尔字段，只能推断。
+ */
+export function inferHosting(...fields: (string | null | undefined)[]): boolean {
+  const blob = fields.filter(Boolean).join(" ").toLowerCase();
+  if (!blob) return false;
+  const keywords = [
+    "hosting",
+    "cloud",
+    "datacenter",
+    "data center",
+    "colo",
+    "vps",
+    "dedicated",
+    "server",
+    "ovh",
+    "hetzner",
+    "digitalocean",
+    "linode",
+    "vultr",
+    "leaseweb",
+    "amazon",
+    "aws",
+    "azure",
+    "oracle",
+    "alibaba",
+    "tencent",
+    "m247",
+    "datacamp",
+    "packethub",
+    "xtom",
+    "ipxo",
+    "choopa",
+    "contabo",
+  ];
+  return keywords.some((k) => blob.includes(k));
+}
+
+/** 单个源解析出的映射字段（null 表示该源失败，尝试下一个）。 */
+type ExitIpSourceFields = {
+  ip: string;
+  country: string | null;
+  countryCode: string | null;
+  org: string | null;
+  isp: string | null;
+};
+
+/**
+ * TLS-only 出口 IP 源（ip-api 免费层无 HTTPS，明文 HTTP 不适合泄漏检查工具）。
+ * 顺序尝试，先成功者胜出。
+ */
+const EXIT_IP_SOURCES: {
+  url: string;
+  parse: (data: unknown) => ExitIpSourceFields | null;
+}[] = [
+  {
+    url: "https://ipwho.is/",
+    parse: (data) => {
+      const d = data as {
+        success?: boolean;
+        ip?: string;
+        country?: string;
+        country_code?: string;
+        connection?: { org?: string; isp?: string };
+      };
+      if (d.success !== true || !d.ip) return null;
+      return {
+        ip: d.ip,
+        country: d.country ?? null,
+        countryCode: d.country_code ?? null,
+        org: d.connection?.org ?? null,
+        isp: d.connection?.isp ?? null,
+      };
+    },
+  },
+  {
+    url: "https://api.ip.sb/geoip",
+    parse: (data) => {
+      const d = data as {
+        ip?: string;
+        country?: string;
+        country_code?: string;
+        organization?: string;
+        isp?: string;
+      };
+      // 无 success 标志；有 ip 即视为成功
+      if (!d.ip) return null;
+      return {
+        ip: d.ip,
+        country: d.country ?? null,
+        countryCode: d.country_code ?? null,
+        org: d.organization ?? null,
+        isp: d.isp ?? null,
+      };
+    },
+  },
+];
+
 export async function fetchExitIp(
   mixedPort?: number | null,
 ): Promise<ExitIpInfo> {
-  // ip-api.com fields aligned with Python reference
-  const r = await fetchTextViaProxy(
-    "http://ip-api.com/json?fields=status,message,country,countryCode,isp,org,as,hosting,query",
-    { mixedPort: mixedPort ?? null, timeoutMs: 4000 },
-  );
-  if (!r.ok || !r.text) {
-    return {
-      ip: null,
-      country: null,
-      countryCode: null,
-      org: null,
-      isp: null,
-      hosting: null,
-      ipTypeLabel: "--",
-    };
-  }
-  try {
-    const data = JSON.parse(r.text) as {
-      status?: string;
-      query?: string;
-      country?: string;
-      countryCode?: string;
-      isp?: string;
-      org?: string;
-      hosting?: boolean;
-    };
-    if (data.status !== "success") {
+  // 顺序尝试（house convention：避免同时打满 Rust spawn_blocking 池）
+  for (const source of EXIT_IP_SOURCES) {
+    const r = await fetchTextViaProxy(source.url, {
+      mixedPort: mixedPort ?? null,
+      timeoutMs: 4000,
+    });
+    if (!r.ok || !r.text) continue;
+    try {
+      const data = JSON.parse(r.text) as unknown;
+      const fields = source.parse(data);
+      if (!fields) continue;
+      const hosting = inferHosting(fields.org, fields.isp);
       return {
-        ip: null,
-        country: null,
-        countryCode: null,
-        org: null,
-        isp: null,
-        hosting: null,
-        ipTypeLabel: "--",
+        ip: fields.ip,
+        country: fields.country,
+        countryCode: fields.countryCode,
+        org: fields.org ?? fields.isp ?? null,
+        isp: fields.isp ?? null,
+        hosting,
+        hostingInferred: true,
+        ipTypeLabel: hosting ? "疑似机房(DCH)" : "住宅(ISP)",
       };
+    } catch {
+      // 解析失败 → 尝试下一个源
     }
-    const hosting = !!data.hosting;
-    return {
-      ip: data.query ?? null,
-      country: data.country ?? null,
-      countryCode: data.countryCode ?? null,
-      org: data.org ?? data.isp ?? null,
-      isp: data.isp ?? null,
-      hosting,
-      ipTypeLabel: hosting ? "机房(DCH)" : "住宅(ISP)",
-    };
-  } catch {
-    return {
-      ip: null,
-      country: null,
-      countryCode: null,
-      org: null,
-      isp: null,
-      hosting: null,
-      ipTypeLabel: "--",
-    };
   }
+  return emptyExitIp();
 }
 
 export function exitIpCard(info: ExitIpInfo): CheckCard {
@@ -209,12 +292,18 @@ export function exitIpCard(info: ExitIpInfo): CheckCard {
     };
   }
   const level: CheckLevel = info.hosting ? "warn" : "pass";
+  const processLines = [
+    `组织 ${info.org ?? "--"} · ISP ${info.isp ?? "--"} · 国家 ${info.country ?? "--"}`,
+  ];
+  if (info.hostingInferred) {
+    processLines.push("机房判定：由组织名关键词推断（当前 IP 源未提供该字段）");
+  }
   return {
     id: "exit-ip",
     title: "出口 IP",
     level,
     conclusion: `${info.ip} · ${info.countryCode ?? "?"} · ${info.ipTypeLabel}`,
-    process: `组织 ${info.org ?? "--"} · ISP ${info.isp ?? "--"} · 国家 ${info.country ?? "--"}`,
+    process: processLines.join("\n"),
     suggestion: info.hosting
       ? "机房 IP 可能导致部分 AI / 流媒体风控；可尝试住宅/家宽节点。"
       : undefined,
@@ -222,14 +311,20 @@ export function exitIpCard(info: ExitIpInfo): CheckCard {
 }
 
 /**
- * A1: True DNS resolvers via macOS `scutil --dns` (Rust).
- * Keep Cloudflare country-match heuristic as secondary detail only.
+ * A1: DNS 泄漏（确定性改造）。
+ * 旧版只列 scutil 配置的 resolver，几乎永远判 pass。新版用 `dig TXT whoami` 实测
+ * DNS 查询真正从哪个公网 IP 出去（以及被哪个递归解析器服务），再与代理出口 IP 比对：
+ * 同出口 → 未泄漏；不同 → DNS 绕过了代理、疑似暴露真实地址。scutil 列表与 Cloudflare
+ * 启发式降级为过程细节。
  */
 export async function checkDnsResolvers(
   exit: ExitIpInfo,
   mixedPort?: number | null,
 ): Promise<CheckCard> {
-  const dns = await listDnsResolvers();
+  const [dns, whoami] = await Promise.all([
+    listDnsResolvers(),
+    dnsWhoami({ timeoutMs: 4500 }),
+  ]);
   const resolvers = dns.resolvers ?? [];
 
   // Secondary heuristic (not leak proof): exit country vs Cloudflare loc
@@ -252,47 +347,50 @@ export async function checkDnsResolvers(
     ? `启发式粗看（非泄漏鉴定）：出口 ${exitCc} 与 Cloudflare loc=${loc} 不太一致`
     : `启发式粗看（非泄漏鉴定）：出口 ${exitCc ?? "?"}，Cloudflare loc=${loc ?? "?"} · colo=${colo ?? "--"}`;
 
-  if (dns.error && resolvers.length === 0) {
-    return {
-      id: "dns-leak",
-      title: "DNS 解析器",
-      level: "unknown",
-      conclusion: `系统解析器读取失败：${dns.error}`,
-      process: [
-        `source: ${dns.source}`,
-        dns.rawHint ? `raw_hint:\n${dns.rawHint}` : "",
-        heuristicLine,
-        "边界：本项列出本机 resolver；不等于 BrowserLeaks 级「完整 DNS 泄漏证明」。",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-      suggestion: "可对照 Wi-Fi DNS，或改到 1.1.1.1 / 8.8.8.8 后再测。",
-    };
+  const exitIp = exit.ip ?? null;
+  const qIp = whoami.clientIp ?? null;
+
+  let level: CheckLevel;
+  let conclusion: string;
+  let suggestion: string | undefined;
+
+  if (!whoami.ok || !qIp) {
+    level = "unknown";
+    conclusion = `未能实测 DNS 出口（${whoami.error ?? "dig 无有效返回"}）`;
+    suggestion = "确认本机可用 `dig`（macOS/Linux 自带），稍后重试。";
+  } else if (!exitIp) {
+    level = "warn";
+    conclusion = `DNS 查询从 ${qIp} 出去，但缺少代理出口 IP 可对照，无法判定是否泄漏`;
+    suggestion = "先完成「出口 IP」检查（或连上代理）后再测 DNS。";
+  } else if (qIp === exitIp) {
+    level = "pass";
+    conclusion = `DNS 查询与代理流量同出口（${qIp}）—— 未泄漏真实地址`;
+  } else {
+    level = "fail";
+    conclusion = `DNS 从 ${qIp} 出去，而代理出口是 ${exitIp} —— 两者不符，疑似 DNS 泄漏真实地址`;
+    suggestion =
+      "把系统/Wi-Fi DNS 改到隧道可达的 1.1.1.1 / 8.8.8.8，或在客户端开启 DNS 劫持（fake-ip / TUN DNS）后重测。";
   }
 
-  const preview = resolvers.slice(0, 4).join(", ");
-  const more = resolvers.length > 4 ? ` 等 ${resolvers.length} 个` : "";
-  const conclusion =
-    resolvers.length === 0
-      ? "系统解析器 0 个（未解析到 nameserver）"
-      : `系统解析器 ${resolvers.length} 个：${preview}${more}`;
+  const proc = [
+    `实测：DNS 出口 IP=${qIp ?? "无"} · 递归解析器 ns=${whoami.resolverNs ?? "无"}${
+      whoami.ecs ? ` · ECS=${whoami.ecs}` : ""
+    }（via ${whoami.via}）`,
+    `代理出口 IP=${exitIp ?? "无"}`,
+    `配置解析器：${resolvers.join(", ") || "(无)"}（source ${dns.source}）`,
+    dns.error ? `note: ${dns.error}` : "",
+    dns.rawHint ? `raw_hint:\n${dns.rawHint}` : "",
+    heuristicLine,
+    "边界：whoami 反映「查询实际从哪出去」，比读配置更接近真相；ECS 若暴露你的 /24 仍属信息泄露。不是 BrowserLeaks 级全量证明。",
+  ].filter(Boolean);
 
   return {
     id: "dns-leak",
     title: "DNS 解析器",
-    level: resolvers.length > 0 ? "pass" : "warn",
+    level,
     conclusion,
-    process: [
-      `resolvers: ${resolvers.join(", ") || "(无)"}`,
-      `source: ${dns.source}`,
-      dns.error ? `note: ${dns.error}` : "",
-      dns.rawHint ? `raw_hint:\n${dns.rawHint}` : "",
-      heuristicLine,
-      "边界：优先展示隧道/VPN 相关 scoped resolver（若有）；否则全部去重 nameserver。不是完整泄漏鉴定。",
-    ]
-      .filter(Boolean)
-      .join("\n"),
-    suggestion: "若解析器仍是运营商 DNS，可把 Wi-Fi DNS 改到隧道可达的 1.1.1.1 / 8.8.8.8，并确认流量走代理。",
+    process: proc.join("\n"),
+    suggestion,
   };
 }
 
@@ -319,164 +417,63 @@ function extractIpBody(text: string): string | null {
 }
 
 /**
- * A2: IPv6 leak / reachability — direct vs mixed-port proxied.
- * Not a full OS stack audit; honest about timeouts and dual-stack proxies.
+ * A2: IPv6 leak — 交叉验证矩阵（确定性改造）。
+ * 单看 (直连v6, 代理v6) 分不清"真旁路"与"TUN 全局接管"，因此同时采 IPv4：
+ * 若走代理后 IPv4 出口改变，证明直连/代理是两条真不同的路，此时 v6 才谈得上旁路；
+ * IPv4 两路同源则说明被统一隧道接管，v6 同址是健康。判定下沉到纯函数 classifyIpv6Leak。
  */
 export async function checkIpv6Leak(
   mixedPort?: number | null,
 ): Promise<CheckCard> {
-  const urls = [
-    "https://api64.ipify.org",
-    "https://ipv6.icanhazip.com",
-  ];
   const timeoutMs = 4500;
+  const expectProxy = mixedPort != null && mixedPort > 0;
 
-  async function probeOne(
-    url: string,
-    port: number | null,
-  ): Promise<{ url: string; ip: string | null; ok: boolean; status: number; note: string }> {
-    const r = await fetchTextViaProxy(url, {
+  async function probeV6(port: number | null): Promise<string | null> {
+    for (const url of ["https://api64.ipify.org", "https://ipv6.icanhazip.com"]) {
+      const r = await fetchTextViaProxy(url, { mixedPort: port, timeoutMs });
+      const ip = extractIpBody(r.text);
+      if (r.ok && ip && isIpv6Literal(ip)) return ip;
+    }
+    return null;
+  }
+
+  async function probeV4(port: number | null): Promise<string | null> {
+    const r = await fetchTextViaProxy("https://api.ipify.org", {
       mixedPort: port,
       timeoutMs,
     });
-    const raw = extractIpBody(r.text);
-    if (r.ok && raw && isIpv6Literal(raw)) {
-      return { url, ip: raw, ok: true, status: r.status, note: "ipv6" };
-    }
-    if (r.ok && raw && !isIpv6Literal(raw)) {
-      return {
-        url,
-        ip: raw,
-        ok: false,
-        status: r.status,
-        note: "返回了非 IPv6（可能是 IPv4 / 双栈回落）",
-      };
-    }
-    return {
-      url,
-      ip: null,
-      ok: false,
-      status: r.status,
-      note: r.status ? `HTTP ${r.status}` : "超时或不可达",
-    };
+    const ip = extractIpBody(r.text);
+    return r.ok && ip && !isIpv6Literal(ip) ? ip : null;
   }
 
-  // Direct: explicitly NO proxy
-  const directResults = [];
-  for (const url of urls) {
-    directResults.push(await probeOne(url, null));
-    if (directResults[directResults.length - 1].ok) break;
-  }
-  const directV6 = directResults.find((x) => x.ok)?.ip ?? null;
+  const directV4 = await probeV4(null);
+  const directV6 = await probeV6(null);
+  const proxiedV4 = expectProxy ? await probeV4(mixedPort!) : null;
+  const proxiedV6 = expectProxy ? await probeV6(mixedPort!) : null;
 
-  const expectProxy = mixedPort != null && mixedPort > 0;
-  let proxiedResults: typeof directResults = [];
-  let proxiedV6: string | null = null;
-  if (expectProxy) {
-    for (const url of urls) {
-      proxiedResults.push(await probeOne(url, mixedPort));
-      if (proxiedResults[proxiedResults.length - 1].ok) break;
-    }
-    proxiedV6 = proxiedResults.find((x) => x.ok)?.ip ?? null;
-  }
+  const verdict = classifyIpv6Leak({
+    proxyConfigured: expectProxy,
+    directV4,
+    proxiedV4,
+    directV6,
+    proxiedV6,
+  });
 
   const lines: string[] = [
-    `直连 IPv6: ${directV6 ?? "无 / 不可达"}`,
-    expectProxy
-      ? `经 mixed-port(${mixedPort}) IPv6: ${proxiedV6 ?? "无 / 不可达"}`
-      : "未配置 mixed-port，跳过代理侧 IPv6 对照",
-    "探测 URL：" + urls.join(" · "),
-    ...directResults.map(
-      (r) => `直连 ${r.url} → ${r.ip ?? r.note} (HTTP ${r.status || 0})`,
-    ),
-    ...proxiedResults.map(
-      (r) => `代理 ${r.url} → ${r.ip ?? r.note} (HTTP ${r.status || 0})`,
-    ),
-    "边界：短超时；部分节点无 IPv6；api64 在仅 IPv4 时可能回落 IPv4（已识别）。不能证明内核/应用全部 IPv6 路径。",
+    `IPv4 直连 ${directV4 ?? "无"} · 代理 ${proxiedV4 ?? (expectProxy ? "无" : "未测")}`,
+    `IPv6 直连 ${directV6 ?? "无"} · 代理 ${proxiedV6 ?? (expectProxy ? "无" : "未测")}`,
+    ...verdict.rationale,
+    "边界：短超时；部分节点无 IPv6；探测走 mixed-port 与直连分别采样。不能证明内核全部 IPv6 路径。",
   ];
 
-  if (!directV6 && !proxiedV6) {
-    return {
-      id: "ipv6-leak",
-      title: "IPv6 泄漏",
-      level: "pass",
-      conclusion: "本机当前探测不到可用 IPv6 出口（直连与代理均无）",
-      process: lines.join("\n"),
-      // no suggestion: pass with nothing actionable
-    };
-  }
-
-  if (expectProxy && directV6) {
-    if (!proxiedV6) {
-      return {
-        id: "ipv6-leak",
-        title: "IPv6 泄漏",
-        level: "fail",
-        conclusion: `直连能拿到 IPv6（${directV6}），代理侧没有 — 可能绕过代理`,
-        process: lines.join("\n"),
-        suggestion: "若期望全局走代理：检查 Clash 的 IPv6 / TUN / 系统代理，或暂时关闭系统 IPv6。",
-      };
-    }
-    if (proxiedV6 !== directV6) {
-      return {
-        id: "ipv6-leak",
-        title: "IPv6 泄漏",
-        level: "warn",
-        conclusion: `直连 ${directV6} 与代理 ${proxiedV6} 不一致 — 存在独立直连 IPv6 面`,
-        process: lines.join("\n"),
-        suggestion: "代理期望生效时，直连仍能出 IPv6 可能泄漏真实网络身份。可关 IPv6 或强制 TUN。",
-      };
-    }
-    // same address both paths — unusual but report honestly
-    return {
-      id: "ipv6-leak",
-      title: "IPv6 泄漏",
-      level: "warn",
-      conclusion: `直连与代理看到相同 IPv6（${directV6}）— 请人工确认是否真经代理`,
-      process: lines.join("\n"),
-      suggestion: "请结合出口 IP 卡核对。",
-    };
-  }
-
-  if (expectProxy && !directV6 && proxiedV6) {
-    return {
-      id: "ipv6-leak",
-      title: "IPv6 泄漏",
-      level: "pass",
-      conclusion: `仅代理侧有 IPv6（${proxiedV6}），直连无 — 未见直连旁路`,
-      process: lines.join("\n"),
-      // no suggestion: pass path
-    };
-  }
-
-  // No mixed-port configured but direct IPv6 exists
   return {
     id: "ipv6-leak",
     title: "IPv6 泄漏",
-    level: "unknown",
-    conclusion: directV6
-      ? `直连 IPv6 可达（${directV6}）；尚未连上代理口，无法对照代理`
-      : "IPv6 状态不明",
+    level: verdict.level,
+    conclusion: verdict.conclusion,
     process: lines.join("\n"),
-    suggestion: "请先点「刷新连接」确保已连上软件，再重测。",
+    suggestion: verdict.suggestion,
   };
-}
-
-function isPrivateOrLocalIp(ip: string): boolean {
-  const t = ip.trim().toLowerCase();
-  if (t === "::1" || t === "0.0.0.0") return true;
-  if (t.startsWith("fe80:")) return true; // link-local
-  if (t.startsWith("fc") || t.startsWith("fd")) return true; // ULA rough
-  const m = t.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-  if (!m) return false;
-  const a = Number(m[1]);
-  const b = Number(m[2]);
-  if (a === 10) return true;
-  if (a === 127) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 169 && b === 254) return true;
-  return false;
 }
 
 type IceCand = {
@@ -488,24 +485,30 @@ type IceCand = {
 };
 
 /**
- * A3: Browser STUN gather — host / srflx / relay. Not full leak proof.
+ * A3: Browser STUN gather — 用已知代理出口比对候选（确定性改造）。
+ * 真正的泄漏信号是"公网候选 ≠ 代理出口"，据此把三类明确分开而非统统 warn。
  */
-export async function checkWebRtcLeak(): Promise<CheckCard> {
+export async function checkWebRtcLeak(
+  exit?: ExitIpInfo | null,
+): Promise<CheckCard> {
   const RTCPeer =
     typeof window !== "undefined"
       ? (window as unknown as { RTCPeerConnection?: typeof RTCPeerConnection })
           .RTCPeerConnection
       : undefined;
 
+  const proxyExitIps = [exit?.ip].filter((x): x is string => !!x);
+
   if (!RTCPeer) {
+    const v = classifyWebRtc({ apiAvailable: false, gatherFailed: false, candidates: [] });
     return {
       id: "webrtc",
       title: "WebRTC",
-      level: "unknown",
-      conclusion: "当前 WebView 无 RTCPeerConnection，无法收集 ICE 候选",
+      level: v.level,
+      conclusion: v.conclusion,
       process:
         "嵌入式 WebView 可能禁用 WebRTC。这不等于「无泄漏」，只是本环境测不了。\n测了什么：无（API 缺失）。\n没测：完整 BrowserLeaks / 系统级 WebRTC 策略。",
-      suggestion: "可在系统浏览器打开 chrome://webrtc-internals 或 BrowserLeaks 复核；或在代理客户端关闭 WebRTC 泄露防护对照。",
+      suggestion: v.suggestion,
     };
   }
 
@@ -541,11 +544,7 @@ export async function checkWebRtcLeak(): Promise<CheckCard> {
           || (parts.length > 2 ? parts[2] : "")
           || "";
         if (!address) return;
-        const scope = isPrivateOrLocalIp(address)
-          ? "private"
-          : address.includes(".") || address.includes(":")
-            ? "public"
-            : "unknown";
+        const scope = candidateScope(address);
         candidates.push({
           type: typ,
           address,
@@ -571,68 +570,48 @@ export async function checkWebRtcLeak(): Promise<CheckCard> {
     failMsg = e instanceof Error ? e.message : String(e);
   }
 
-  if (failMsg) {
-    return {
-      id: "webrtc",
-      title: "WebRTC",
-      level: "warn",
-      conclusion: `本次未能收集 WebRTC 候选：${failMsg}`,
-      process:
-        "WebView 可能限制 WebRTC。失败≠无泄漏。\n边界：仅做短时 STUN 候选收集，不是完整泄漏证明。",
-      suggestion: "若持续失败，以系统浏览器复核为准。",
-    };
-  }
-
   const uniq = new Map<string, IceCand>();
   for (const c of candidates) {
     const key = `${c.type}|${c.address}|${c.protocol}`;
     if (!uniq.has(key)) uniq.set(key, c);
   }
   const list = [...uniq.values()];
-  const host = list.filter((c) => c.type === "host");
-  const srflx = list.filter((c) => c.type === "srflx");
-  const relay = list.filter((c) => c.type === "relay");
-  const publicHost = host.filter((c) => c.scope === "public");
-  const publicSrflx = srflx.filter((c) => c.scope === "public");
 
-  const conclusionParts = [
-    `候选 ${list.length}`,
-    `host ${host.length}`,
-    `srflx ${srflx.length}`,
-    `relay ${relay.length}`,
-  ];
-
-  let level: CheckLevel = "pass";
-  let conclusion = `已收集到 WebRTC 候选：${conclusionParts.join(" · ")}`;
-  if (list.length === 0) {
-    level = "unknown";
-    conclusion = "未收集到 ICE 候选（可能被策略拦截或网络限制）";
-  } else if (publicHost.length > 0) {
-    level = "warn";
-    conclusion = `发现公网 host 候选（${publicHost.map((c) => c.address).join(", ")}）— 可能暴露地址`;
-  } else if (publicSrflx.length > 0) {
-    level = "warn";
-    conclusion = `发现 srflx 公网反射地址（${publicSrflx.map((c) => c.address).slice(0, 2).join(", ")}）`;
-  }
+  const verdict = classifyWebRtc({
+    apiAvailable: true,
+    gatherFailed: !!failMsg,
+    proxyExitIps,
+    candidates: list.map((c) => ({
+      type: normalizeIceType(c.type),
+      address: c.address,
+      scope: c.scope,
+    })),
+  });
 
   const detailLines = [
-    ...list.map(
-      (c) =>
-        `${c.type} ${c.scope} ${c.protocol} ${c.address}`,
-    ),
-    "测了什么：浏览器 RTCPeerConnection + Google STUN，约 2.8s 收集。",
+    ...list.map((c) => `${c.type} ${c.scope} ${c.protocol} ${c.address}`),
+    `代理出口 IP：${proxyExitIps.join(", ") || "无（先做环境检查/出口 IP 才能精确比对）"}`,
+    failMsg ? `收集报错：${failMsg}` : "",
+    "测了什么：浏览器 RTCPeerConnection + Google STUN，约 2.8s 收集，公网候选与代理出口比对。",
     "没测：完整泄漏矩阵、mdns 隐藏策略细节、非 WebView 进程。",
-    "边界：有候选≠一定泄漏到目标站点；无候选≠一定安全。勿当作完整泄漏证明。",
-  ];
+    "边界：有候选≠一定泄漏到目标站点；无候选≠一定安全。",
+  ].filter(Boolean);
 
   return {
     id: "webrtc",
     title: "WebRTC",
-    level,
-    conclusion,
+    level: verdict.level,
+    conclusion: verdict.conclusion,
     process: detailLines.join("\n"),
-    suggestion: "若在意暴露：在浏览器/系统关闭 WebRTC，或仅允许代理路径；并到系统浏览器复核。",
+    suggestion: verdict.suggestion,
   };
+}
+
+/** 归一 ICE 候选类型到 leakMatrix 的联合；未知一律 unknown。 */
+function normalizeIceType(t: string): WebRtcCandidateType {
+  const k = t.toLowerCase();
+  if (k === "host" || k === "srflx" || k === "prflx" || k === "relay") return k;
+  return "unknown";
 }
 
 /** Sync placeholder kept for type imports; prefer checkWebRtcLeak(). */

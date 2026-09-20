@@ -25,6 +25,8 @@ export interface ExitIpInfo {
   org: string | null;
   isp: string | null;
   hosting: boolean | null;
+  /** true when `hosting` was keyword-inferred (TLS sources don't provide it) */
+  hostingInferred?: boolean;
   ipTypeLabel: string;
 }
 
