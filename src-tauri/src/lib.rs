@@ -313,8 +313,6 @@ fn show_vite_dead_page(win: &tauri::WebviewWindow, reason: &str) {
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            use tauri::Manager;
-
             let frontend_url = app
                 .config()
                 .build
@@ -328,6 +326,7 @@ pub fn run() {
 
             #[cfg(debug_assertions)]
             {
+                use tauri::Manager;
                 let handle = app.handle().clone();
                 let probe_url = frontend_url.clone();
                 tauri::async_runtime::spawn(async move {
