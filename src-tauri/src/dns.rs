@@ -263,98 +263,94 @@ pub fn list_dns_resolvers_blocking() -> DnsResolversResult {
     }
 }
 
-#[cfg(not(unix))]
-fn unsupported_whoami(via: String) -> DnsWhoamiResult {
-    DnsWhoamiResult {
-        ok: false,
-        client_ip: None,
-        resolver_ns: None,
-        ecs: None,
-        via,
-        raw: String::new(),
-        error: Some(
-            "DNS whoami 实测依赖 `dig`（macOS/Linux）；当前平台不可用。".into(),
-        ),
+/// Discover the system's default DNS resolver.
+/// - macOS: first nameserver from `scutil --dns` (reuses `list_dns_resolvers_blocking`).
+/// - Linux: first `nameserver` from `/etc/resolv.conf`.
+/// - Windows: fallback to well-known public resolver (8.8.8.8) — the OS DNS API
+///   requires the `windows` crate or `GetAdaptersInfo` and is a separate concern.
+fn find_system_resolver() -> Option<String> {
+    #[cfg(target_os = "macos")]
+    {
+        let r = list_dns_resolvers_blocking();
+        r.resolvers.into_iter().next()
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(content) = std::fs::read_to_string("/etc/resolv.conf") {
+            for line in content.lines() {
+                if let Some(rest) = line.strip_prefix("nameserver") {
+                    let ip = rest.trim();
+                    if !ip.is_empty() {
+                        return Some(ip.to_string());
+                    }
+                }
+            }
+        }
+        None
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // Best-effort fallback; full Windows adapter enumeration deferred.
+        Some("8.8.8.8".to_string())
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        None
     }
 }
 
-/// Blocking `dig TXT whoami.ds.akahelp.net`. `resolver` = Some("@IP") to force the
-/// query through a specific recursive resolver; None uses the system default path.
+/// Blocking raw-UDP DNS TXT query to `whoami.ds.akahelp.net`.
+/// `resolver` = Some("1.1.1.1") to force a specific recursive resolver;
+/// None uses the system default path (discovered via `find_system_resolver`).
 pub fn dns_whoami_blocking(resolver: Option<&str>, timeout_ms: u64) -> DnsWhoamiResult {
-    #[cfg(unix)]
-    {
-        use std::process::Command;
+    use crate::dns_query;
+    use std::time::Duration;
 
-        let host = "whoami.ds.akahelp.net";
-        let via = resolver.unwrap_or("system").to_string();
-        let secs = ((timeout_ms + 999) / 1000).max(1);
-
-        let mut cmd = Command::new("dig");
-        cmd.args([
-            "+short",
-            &format!("+time={secs}"),
-            "+tries=1",
-            "TXT",
-            host,
-        ]);
-        if let Some(r) = resolver {
-            cmd.arg(format!("@{r}"));
-        }
-
-        let output = match cmd.output() {
-            Ok(o) => o,
-            Err(e) => {
-                return DnsWhoamiResult {
-                    ok: false,
-                    client_ip: None,
-                    resolver_ns: None,
-                    ecs: None,
-                    via,
-                    raw: String::new(),
-                    error: Some(format!("执行 dig 失败: {e}")),
-                };
-            }
-        };
-
-        let raw = String::from_utf8_lossy(&output.stdout).into_owned();
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return DnsWhoamiResult {
-                ok: false,
-                client_ip: None,
-                resolver_ns: None,
-                ecs: None,
-                via,
-                raw: truncate_hint(&raw, 300),
-                error: Some(format!(
-                    "dig 退出码 {:?}: {}",
-                    output.status.code(),
-                    stderr.trim()
-                )),
-            };
-        }
-
-        let (client_ip, resolver_ns, ecs) = parse_whoami_txt(&raw);
-        let ok = client_ip.is_some() || resolver_ns.is_some();
+    fn whoami_err(via: String, msg: String) -> DnsWhoamiResult {
         DnsWhoamiResult {
-            ok,
-            client_ip,
-            resolver_ns,
-            ecs,
+            ok: false,
+            client_ip: None,
+            resolver_ns: None,
+            ecs: None,
             via,
-            raw: truncate_hint(&raw, 300),
-            error: if ok {
-                None
-            } else {
-                Some("dig 已执行但未解析到 ip/ns 字段".into())
-            },
+            raw: String::new(),
+            error: Some(msg.into()),
         }
     }
 
-    #[cfg(not(unix))]
-    {
-        let _ = (resolver, timeout_ms);
-        unsupported_whoami(resolver.unwrap_or("system").to_string())
+    let host = "whoami.ds.akahelp.net";
+    let timeout = Duration::from_millis(timeout_ms.max(500));
+
+    let server = match resolver {
+        Some(r) => r.to_string(),
+        None => match find_system_resolver() {
+            Some(s) => s,
+            None => return whoami_err("system".to_string(), "无法确定系统 DNS 解析器地址".to_string()),
+        },
+    };
+
+    let via = server.clone();
+
+    match dns_query::dns_txt_lookup(host, &server, timeout) {
+        Ok(txt_strings) => {
+            let raw = txt_strings.join("\n");
+            let (client_ip, resolver_ns, ecs) = parse_whoami_txt(&raw);
+            let ok = client_ip.is_some() || resolver_ns.is_some();
+            DnsWhoamiResult {
+                ok,
+                client_ip,
+                resolver_ns,
+                ecs,
+                via,
+                raw: truncate_hint(&raw, 300),
+                error: if ok {
+                    None
+                } else {
+                    Some("DNS 查询已返回但未解析到 ip/ns 字段".into())
+                },
+            }
+        }
+        Err(e) => whoami_err(via, format!("UDP DNS 查询失败: {e}")),
     }
 }
 
