@@ -204,3 +204,58 @@ describe("scoreVpn", () => {
     expect(r.tier).toBe("能用");
   });
 });
+
+/**
+ * 未验证（无代理口 + 拒绝直连兜底）：既不能冒绿，也不能被当成坏节点拖星，
+ * 更不能误判成「连海外都打不开」的死节点。打分应剔除该维度并按剩余权重归一。
+ */
+describe("scoreNodeFromCards · 未验证态剔除与权重归一", () => {
+  const unverifiedCard = (id: string, conclusion: string): CheckCard => ({
+    ...card(id, "unknown", conclusion),
+    unverified: true,
+  });
+
+  it("连通性未验证（其余全绿）→ 不判死、不计好坏，权重归一后仍 5 星", () => {
+    const cards: CheckCard[] = [
+      unverifiedCard("reachability", "未验证：未取到可用代理口"),
+      card("bandwidth", "pass", "带宽抽样 ↓ 60 Mbps"),
+      ...SERVICE_IDS.map((id) => card(id, "pass", "可访问")),
+      card("exit-ip", "pass", "1.2.3.4 · US · 住宅线路"),
+    ];
+    // 剔除 avail：measuredWeight=0.3+0.3+0.15=0.75
+    // total = round((100*.3 + 100*.3 + 95*.15) / 0.75) = round(74.25/0.75) = 99 → 5 星
+    const r = scoreNodeFromCards("仅连通性未验证", cards);
+    expect(r.stars).toBe(5);
+    expect(r.totalScore).toBe(99);
+    expect(
+      r.breakdown.find((b) => b.key === "availability")?.note,
+    ).toContain("未验证");
+  });
+
+  it("服务面全部未验证 → 跳过该维度，其余照常", () => {
+    const cards: CheckCard[] = [
+      card("reachability", "pass", "4/4 境外探测点能通"),
+      card("bandwidth", "pass", "↓ 60 Mbps"),
+      ...SERVICE_IDS.map((id) => unverifiedCard(id, "未验证")),
+      card("exit-ip", "pass", "住宅线路"),
+    ];
+    // 剔除 services：measuredWeight=0.25+0.3+0.15=0.7
+    // total = round((100*.25 + 100*.3 + 95*.15) / 0.7) = round(69.25/0.7) = 99 → 5 星
+    const r = scoreNodeFromCards("服务面未验证", cards);
+    expect(r.totalScore).toBe(99);
+    expect(r.stars).toBe(5);
+  });
+
+  it("全部维度未验证（裸环境无代理口）→ unavailable 且说明「未经代理验证」", () => {
+    const cards: CheckCard[] = [
+      unverifiedCard("reachability", "未验证"),
+      unverifiedCard("bandwidth", "未验证"),
+      ...SERVICE_IDS.map((id) => unverifiedCard(id, "未验证")),
+      unverifiedCard("exit-ip", "未验证"),
+    ];
+    const r = scoreNodeFromCards("裸环境", cards);
+    expect(r.stars).toBe("unavailable");
+    expect(r.totalScore).toBe(0);
+    expect(r.blurb).toContain("未经代理验证");
+  });
+});

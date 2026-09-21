@@ -2,11 +2,23 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 // @ts-expect-error type error without @types/node package
 import process from "node:process";
+import { readFileSync } from "node:fs";
 const host = process.env.TAURI_DEV_HOST;
+
+// Single source of truth for the in-app version label: package.json. Tauri's
+// build already enforces package.json == Cargo.toml == tauri.conf.json, so this
+// removes the old hardcoded "v0.1.x" in the UI that kept drifting each release.
+const pkg = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+) as { version: string };
 
 // https://vite.dev/config/
 export default defineConfig(() => ({
   plugins: [react()],
+
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

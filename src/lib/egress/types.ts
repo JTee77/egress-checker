@@ -16,6 +16,13 @@ export interface CheckCard {
   detail?: string;
   /** @deprecated Prefer `suggestion`. */
   tip?: string;
+  /**
+   * True when the check could not actually run through the proxy (no mixed-port
+   * available) and we REFUSED to fall back to a direct browser fetch, so the
+   * result is neither good nor bad — genuinely "未验证". Scoring drops such a
+   * dimension from the weighted average rather than treating it as a failure.
+   */
+  unverified?: boolean;
 }
 
 export interface ExitIpInfo {
