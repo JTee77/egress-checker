@@ -17,7 +17,7 @@ function emptyExitIp(): ExitIpInfo {
 
 /**
  * 由组织名/ISP 关键词推断是否机房（datacenter）IP。
- * TLS IP 源（ipwho.is / ip.sb）不像 ip-api 那样提供 hosting 布尔字段，只能推断。
+ * TLS IP 源（ipwho.is / ip.sb / geojs.io）不像 ip-api 那样提供 hosting 布尔字段，只能推断。
  */
 export function inferHosting(...fields: (string | null | undefined)[]): boolean {
   const blob = fields.filter(Boolean).join(" ").toLowerCase();
@@ -109,6 +109,29 @@ const EXIT_IP_SOURCES: {
         countryCode: d.country_code ?? null,
         org: d.organization ?? null,
         isp: d.isp ?? null,
+      };
+    },
+  },
+  {
+    // 第三冗余源（v0.1.9）：geojs.io HTTPS 无鉴权、当前不打 429，用来兜住
+    // ipwho.is→ip.sb 双双限流/失败时"整体取不到出口 IP"。它同样不提供 hosting
+    // 权威字段，机房判定仍走上面的关键词推断（UI 老实标「疑似」，不做确认级升级——
+    // 经实测，可在此工具代理出口下稳定访问且带权威机房字段的免费 HTTPS 源不存在）。
+    url: "https://get.geojs.io/v1/ip/geo.json",
+    parse: (data) => {
+      const d = data as {
+        ip?: string;
+        country?: string;
+        country_code?: string;
+        organization?: string;
+      };
+      if (!d.ip) return null;
+      return {
+        ip: d.ip,
+        country: d.country ?? null,
+        countryCode: d.country_code ?? null,
+        org: d.organization ?? null,
+        isp: d.organization ?? null,
       };
     },
   },
