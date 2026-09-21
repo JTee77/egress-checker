@@ -1,0 +1,515 @@
+//! `/proxies` handling: slim the controller's proxy JSON down to real leaf
+//! nodes (dropping selector/urltest groups, history arrays, junk names) and the
+//! TCP→Unix fallback that fetches it for the node list.
+
+use serde_json::Value;
+
+use super::transport::{http_via_tcp_async, http_via_unix};
+use super::types::{ListNodesResult, SlimNode, IGNORE_PROXY_TYPES, JUNK_NAME_KEYWORDS};
+
+fn is_junk_name(name: &str) -> bool {
+    if name.starts_with("PASS") || name.starts_with("REJECT") {
+        return true;
+    }
+    JUNK_NAME_KEYWORDS.iter().any(|k| name.contains(k))
+}
+
+fn ignore_type(t: &str) -> bool {
+    IGNORE_PROXY_TYPES.iter().any(|x| *x == t)
+}
+
+/// Parse /proxies JSON into a slim node list (no history arrays).
+pub fn slim_nodes_from_proxies_json(body: &str) -> Result<ListNodesResult, String> {
+    let root: Value = serde_json::from_str(body).map_err(|e| format!("json: {e}"))?;
+    let proxies = root
+        .get("proxies")
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| "missing proxies object".to_string())?;
+
+    let current_proxy = ["Proxy", "GLOBAL", "proxy"]
+        .iter()
+        .find_map(|g| {
+            proxies
+                .get(*g)
+                .and_then(|p| p.get("now"))
+                .and_then(|n| n.as_str())
+                .map(|s| s.to_string())
+        });
+
+    let mut nodes: Vec<SlimNode> = Vec::new();
+    for (name, p) in proxies {
+        let node_type = p
+            .get("type")
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_string();
+        if ignore_type(&node_type) || is_junk_name(name) {
+            continue;
+        }
+        nodes.push(SlimNode {
+            name: name.clone(),
+            node_type,
+        });
+    }
+
+    if nodes.is_empty() {
+        // Resolve leaf names from Selector / URLTest / Fallback `all` arrays.
+        let mut leaf_names = std::collections::BTreeSet::new();
+        let consider_all = |all: Option<&Value>, set: &mut std::collections::BTreeSet<String>| {
+            let Some(arr) = all.and_then(|v| v.as_array()) else {
+                return;
+            };
+            for item in arr {
+                let Some(name) = item.as_str() else { continue };
+                let Some(p) = proxies.get(name) else { continue };
+                let t = p.get("type").and_then(|x| x.as_str()).unwrap_or("");
+                if ignore_type(t) || is_junk_name(name) {
+                    continue;
+                }
+                set.insert(name.to_string());
+            }
+        };
+
+        for g in ["Proxy", "GLOBAL", "proxy"] {
+            if let Some(p) = proxies.get(g) {
+                consider_all(p.get("all"), &mut leaf_names);
+            }
+        }
+        for (_name, p) in proxies {
+            let t = p.get("type").and_then(|x| x.as_str()).unwrap_or("");
+            if matches!(t, "Selector" | "URLTest" | "Fallback") {
+                consider_all(p.get("all"), &mut leaf_names);
+            }
+        }
+
+        nodes = leaf_names
+            .into_iter()
+            .filter_map(|name| {
+                let p = proxies.get(&name)?;
+                let node_type = p
+                    .get("type")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                Some(SlimNode { name, node_type })
+            })
+            .collect();
+    }
+
+    Ok(ListNodesResult {
+        nodes,
+        current_proxy,
+        status: 200,
+        error: None,
+        unauthorized: false,
+        transport: None,
+    })
+}
+
+/// Fetch /proxies: try TCP briefly, then Unix socket fallback.
+/// Prefer unix when TCP is dead (Clash Verge Rev often exposes only the sock).
+pub async fn list_nodes_async(
+    host: &str,
+    port: u16,
+    secret: &str,
+    timeout_ms: u64,
+    sock_path: Option<&str>,
+) -> Result<ListNodesResult, String> {
+    let tcp_timeout = timeout_ms.min(2000).max(400);
+    let tcp_attempt =
+        http_via_tcp_async(host, port, "GET", "/proxies", None, secret, tcp_timeout).await;
+
+    match tcp_attempt {
+        Ok(res) if res.status == 401 || res.status == 403 => {
+            return Ok(ListNodesResult {
+                nodes: vec![],
+                current_proxy: None,
+                status: res.status,
+                error: Some("API 返回未授权（401/403），请到设置检查 Secret".into()),
+                unauthorized: true,
+                transport: Some("tcp".into()),
+            });
+        }
+        Ok(res) if (200..300).contains(&res.status) => {
+            match slim_nodes_from_proxies_json(&res.body) {
+                Ok(mut slim) => {
+                    slim.status = res.status;
+                    slim.transport = Some("tcp".into());
+                    if slim.nodes.is_empty() {
+                        slim.error = Some(
+                            "已连接但未解析到可用节点，请到设置检查 Secret / 刷新，或确认订阅已加载"
+                                .into(),
+                        );
+                    }
+                    return Ok(slim);
+                }
+                Err(e) => {
+                    return Ok(ListNodesResult {
+                        nodes: vec![],
+                        current_proxy: None,
+                        status: res.status,
+                        error: Some(format!(
+                            "解析 /proxies JSON 失败（TCP）: {e}；body {} 字节",
+                            res.body.len()
+                        )),
+                        unauthorized: false,
+                        transport: Some("tcp".into()),
+                    });
+                }
+            }
+        }
+        Ok(_) | Err(_) => {
+            // Fall through to unix: connect failure or non-2xx (except 401/403 above).
+        }
+    }
+
+    let Some(sock) = sock_path.map(|s| s.to_string()).filter(|s| !s.is_empty()) else {
+        return Err(format!(
+            "TCP {host}:{port} 不可用，且未配置 Unix 套接字（不会回退到 Verge 默认 sock）"
+        ));
+    };
+    let secret_owned = secret.to_string();
+    let sock_for_err = sock.clone();
+    let unix_timeout = timeout_ms.max(tcp_timeout);
+
+    let unix_attempt = tauri::async_runtime::spawn_blocking(move || {
+        http_via_unix(
+            "GET",
+            "/proxies",
+            None,
+            &secret_owned,
+            Some(sock.as_str()),
+            unix_timeout,
+        )
+    })
+    .await
+    .map_err(|e| format!("unix task join: {e}"))?;
+
+    match unix_attempt {
+        Ok(res) if res.status == 401 || res.status == 403 => Ok(ListNodesResult {
+            nodes: vec![],
+            current_proxy: None,
+            status: res.status,
+            error: Some("API 返回未授权（401/403），请到设置检查 Secret".into()),
+            unauthorized: true,
+            transport: Some("unix".into()),
+        }),
+        Ok(res) if (200..300).contains(&res.status) => {
+            match slim_nodes_from_proxies_json(&res.body) {
+                Ok(mut slim) => {
+                    slim.status = res.status;
+                    slim.transport = Some("unix".into());
+                    if slim.nodes.is_empty() {
+                        slim.error = Some(
+                            "已连接但未解析到可用节点，请到设置检查 Secret / 刷新，或确认订阅已加载"
+                                .into(),
+                        );
+                    }
+                    Ok(slim)
+                }
+                Err(e) => Ok(ListNodesResult {
+                    nodes: vec![],
+                    current_proxy: None,
+                    status: res.status,
+                    error: Some(format!(
+                        "解析 /proxies JSON 失败（Unix）: {e}；body {} 字节",
+                        res.body.len()
+                    )),
+                    unauthorized: false,
+                    transport: Some("unix".into()),
+                }),
+            }
+        }
+        Ok(res) => Ok(ListNodesResult {
+            nodes: vec![],
+            current_proxy: None,
+            status: res.status,
+            error: Some(format!(
+                "TCP 与 Unix（{sock_for_err}）均失败：Unix HTTP {}",
+                res.status
+            )),
+            unauthorized: false,
+            transport: Some("unix".into()),
+        }),
+        Err(e) => Err(format!(
+            "TCP {host}:{port} 不可用，Unix {sock_for_err} 也失败：{e}"
+        )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn smoke_spawn_blocking_catch_unwind_maps_panic() {
+        let join = tauri::async_runtime::block_on(async {
+            tauri::async_runtime::spawn_blocking(|| {
+                std::panic::catch_unwind(|| {
+                    panic!("intentional smoke panic");
+                })
+                .map_err(|_| "caught panic".to_string())
+                .and_then(|()| Ok::<(), String>(()))
+            })
+            .await
+        });
+        assert!(join.is_ok());
+        let inner = join.unwrap();
+        assert!(inner.is_err());
+        assert!(inner.unwrap_err().contains("panic"));
+    }
+
+    #[test]
+    fn slim_nodes_strips_groups_and_history_shape() {
+        let body = r#"{
+          "proxies": {
+            "Proxy": {"type":"Selector","now":"hk-1","all":["hk-1","jp-1"]},
+            "hk-1": {"type":"Shadowsocks","history":[{"time":"t","delay":12}]},
+            "jp-1": {"type":"Vmess","history":[{"time":"t","delay":99}]},
+            "DIRECT": {"type":"Direct"}
+          }
+        }"#;
+        let slim = slim_nodes_from_proxies_json(body).unwrap();
+        assert_eq!(slim.current_proxy.as_deref(), Some("hk-1"));
+        let names: Vec<_> = slim.nodes.iter().map(|n| n.name.as_str()).collect();
+        assert!(names.contains(&"hk-1"));
+        assert!(names.contains(&"jp-1"));
+        assert!(!names.iter().any(|n| *n == "Proxy" || *n == "DIRECT"));
+    }
+
+    #[test]
+    fn smoke_list_nodes_dead_tcp_missing_sock_no_panic() {
+        let missing = "/tmp/egress-checker-no-such-mihomo.sock";
+        let _ = std::fs::remove_file(missing);
+        let result = std::panic::catch_unwind(|| {
+            tauri::async_runtime::block_on(list_nodes_async(
+                "127.0.0.1",
+                1,
+                "",
+                800,
+                Some(missing),
+            ))
+        });
+        assert!(result.is_ok(), "list_nodes_async panicked");
+        let inner = result.unwrap();
+        assert!(
+            inner.is_err(),
+            "expected Err when TCP dead and sock missing, got {inner:?}"
+        );
+    }
+
+    /// TCP dead + live Unix sock → leaf nodes > 0, transport unix, no app demo names.
+    #[test]
+    fn smoke_list_nodes_dead_tcp_live_sock_real_leaves() {
+        use std::io::{Read, Write};
+        use std::os::unix::net::UnixListener;
+        use std::sync::mpsc;
+        use std::thread;
+        use std::time::Duration;
+
+        let sock = format!(
+            "/tmp/egress-checker-list-nodes-smoke-{}.sock",
+            std::process::id()
+        );
+        let _ = std::fs::remove_file(&sock);
+
+        let body = concat!(
+            r#"{"proxies":{"Proxy":{"type":"Selector","now":"香港 HK-2-AT","all":["香港 HK-2-AT","日本 TY-4-HY2"]},"GLOBAL":{"type":"Selector","now":"香港 HK-2-AT","all":["香港 HK-2-AT","日本 TY-4-HY2"]},"香港 HK-2-AT":{"type":"Hysteria2","history":[{"time":"t","delay":40}]},"日本 TY-4-HY2":{"type":"Hysteria2","history":[{"time":"t","delay":55}]},"DIRECT":{"type":"Direct"}}}"#
+        );
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+
+        let listener = UnixListener::bind(&sock).expect("bind unix smoke sock");
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let sock_path = sock.clone();
+        let server = thread::spawn(move || {
+            ready_tx.send(()).ok();
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf);
+                let _ = stream.write_all(resp.as_bytes());
+            }
+            let _ = std::fs::remove_file(&sock_path);
+        });
+        ready_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("server ready");
+
+        let result = std::panic::catch_unwind(|| {
+            tauri::async_runtime::block_on(list_nodes_async(
+                "127.0.0.1",
+                1,
+                "test-secret",
+                2000,
+                Some(&sock),
+            ))
+        });
+        let _ = server.join();
+        let _ = std::fs::remove_file(&sock);
+
+        assert!(result.is_ok(), "list_nodes_async panicked");
+        let inner = result.unwrap().expect("list_nodes should Ok via unix");
+        assert_eq!(inner.transport.as_deref(), Some("unix"));
+        assert!(
+            inner.nodes.len() >= 2,
+            "expected real leaves via unix, got {:?}",
+            inner.nodes
+        );
+        let names: Vec<_> = inner.nodes.iter().map(|n| n.name.as_str()).collect();
+        assert!(names.contains(&"香港 HK-2-AT"));
+        assert!(names.contains(&"日本 TY-4-HY2"));
+        assert!(
+            !names.iter().any(|n| n.contains("香港 01 | Hysteria2")
+                || n.contains("东京 Premium")
+                || n.contains("Singapore IEPL")),
+            "demo mock names must not appear: {names:?}"
+        );
+        
+        assert!(!inner.unauthorized);
+    }
+
+    /// TCP dead + live Unix sock returning **chunked** body with Chinese names.
+    #[test]
+    fn smoke_list_nodes_unix_chunked_chinese_names() {
+        use std::io::{Read, Write};
+        use std::os::unix::net::UnixListener;
+        use std::sync::mpsc;
+        use std::thread;
+        use std::time::Duration;
+
+        let sock = format!(
+            "/tmp/egress-checker-list-nodes-chunked-{}.sock",
+            std::process::id()
+        );
+        let _ = std::fs::remove_file(&sock);
+
+        let json = concat!(
+            r#"{"proxies":{"Proxy":{"type":"Selector","now":"香港 HK-2-AT","all":["香港 HK-2-AT","日本 TY-4-HY2"]},"香港 HK-2-AT":{"type":"Hysteria2"},"日本 TY-4-HY2":{"type":"Hysteria2"},"DIRECT":{"type":"Direct"}}}"#
+        );
+        let json_b = json.as_bytes();
+        // Split inside multi-byte UTF-8 so char-based decode would corrupt.
+        let split_at = (0..json_b.len())
+            .find(|&i| !json.is_char_boundary(i))
+            .expect("fixture must contain multi-byte UTF-8");
+        let (a, b) = json_b.split_at(split_at);
+        let mut chunked_body = Vec::new();
+        chunked_body.extend_from_slice(format!("{:x}\r\n", a.len()).as_bytes());
+        chunked_body.extend_from_slice(a);
+        chunked_body.extend_from_slice(b"\r\n");
+        chunked_body.extend_from_slice(format!("{:x}\r\n", b.len()).as_bytes());
+        chunked_body.extend_from_slice(b);
+        chunked_body.extend_from_slice(b"\r\n0\r\n\r\n");
+
+        let mut resp = Vec::new();
+        resp.extend_from_slice(
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n",
+        );
+        resp.extend_from_slice(&chunked_body);
+
+        let listener = UnixListener::bind(&sock).expect("bind");
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let sock_path = sock.clone();
+        let server = thread::spawn(move || {
+            ready_tx.send(()).ok();
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 8192];
+                let n = stream.read(&mut buf).unwrap_or(0);
+                let req = String::from_utf8_lossy(&buf[..n]);
+                assert!(
+                    req.to_ascii_lowercase().contains("accept-encoding: identity"),
+                    "unix request must ask for identity encoding, got:\n{req}"
+                );
+                let _ = stream.write_all(&resp);
+            }
+            let _ = std::fs::remove_file(&sock_path);
+        });
+        ready_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("server ready");
+
+        let result = std::panic::catch_unwind(|| {
+            tauri::async_runtime::block_on(list_nodes_async(
+                "127.0.0.1",
+                1,
+                "test-secret",
+                2000,
+                Some(&sock),
+            ))
+        });
+        let _ = server.join();
+        let _ = std::fs::remove_file(&sock);
+
+        assert!(result.is_ok(), "list_nodes_async panicked");
+        let inner = result.unwrap().expect("list_nodes should Ok via unix chunked");
+        assert_eq!(inner.transport.as_deref(), Some("unix"));
+        assert!(
+            inner.error.is_none(),
+            "expected successful parse, got error {:?}",
+            inner.error
+        );
+        let names: Vec<_> = inner.nodes.iter().map(|n| n.name.as_str()).collect();
+        assert!(names.contains(&"香港 HK-2-AT"), "{names:?}");
+        assert!(names.contains(&"日本 TY-4-HY2"), "{names:?}");
+    }
+
+    #[test]
+    fn slim_parse_fail_returns_ok_with_error_via_list_nodes_unix() {
+        use std::io::{Read, Write};
+        use std::os::unix::net::UnixListener;
+        use std::sync::mpsc;
+        use std::thread;
+        use std::time::Duration;
+
+        let sock = format!(
+            "/tmp/egress-checker-list-nodes-badjson-{}.sock",
+            std::process::id()
+        );
+        let _ = std::fs::remove_file(&sock);
+
+        // Valid HTTP but invalid JSON body — should Ok with error, not Err.
+        let body = "{not-json";
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+
+        let listener = UnixListener::bind(&sock).expect("bind");
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let sock_path = sock.clone();
+        let server = thread::spawn(move || {
+            ready_tx.send(()).ok();
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf);
+                let _ = stream.write_all(resp.as_bytes());
+            }
+            let _ = std::fs::remove_file(&sock_path);
+        });
+        ready_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("server ready");
+
+        let result = tauri::async_runtime::block_on(list_nodes_async(
+            "127.0.0.1",
+            1,
+            "",
+            2000,
+            Some(&sock),
+        ));
+        let _ = server.join();
+        let _ = std::fs::remove_file(&sock);
+
+        let inner = result.expect("should Ok with parse error detail, not Err");
+        assert_eq!(inner.status, 200);
+        assert!(inner.nodes.is_empty());
+        let err = inner.error.expect("error detail");
+        assert!(
+            err.contains("解析 /proxies JSON 失败"),
+            "unexpected error: {err}"
+        );
+    }
+}
