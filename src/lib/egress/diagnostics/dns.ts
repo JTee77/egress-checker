@@ -1,6 +1,6 @@
 //! DNS 泄漏检测：UDP whoami 实测出口 IP 与代理出口比对（含旧名别名）。
 import { listDnsResolvers, dnsWhoami } from "../fetchVia";
-import { probeText, PROBE_TIMEOUT_MS } from "./probe";
+import { probeText } from "./probe";
 import type { CheckCard, CheckLevel, ExitIpInfo } from "../types";
 
 /**
@@ -14,17 +14,20 @@ export async function checkDnsResolvers(
   exit: ExitIpInfo,
   mixedPort?: number | null,
 ): Promise<CheckCard> {
-  const [dns, whoami] = await Promise.all([
+  // whoami（主判定）与 Cloudflare loc（次要启发式）并行取：loc 只是 non-leak-proof
+  // 的粗对照，绝不参与 verdict，因此单独收紧到 2500ms，缺席时降级为参考文案即可。
+  // v0.1.8 之前它串行 await 在主流程里，dev/预览下境外不可达会顶满 6s，把 DNS 卡
+  // 拖向 envRun 的 12s deadline（观测到的"超时未响应"根因之一）。
+  const [dns, whoami, cf] = await Promise.all([
     listDnsResolvers(),
     dnsWhoami({ timeoutMs: 4500 }),
+    probeText("https://www.cloudflare.com/cdn-cgi/trace", {
+      mixedPort,
+      timeoutMs: 2500,
+    }),
   ]);
   const resolvers = dns.resolvers ?? [];
 
-  // Secondary heuristic (not leak proof): exit country vs Cloudflare loc
-  const cf = await probeText("https://www.cloudflare.com/cdn-cgi/trace", {
-    mixedPort,
-    timeoutMs: PROBE_TIMEOUT_MS,
-  });
   let loc: string | null = null;
   let colo: string | null = null;
   if (cf.text) {
@@ -38,7 +41,9 @@ export async function checkDnsResolvers(
     exitCc && loc && exitCc !== loc.toUpperCase() && loc.toUpperCase() !== "XX";
   const heuristicLine = mismatch
     ? `启发式粗看（非泄漏鉴定）：出口 ${exitCc} 与 Cloudflare loc=${loc} 不太一致`
-    : `启发式粗看（非泄漏鉴定）：出口 ${exitCc ?? "?"}，Cloudflare loc=${loc ?? "?"} · colo=${colo ?? "--"}`;
+    : loc
+      ? `启发式粗看（非泄漏鉴定）：出口 ${exitCc ?? "?"}，Cloudflare loc=${loc} · colo=${colo ?? "--"}`
+      : "启发式粗看（非泄漏鉴定）：Cloudflare loc 未取到（无代理口或境外不可达），仅供参考";
 
   const exitIp = exit.ip ?? null;
   const qIp = whoami.clientIp ?? null;

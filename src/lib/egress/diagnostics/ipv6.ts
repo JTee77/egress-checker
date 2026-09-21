@@ -27,30 +27,56 @@ export async function checkIpv6Leak(
   mixedPort?: number | null,
 ): Promise<CheckCard> {
   const timeoutMs = 4500;
+  // 直连模式下两个 v6 端点在国内大概率双双超时；把直连 v6 单独收紧到 3000ms，
+  // 配合下面 directV4/directV6 并行，把该卡最坏耗时从「串行叠加 ~13.5s」压到 <5s，
+  // 不再撞 envRun 的 12s deadline（v0.1.8 观测到的 IPv6 卡"超时未响应"根因即此处串行）。
+  const v6DirectTimeoutMs = 3000;
   const expectProxy = mixedPort != null && mixedPort > 0;
 
-  async function probeV6(port: number | null): Promise<string | null> {
-    for (const url of ["https://api64.ipify.org", "https://ipv6.icanhazip.com"]) {
-      const r = await fetchTextViaProxy(url, { mixedPort: port, timeoutMs });
+  async function probeV6(
+    port: number | null,
+    timeout: number,
+  ): Promise<string | null> {
+    // 两个候选端点并发采，取任一合法 v6；最坏耗时 = 单端点超时，而非两者相加。
+    const urls = ["https://api64.ipify.org", "https://ipv6.icanhazip.com"];
+    const results = await Promise.all(
+      urls.map((url) =>
+        fetchTextViaProxy(url, { mixedPort: port, timeoutMs: timeout }),
+      ),
+    );
+    for (const r of results) {
       const ip = extractIpBody(r.text);
       if (r.ok && ip && isIpv6Literal(ip)) return ip;
     }
     return null;
   }
 
-  async function probeV4(port: number | null): Promise<string | null> {
+  async function probeV4(
+    port: number | null,
+    timeout: number,
+  ): Promise<string | null> {
     const r = await fetchTextViaProxy("https://api.ipify.org", {
       mixedPort: port,
-      timeoutMs,
+      timeoutMs: timeout,
     });
     const ip = extractIpBody(r.text);
     return r.ok && ip && !isIpv6Literal(ip) ? ip : null;
   }
 
-  const directV4 = await probeV4(null);
-  const directV6 = await probeV6(null);
-  const proxiedV4 = expectProxy ? await probeV4(mixedPort!) : null;
-  const proxiedV6 = expectProxy ? await probeV6(mixedPort!) : null;
+  // 直连两路并行；代理两路并行；直连组先于代理组，保持与 v0.1.8 相同的在飞并发上界
+  // （≤3），不新增 spawn_blocking 池压力。
+  const [directV4, directV6] = await Promise.all([
+    probeV4(null, timeoutMs),
+    probeV6(null, v6DirectTimeoutMs),
+  ]);
+  let proxiedV4: string | null = null;
+  let proxiedV6: string | null = null;
+  if (expectProxy) {
+    [proxiedV4, proxiedV6] = await Promise.all([
+      probeV4(mixedPort!, timeoutMs),
+      probeV6(mixedPort!, timeoutMs),
+    ]);
+  }
 
   const verdict = classifyIpv6Leak({
     proxyConfigured: expectProxy,

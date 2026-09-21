@@ -924,11 +924,18 @@ export function HomePage({
           </button>
         </div>
         {envOpen ? (
-          <div className="card-grid card-grid-home" style={{ marginTop: 12 }}>
-            {envCards.map((c) => (
-              <CheckCardView key={c.id} card={c} />
-            ))}
-          </div>
+          <>
+            {mixedPortNum == null || mixedPortNum <= 0 ? (
+              <div className="note note-compact" role="status" style={{ marginTop: 12 }}>
+                当前未检测到代理，境外探测点不可达，结论不代表VPN表现，要看总评请先连上代理再重测。
+              </div>
+            ) : null}
+            <div className="card-grid card-grid-home" style={{ marginTop: 12 }}>
+              {envCards.map((c) => (
+                <CheckCardView key={c.id} card={c} />
+              ))}
+            </div>
+          </>
         ) : null}
       </div>
 
