@@ -37,37 +37,51 @@ function scoreAvailability(cards: CheckCard[]): {
   score: number;
   note: string;
   dead: boolean;
+  measured: boolean;
 } {
   const reach = card(cards, "reachability");
+  // 未验证（无代理口且拒绝直连兜底）→ 不计好坏、也不判死，交给权重归一跳过。
+  if (reach?.unverified) {
+    return { score: 0, note: "未验证：未经代理测试连通性", dead: false, measured: false };
+  }
   if (reach?.level === "fail") {
     return {
       score: 0,
       note: "境外探测都失败了，按不可用处理",
       dead: true,
+      measured: true,
     };
   }
-  if (!reach) return { score: 40, note: "没有连通性结果", dead: false };
+  if (!reach) return { score: 40, note: "没有连通性结果", dead: false, measured: true };
   return {
     score: levelToScore(reach.level),
     note: reach.conclusion,
     dead: false,
+    measured: true,
   };
 }
 
-function scoreThroughput(cards: CheckCard[]): { score: number; note: string } {
+function scoreThroughput(cards: CheckCard[]): {
+  score: number;
+  note: string;
+  measured: boolean;
+} {
   const bw = card(cards, "bandwidth");
-  if (!bw) return { score: 35, note: "未做带宽抽样" };
-  if (bw.level === "fail") return { score: 0, note: bw.conclusion };
+  if (bw?.unverified) return { score: 0, note: "未验证：未经代理测速", measured: false };
+  if (!bw) return { score: 35, note: "未做带宽抽样", measured: true };
+  if (bw.level === "fail") return { score: 0, note: bw.conclusion, measured: true };
   const mbps = parseDownMbps(bw);
   if (mbps == null) {
-    return { score: levelToScore(bw.level), note: bw.conclusion };
+    return { score: levelToScore(bw.level), note: bw.conclusion, measured: true };
   }
-  if (mbps >= 40) return { score: 100, note: `下行约 ${mbps} Mbps，很充裕` };
-  if (mbps >= 15) return { score: 88, note: `下行约 ${mbps} Mbps，够快` };
-  if (mbps >= 5) return { score: 72, note: `下行约 ${mbps} Mbps，日常能用` };
-  if (mbps >= 1.5) return { score: 50, note: `下行约 ${mbps} Mbps，偏慢` };
-  if (mbps >= 0.4) return { score: 28, note: `下行约 ${mbps} Mbps，明显偏慢` };
-  return { score: 10, note: `下行约 ${mbps} Mbps，几乎不好用` };
+  if (mbps >= 40) return { score: 100, note: `下行约 ${mbps} Mbps，很充裕`, measured: true };
+  if (mbps >= 15) return { score: 88, note: `下行约 ${mbps} Mbps，够快`, measured: true };
+  if (mbps >= 5) return { score: 72, note: `下行约 ${mbps} Mbps，日常能用`, measured: true };
+  if (mbps >= 1.5) return { score: 50, note: `下行约 ${mbps} Mbps，偏慢`, measured: true };
+  if (mbps >= 0.4) {
+    return { score: 28, note: `下行约 ${mbps} Mbps，明显偏慢`, measured: true };
+  }
+  return { score: 10, note: `下行约 ${mbps} Mbps，几乎不好用`, measured: true };
 }
 
 export const SERVICE_IDS = [
@@ -80,30 +94,46 @@ export const SERVICE_IDS = [
   "chatgpt",
 ] as const;
 
-function scoreServices(cards: CheckCard[]): { score: number; note: string } {
+function scoreServices(cards: CheckCard[]): {
+  score: number;
+  note: string;
+  measured: boolean;
+} {
   const list = SERVICE_IDS.map((id) => card(cards, id)).filter(Boolean) as CheckCard[];
-  if (!list.length) return { score: 35, note: "未测服务面" };
-  const avg = list.reduce((s, c) => s + levelToScore(c.level), 0) / list.length;
-  const passN = list.filter((c) => c.level === "pass").length;
-  const failN = list.filter((c) => c.level === "fail").length;
+  if (!list.length) return { score: 35, note: "未测服务面", measured: true };
+  const usable = list.filter((c) => !c.unverified);
+  if (!usable.length) {
+    return { score: 0, note: "未验证：服务面未经代理测试", measured: false };
+  }
+  const avg = usable.reduce((s, c) => s + levelToScore(c.level), 0) / usable.length;
+  const passN = usable.filter((c) => c.level === "pass").length;
+  const failN = usable.filter((c) => c.level === "fail").length;
   return {
     score: Math.round(avg),
-    note: `${passN} 项较顺、${failN} 项不行（共 ${list.length} 项）`,
+    note: `${passN} 项较顺、${failN} 项不行（共 ${usable.length} 项）`,
+    measured: true,
   };
 }
 
-function scoreExit(cards: CheckCard[]): { score: number; note: string } {
+function scoreExit(cards: CheckCard[]): {
+  score: number;
+  note: string;
+  measured: boolean;
+} {
   const exit = card(cards, "exit-ip");
-  if (!exit) return { score: 40, note: "未拿到出口信息" };
-  if (exit.level === "fail") return { score: 0, note: exit.conclusion };
+  if (exit?.unverified) return { score: 0, note: "未验证：未取得代理出口信息", measured: false };
+  if (!exit) return { score: 40, note: "未拿到出口信息", measured: true };
+  if (exit.level === "fail") return { score: 0, note: exit.conclusion, measured: true };
   const text = `${exit.conclusion} ${exit.process ?? ""}`;
   const hosting = /机房|DCH|hosting/i.test(text);
   const residential = /住宅|ISP|家宽/i.test(text);
   if (exit.level === "pass" && residential) {
-    return { score: 95, note: "出口更像住宅线路" };
+    return { score: 95, note: "出口更像住宅线路", measured: true };
   }
-  if (hosting) return { score: 55, note: "出口更像机房地址，有的网站会更挑剔" };
-  return { score: levelToScore(exit.level), note: exit.conclusion };
+  if (hosting) {
+    return { score: 55, note: "出口更像机房地址，有的网站会更挑剔", measured: true };
+  }
+  return { score: levelToScore(exit.level), note: exit.conclusion, measured: true };
 }
 
 function mapStars(total: number, dead: boolean): NodeStars {
@@ -189,8 +219,48 @@ export function scoreNodeFromCards(
   const thr = scoreThroughput(cards);
   const svc = scoreServices(cards);
   const exit = scoreExit(cards);
+
+  // 四个维度各自带 measured 标记；未验证的维度不计好坏、也不拖星——按剩余权重归一。
+  type Dim = {
+    key: string;
+    label: string;
+    weight: number;
+    score: number;
+    note: string;
+    measured: boolean;
+  };
+  const dims: Dim[] = [
+    { key: "availability", label: "可用性", weight: 0.25, score: avail.score, note: avail.note, measured: avail.measured },
+    { key: "throughput", label: "吞吐抽样", weight: 0.3, score: thr.score, note: thr.note, measured: thr.measured },
+    { key: "services", label: "服务面", weight: 0.3, score: svc.score, note: svc.note, measured: svc.measured },
+    { key: "exit", label: "出口质量", weight: 0.15, score: exit.score, note: exit.note, measured: exit.measured },
+  ];
+  const measured = dims.filter((d) => d.measured);
+  const measuredWeight = measured.reduce((s, d) => s + d.weight, 0);
+
+  const breakdown: ScoreBreakdownItem[] = dims.map((d) => ({
+    key: d.key,
+    label: d.label,
+    weight: d.weight,
+    score: d.score,
+    note: d.measured ? d.note : `未验证 · 不计入评分（${d.note}）`,
+  }));
+
+  // 全部维度都未验证（例如压根没有代理口）→ 不评分，也不误判成「死节点」。
+  if (measuredWeight <= 0) {
+    return {
+      nodeName,
+      stars: "unavailable",
+      totalScore: 0,
+      blurb: "未取到代理口 / 各项均未经代理验证，暂无法评分。",
+      breakdown,
+      cards,
+      ranAt,
+    };
+  }
+
   const total = Math.round(
-    avail.score * 0.25 + thr.score * 0.3 + svc.score * 0.3 + exit.score * 0.15,
+    measured.reduce((s, d) => s + d.score * d.weight, 0) / measuredWeight,
   );
   const stars = mapStars(total, false);
 
@@ -199,12 +269,7 @@ export function scoreNodeFromCards(
     stars,
     totalScore: total,
     blurb: blurbFor(stars, thr.note, avail.note, svc.note, exit.note),
-    breakdown: [
-      { key: "availability", label: "可用性", weight: 0.25, score: avail.score, note: avail.note },
-      { key: "throughput", label: "吞吐抽样", weight: 0.3, score: thr.score, note: thr.note },
-      { key: "services", label: "服务面", weight: 0.3, score: svc.score, note: svc.note },
-      { key: "exit", label: "出口质量", weight: 0.15, score: exit.score, note: exit.note },
-    ],
+    breakdown,
     fakeLowLatencyTip: fakeLowLatencyTip(cards, thr.score),
     cards,
     ranAt,

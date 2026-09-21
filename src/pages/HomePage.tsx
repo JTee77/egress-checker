@@ -633,7 +633,7 @@ export function HomePage({
     <div className="home-page">
       <div className="about-block card home-about">
         <p>
-          <strong>Egress Checker v0.1.4</strong>
+          <strong>Egress Checker v{__APP_VERSION__}</strong>
         </p>
         <p>帮你检查代理有没有生效，并给节点打分，方便换节点。</p>
         <p>

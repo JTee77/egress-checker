@@ -4,6 +4,31 @@ const isTauri = () =>
   typeof window !== "undefined" &&
   ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
 
+/**
+ * Whether a DIRECT browser fetch may be used as a fallback for a probe.
+ *
+ * In a production Tauri build this MUST be false: a direct fetch bypasses the
+ * proxy and measures the machine's real egress, which would fabricate a "pass"
+ * (or a bogus bandwidth number) for a node that the proxy could not actually
+ * reach. It is only allowed in the plain-browser / web-preview harness (where
+ * there is no proxy to bypass) or in an explicit dev build, so we can still run
+ * the UI in a browser while developing.
+ *
+ * Kept pure (takes the two booleans) so it is unit-testable across all four
+ * combinations.
+ */
+export function browserFallbackAllowed(env: {
+  isTauri: boolean;
+  dev: boolean;
+}): boolean {
+  if (!env.isTauri) return true; // pure browser / preview: nothing to bypass
+  return env.dev; // Tauri dev build → allowed; production Tauri → refused
+}
+
+/** Runtime view of {@link browserFallbackAllowed} against the current env. */
+export const canBrowserFallback = () =>
+  browserFallbackAllowed({ isTauri: isTauri(), dev: import.meta.env.DEV });
+
 export async function fetchTextViaProxy(
   url: string,
   opts: {
@@ -33,9 +58,10 @@ export async function fetchTextViaProxy(
     }
   }
 
-  // Browser fallback is dev-only: in production a direct browser fetch would
-  // bypass the proxy (leaking the real IP) — must not happen silently.
-  if (!import.meta.env.DEV) {
+  // Browser fallback is dev-only: in a production Tauri build a direct browser
+  // fetch would bypass the proxy (leaking the real IP) — must not happen
+  // silently. See {@link browserFallbackAllowed}.
+  if (!canBrowserFallback()) {
     return { ok: false, status: 0, text: "", via: "browser" };
   }
 
@@ -198,6 +224,19 @@ export async function timedTransferViaProxy(opts: {
       };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      // In a production Tauri build we must NOT silently measure speed with a
+      // direct browser fetch — that reports the machine's real bandwidth as if
+      // it were the node's. Report an honest, not-ok "unverified" transfer.
+      if (!canBrowserFallback()) {
+        return {
+          ok: false,
+          status: 0,
+          bytes: 0,
+          elapsedMs: 0,
+          error: `测速未能经代理完成（已拒绝直连兜底）：${msg}`,
+          via: "browser",
+        };
+      }
       // Fall through to browser; keep invoke error if browser also fails.
       const browser = await timedTransferBrowser({
         url: opts.url,
