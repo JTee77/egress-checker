@@ -1,4 +1,5 @@
 mod dns;
+mod dns_query;
 mod mihomo;
 mod platform;
 

@@ -1,11 +1,11 @@
-//! DNS 泄漏检测：dig whoami 实测出口 IP 与代理出口比对（含旧名别名）。
+//! DNS 泄漏检测：UDP whoami 实测出口 IP 与代理出口比对（含旧名别名）。
 import { listDnsResolvers, dnsWhoami } from "../fetchVia";
 import { probeText, PROBE_TIMEOUT_MS } from "./probe";
 import type { CheckCard, CheckLevel, ExitIpInfo } from "../types";
 
 /**
  * A1: DNS 泄漏（确定性改造）。
- * 旧版只列 scutil 配置的 resolver，几乎永远判 pass。新版用 `dig TXT whoami` 实测
+ * 旧版只列 scutil 配置的 resolver，几乎永远判 pass。新版用 UDP 原始 DNS `TXT whoami` 实测
  * DNS 查询真正从哪个公网 IP 出去（以及被哪个递归解析器服务），再与代理出口 IP 比对：
  * 同出口 → 未泄漏；不同 → DNS 绕过了代理、疑似暴露真实地址。scutil 列表与 Cloudflare
  * 启发式降级为过程细节。
@@ -49,8 +49,8 @@ export async function checkDnsResolvers(
 
   if (!whoami.ok || !qIp) {
     level = "unknown";
-    conclusion = `未能实测 DNS 出口（${whoami.error ?? "dig 无有效返回"}）`;
-    suggestion = "确认本机可用 `dig`（macOS/Linux 自带），稍后重试。";
+    conclusion = `未能实测 DNS 出口（${whoami.error ?? "DNS 查询无有效返回"}）`;
+    suggestion = "检查网络连接是否正常，稍后重试。";
   } else if (!exitIp) {
     level = "warn";
     conclusion = `DNS 查询从 ${qIp} 出去，但缺少代理出口 IP 可对照，无法判定是否泄漏`;

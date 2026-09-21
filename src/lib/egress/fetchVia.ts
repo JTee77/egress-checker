@@ -130,7 +130,7 @@ export type DnsWhoamiPayload = {
 };
 
 /**
- * Ground-truth DNS egress probe via Rust `dig TXT whoami.ds.akahelp.net`.
+ * Ground-truth DNS egress probe via Rust raw-UDP `TXT whoami.ds.akahelp.net`.
  * `resolver` forces the query through a specific recursive resolver (e.g.
  * "8.8.8.8"); omit to use the system default path. Returns who the query
  * actually left from (clientIp) and which resolver served it (resolverNs).
@@ -143,7 +143,7 @@ export async function dnsWhoami(
       ok: false,
       via: "browser",
       raw: "",
-      error: "非 Tauri 环境，无法执行 dig 实测。",
+      error: "非 Tauri 环境，无法执行 UDP DNS 实测。",
     };
   }
   try {
