@@ -18,6 +18,7 @@ import {
   clientLabel,
   findSelectorGroup,
   normalizeClientId,
+  nodeCapabilityChips,
   probeDelay,
   resolveSelectorSnapshot,
   restoreProxy,
@@ -763,7 +764,12 @@ export function HomePage({
                     <StarRating stars={scored.stars} size={13} />
                   ) : (
                     <span className="home-nodes-meta">
-                      {n.region && n.region !== "未知" ? n.region : n.type}
+                      {n.type || "未知类型"}
+                      {nodeCapabilityChips(n).map((chip) => (
+                        <span key={chip} className="home-node-chip">
+                          {chip}
+                        </span>
+                      ))}
                     </span>
                   )}
                 </button>

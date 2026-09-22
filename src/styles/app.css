@@ -1030,6 +1030,19 @@ table.data tr:last-child td {
   white-space: nowrap;
 }
 
+.home-node-chip {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  vertical-align: middle;
+}
+
 /* --- visible test progress (测当前 / 测全部) --- */
 .test-progress {
   margin: 0 0 10px;
