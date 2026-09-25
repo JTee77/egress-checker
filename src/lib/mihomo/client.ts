@@ -480,7 +480,7 @@ async function probeWithConfig(
     status: "unreachable",
     message: clientId
       ? clientUnreachableHint(clientId)
-      : "请先打开并连上你的代理软件，再点刷新",
+      : "请先打开并连上你的VPN软件，再点「获取节点」",
     config,
     currentProxy: null,
     usingMock: false,
@@ -589,7 +589,7 @@ export async function getProxies(config: ControllerConfig): Promise<GetProxiesRe
   // Fallback: full /proxies via TCP/unix/browser (dev / non-Tauri).
   const res = await httpApi(config, "GET", "/proxies", undefined, 18000);
   if (!res) {
-    return empty("暂时读不到节点列表，请确认软件已打开并点「刷新连接」");
+    return empty("暂时读不到节点列表，请确认软件已打开并点「获取节点」");
   }
   if (res.status === 401 || res.status === 403) {
     return empty(
@@ -600,11 +600,11 @@ export async function getProxies(config: ControllerConfig): Promise<GetProxiesRe
   if (!is2xx(res.status) || !res.json) {
     if (is2xx(res.status) && !res.json) {
       return empty(
-        `读节点列表失败（响应异常），请再点「刷新连接」`,
+        `读节点列表失败（响应异常），请再点「获取节点」`,
       );
     }
     return empty(
-      `读节点列表失败，请确认软件已打开并点「刷新连接」`,
+      `读节点列表失败，请确认软件已打开并点「获取节点」`,
     );
   }
 

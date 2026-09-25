@@ -47,7 +47,7 @@ export async function sampleLatency(
         level: "fail",
         conclusion: "采样失败",
         process: [`目标: ${url}`, ...attemptLines].join("\n"),
-        suggestion: "请确认代理软件已连接，并开启系统代理或 TUN，然后重试。",
+        suggestion: "请确认VPN软件已连接，并开启系统代理或 TUN，然后重试。",
       },
     };
   }
@@ -282,7 +282,7 @@ export async function sampleBandwidth(
         "\n",
       ),
       suggestion:
-        second.level === "fail" ? "请确认代理软件已连上后再测。" : undefined,
+        second.level === "fail" ? "请确认VPN软件已连上后再测。" : undefined,
     };
   }
 
@@ -294,7 +294,7 @@ export async function sampleBandwidth(
       level: first.level,
       conclusion: first.conclusion,
       process: first.process,
-      suggestion: "请确认代理软件已连上后再测。",
+      suggestion: "请确认VPN软件已连上后再测。",
     };
   }
 
@@ -347,6 +347,6 @@ export async function sampleBandwidth(
     level,
     conclusion,
     process,
-    suggestion: level === "fail" ? "请确认代理软件已连上后再测。" : undefined,
+    suggestion: level === "fail" ? "请确认VPN软件已连上后再测。" : undefined,
   };
 }

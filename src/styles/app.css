@@ -183,7 +183,8 @@ select {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 0 1 auto;
+  /* 禁止收缩：否则盒子缩窄后按钮溢出，后面的状态标会按盒子边缘排布而贴进按钮 */
+  flex: 0 0 auto;
   min-width: 0;
   flex-wrap: nowrap;
 }
@@ -195,17 +196,25 @@ select {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
-  line-height: 32px;
-  height: 32px;
+  line-height: 29px;
+  height: 29px;
   margin: 0;
   display: inline-flex;
   align-items: center;
 }
-.home-ops .client-picker-select {
+.picker-group {
+  /* 固定宽度，让「获取节点」左缘精确落在动作列 --action-x 上 */
+  flex: 0 0 352px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.client-picker-select {
   flex: 0 1 240px;
   max-width: 100%;
   min-width: 160px;
-  height: 32px;
+  height: 29px;
   margin: 0;
   padding: 0 10px;
   border-radius: 8px;
@@ -218,41 +227,60 @@ select {
   -webkit-appearance: none;
   background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
     linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
-  background-position: calc(100% - 14px) 13px, calc(100% - 9px) 13px;
+  background-position: calc(100% - 14px) 12px, calc(100% - 9px) 12px;
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
   padding-right: 28px;
 }
-.home-ops-refresh.btn,
-.home-ops .btn-sm.home-ops-refresh {
-  flex-shrink: 0;
+/* 获取成功：贴在按钮旁的小提示，无底框 */
+.fetch-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
   white-space: nowrap;
-  height: 32px;
-  margin: 0;
-  padding: 0 10px;
-  border-radius: 8px;
+  margin-left: 40px;
   font-size: 12px;
-  line-height: 1;
-  box-sizing: border-box;
+  font-weight: 600;
+  color: var(--pass);
+}
+.status-ok-mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--pass);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  flex: none;
 }
-.home-ops-status,
-.home-ops .status-pill-dense.home-ops-status {
-  flex: 1 1 140px;
-  min-width: 0;
-  height: 32px;
-  margin: 0;
-  margin-bottom: 0;
-  padding: 0 10px;
-  border-radius: 8px;
-  font-size: 12px;
-  line-height: 1;
-  box-sizing: border-box;
+/* 获取失败：与成功对称的行内状态；详细解释与过程仍在下方横幅 */
+.fetch-fail {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  flex: none;
+  white-space: nowrap;
+  margin-left: 40px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fail);
+}
+.status-fail-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--fail);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  flex: none;
 }
 
 .client-picker-hint {
@@ -353,9 +381,10 @@ select {
   padding-bottom: 8px;
 }
 
-/* 首页检测卡：随窗宽加密列数，避免宽屏过稀 */
+/* 首页环境检查卡：auto-fit 折叠空轨道，卡片平均拉伸铺满整行
+   （auto-fill 会保留空轨道，表现为右侧成片空白） */
 .card-grid-home {
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 6px;
   padding-bottom: 0;
   align-items: stretch;
@@ -373,7 +402,8 @@ select {
   padding: 5px 7px;
   border-radius: 8px;
   box-shadow: none;
-  min-height: 0;
+  /* 不设 min-height:0 —— 网格 stretch 下允许 item 矮于内容，
+     会让"查看过程"捅出卡片下边界 */
 }
 
 .card-top {
@@ -715,11 +745,6 @@ table.data tr:last-child td {
   border-color: color-mix(in srgb, var(--fail) 45%, var(--border));
   color: var(--fail);
 }
-.gate-banner-ok {
-  background: var(--pass-bg);
-  border-color: color-mix(in srgb, var(--pass) 45%, var(--border));
-  color: var(--pass);
-}
 .gate-banner-title {
   font-weight: 650;
   margin-bottom: 4px;
@@ -727,15 +752,8 @@ table.data tr:last-child td {
 }
 .gate-banner-msg {
   line-height: 1.5;
-  color: var(--text);
+  color: inherit;
 }
-.gate-process {
-  margin-top: 8px;
-  white-space: pre-wrap;
-  font-size: 12px;
-  opacity: 0.85;
-}
-
 .mode-toggle {
   display: flex;
   gap: 8px;
@@ -1134,16 +1152,10 @@ table.data tr:last-child td {
   .card-grid-home {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   }
-  .home-nodes-list {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  }
 }
 
 @media (max-width: 480px) {
   .card-grid-home {
-    grid-template-columns: 1fr;
-  }
-  .home-nodes-list {
     grid-template-columns: 1fr;
   }
 }
@@ -1152,12 +1164,6 @@ table.data tr:last-child td {
   .main {
     padding-left: 24px;
     padding-right: 24px;
-  }
-  .card-grid-home {
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  }
-  .home-nodes-list {
-    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
   }
 }
 
@@ -1200,4 +1206,466 @@ table.data tr:last-child td {
   fill: none;
   stroke: color-mix(in srgb, var(--warn) 55%, var(--border));
   stroke-width: 1.4;
+}
+
+/* ============================================================
+   v0.1.10 UI 整备：头部工具条 / 连接前引导 / 工作区 / 节点瀑布流卡
+   / 环境检查上移 / 底部关于 / 玻璃地基
+   ============================================================ */
+:root {
+  /* 收起卡高度 */
+  --nc-h: 84px;
+  /* 展开卡内摘要区高度：压到自然内容高，省出的空间全部让给详情 */
+  --nc-sum-h: 66px;
+  /* 卡片纵向间距（展开总高必须把它算进去：2*--nc-h + --nc-gap） */
+  --nc-gap: 9px;
+  /* 动作列：三个主按钮左缘统一的竖线 */
+  --action-x: 376px;
+}
+
+/* 吸顶头部工具条（选软件 · 刷新 · 连接状态） */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  flex-wrap: wrap;
+}
+.app-header .client-picker-select {
+  min-width: 160px;
+}
+
+/* 环境检查（上移到节点列表之前） */
+.env-section {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  padding: 12px 16px;
+  margin-bottom: 14px;
+}
+.env-head {
+  display: grid;
+  grid-template-columns: calc(var(--action-x) - 16px) auto;
+  align-items: center;
+  justify-items: start; /* 网格子项默认拉伸，必须关掉，按钮才会保持自然宽度 */
+}
+.env-head-labels {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.env-head .t {
+  font-weight: 700;
+  font-size: 13px;
+}
+.env-head .s {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* 工作区操作条 */
+.ws-ops {
+  display: grid;
+  grid-template-columns: var(--action-x) 1fr;
+  align-items: center;
+  justify-items: start; /* 同上：按钮保持自然宽度，不被轨道拉伸 */
+  margin-bottom: 12px;
+}
+.ws-ops-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.ws-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  min-width: 0;
+}
+/* 三大动作按钮（获取节点 / 开始环境检查 / 测全部节点）：
+   统一样式与宽度，右缘对齐成一条"动作列" */
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 112px;
+  min-width: 112px;
+  height: 30px;
+  line-height: 1;
+  padding: 0 12px;
+  box-sizing: border-box;
+  flex: none;
+  white-space: nowrap;
+}
+
+/* 节点瀑布流：JS 定列（列数随容器宽度自适应），展开只向下推、无侧留白 */
+.node-flow {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  justify-content: center; /* 固定卡宽：列数由窗口宽决定，余量对称留白 */
+}
+.flow-col {
+  flex: none;
+  width: 250px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.ncard {
+  height: var(--nc-h);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  cursor: pointer;
+  transition: height 0.22s ease, border-color 0.22s ease, background 0.22s ease;
+}
+.ncard:hover {
+  border-color: var(--accent);
+}
+.ncard.exp {
+  /* 不变量：总高 = 邻列两张收起卡 + 一个空行（含空行对齐网格节奏） */
+  height: calc(var(--nc-h) * 2 + var(--nc-gap));
+  border-color: var(--accent);
+}
+.nc-sum {
+  display: flex;
+  gap: 9px;
+  padding: 8px 11px;
+  height: var(--nc-h);
+}
+.nc-info {
+  flex: 1;
+  min-width: 0;
+}
+.nc-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.nc-nm {
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nc-badge {
+  font-size: 9px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--pass);
+  border-radius: 5px;
+  padding: 1px 4px;
+  flex: none;
+}
+.nc-tags {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.nc-chip {
+  font-weight: 700;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 5px;
+  font-size: 9.5px;
+}
+.nc-dots {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.nc-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.nc-dot.ok {
+  background: var(--pass);
+}
+.nc-dot.warn {
+  background: var(--warn);
+}
+.nc-dot.fail {
+  background: var(--fail);
+}
+.nc-dot.run {
+  background: var(--accent);
+}
+.nc-dot.unk {
+  background: var(--unknown);
+}
+.nc-side {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.nc-untested {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.nc-act {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  background: var(--bg-elevated);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.nc-act:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.nc-full {
+  height: var(--nc-h);
+  padding: 8px 11px 9px;
+  border-top: 1px dashed var(--border);
+  overflow: hidden;
+}
+.nc-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px 8px;
+  align-content: start;
+}
+/* 只显小标题；完整结论放 title 悬停（卡片 overflow:hidden，CSS 气泡会被裁） */
+.nc-cell {
+  min-width: 0;
+}
+.nc-cl {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.nc-t {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nc-dot-mini {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+}
+.nc-dot-mini.ok {
+  background: var(--pass);
+}
+.nc-dot-mini.warn {
+  background: var(--warn);
+}
+.nc-dot-mini.fail {
+  background: var(--fail);
+}
+.nc-dot-mini.run {
+  background: var(--accent);
+}
+.nc-dot-mini.unk {
+  background: var(--unknown);
+}
+/* 内容行：正常展示、放不下单行省略，悬停见全文 */
+.nc-cv {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nc-cv.ok {
+  color: var(--pass);
+}
+.nc-cv.warn {
+  color: var(--warn);
+}
+.nc-cv.fail {
+  color: var(--fail);
+}
+.nc-cv.run {
+  color: var(--accent);
+}
+.nc-cv.unk {
+  color: var(--unknown);
+}
+/* 不可用节点：无明细卡，展开时显示原因 */
+.nc-dead {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  padding: 4px 2px;
+}
+.nc-cell:hover .nc-cl {
+  color: var(--text);
+}
+
+/* 底部关于 */
+.about-footer {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.about-footer summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  list-style: none;
+}
+.about-footer summary::-webkit-details-marker {
+  display: none;
+}
+.about-footer summary::before {
+  content: "▸ ";
+}
+.about-footer[open] summary::before {
+  content: "▾ ";
+}
+.about-footer .a-body {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.9;
+  margin-top: 8px;
+}
+.about-footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* 玻璃地基：仅在 Tauri 透明窗口下（html.glass）生效。
+   桌面模糊由原生 NSVisualEffectView（tauri windowEffects）提供，
+   面板只作半透明填充、不各自 backdrop-filter；仅吸顶头部做实时模糊。 */
+html.glass,
+html.glass body,
+html.glass #root,
+html.glass .app-shell,
+html.glass .main,
+html.glass .home-page {
+  background: transparent;
+}
+html.glass .app-header,
+html.glass .ncard,
+html.glass .env-section,
+html.glass .card,
+html.glass .fold-panel,
+html.glass .vpn-score-card,
+html.glass .gate-banner {
+  background: color-mix(in srgb, var(--bg-elevated) 74%, transparent);
+}
+html.glass .app-header {
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+}
+@media (prefers-reduced-transparency: reduce) {
+  html.glass,
+  html.glass body,
+  html.glass #root,
+  html.glass .app-shell,
+  html.glass .main,
+  html.glass .home-page {
+    background: var(--bg);
+  }
+  html.glass .app-header,
+  html.glass .ncard,
+  html.glass .env-section,
+  html.glass .card,
+  html.glass .fold-panel,
+  html.glass .vpn-score-card,
+  html.glass .gate-banner {
+    background: var(--bg-elevated);
+  }
+  html.glass .app-header {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* 顶部步骤条：状态驱动（哪步完成哪步打勾），替代静态使用说明文字 */
+.flow-hint {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+.fh-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+.fh-step i {
+  font-style: normal;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--unknown);
+  flex: none;
+}
+.fh-step.cur {
+  color: var(--text);
+}
+.fh-step.cur i {
+  background: var(--accent);
+}
+.fh-step.done i {
+  background: var(--pass);
+}
+.fh-step.todo {
+  opacity: 0.65;
+}
+.fh-arrow {
+  opacity: 0.45;
+}
+
+/* 测全部确认：模态居中，避免沉在长列表底部看不到 */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.32);
+  padding: 20px;
+}
+.confirm-overlay .confirm-panel {
+  max-width: 480px;
+  width: 100%;
+  margin: 0;
 }

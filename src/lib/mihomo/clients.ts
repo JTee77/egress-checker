@@ -28,23 +28,8 @@ export const CLIENT_OPTIONS: ClientOption[] = [
     hint: "选好后点刷新，按该软件自动连接",
   },
   {
-    id: "clashx_meta",
-    label: "ClashX Meta",
-    hint: "选好后点刷新，按该软件自动连接",
-  },
-  {
     id: "flclash",
     label: "FlClash",
-    hint: "选好后点刷新，按该软件自动连接",
-  },
-  {
-    id: "mihomo_party",
-    label: "Mihomo Party",
-    hint: "选好后点刷新，按该软件自动连接",
-  },
-  {
-    id: "nyanpasu",
-    label: "Clash Nyanpasu",
     hint: "选好后点刷新，按该软件自动连接",
   },
 ];
@@ -125,16 +110,12 @@ export function isClientId(v: unknown): v is ClientId {
 }
 
 /**
- * Map stored clientId. Known five kept; legacy mihomo/manual/unknown → null (force re-pick).
+ * Map stored clientId. Only currently-supported clients kept; everything else
+ * (legacy picks like clashx_meta/mihomo_party/nyanpasu, mihomo/manual/unknown)
+ * → null, forcing a fresh pick.
  */
 export function normalizeClientId(v: unknown): ClientId | null {
-  if (
-    v === "verge" ||
-    v === "clashx_meta" ||
-    v === "flclash" ||
-    v === "mihomo_party" ||
-    v === "nyanpasu"
-  ) {
+  if (v === "verge" || v === "flclash") {
     return v;
   }
   return null;
@@ -148,7 +129,7 @@ export function clientLabel(id: ClientId | null): string {
 /** Plain-language unreachable tip naming the selected app. */
 export function clientUnreachableHint(id: ClientId): string {
   const name = clientLabel(id);
-  return `请先打开并连上【${name}】，再点刷新`;
+  return `请先打开并连上【${name}】，再点「获取节点」`;
 }
 
 export const VERGE_SOCK = "/tmp/verge/verge-mihomo.sock";
