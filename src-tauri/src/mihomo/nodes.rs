@@ -18,6 +18,95 @@ fn ignore_type(t: &str) -> bool {
     IGNORE_PROXY_TYPES.iter().any(|x| *x == t)
 }
 
+/// A per-node capability flag from a proxy object; absent → false.
+fn read_bool(p: &Value, key: &str) -> bool {
+    p.get(key).and_then(|v| v.as_bool()).unwrap_or(false)
+}
+
+/// Build a slim node from a proxy object, reading the full six-flag mihomo
+/// capability vocabulary in one place. Adding a future flag only means touching
+/// this function + the `SlimNode` struct — no call-site churn.
+fn slim_node(name: String, node_type: String, p: &Value) -> SlimNode {
+    SlimNode {
+        name,
+        node_type,
+        udp: read_bool(p, "udp"),
+        xudp: read_bool(p, "xudp"),
+        uot: read_bool(p, "uot"),
+        tfo: read_bool(p, "tfo"),
+        smux: read_bool(p, "smux"),
+        mptcp: read_bool(p, "mptcp"),
+    }
+}
+
+/// Group types that route to a member via their `now` field.
+const GROUP_TYPES: &[&str] = &["Selector", "URLTest", "Fallback", "LoadBalance"];
+
+/// User-facing selector groups, most authoritative first. `GLOBAL` is the
+/// global-mode pseudo-group and often sits at `DIRECT` while the client is in
+/// rule mode, so it must not be trusted blindly — hence the ordered scan below
+/// that only accepts a group whose `now` resolves to a real leaf node.
+const PREFER_GROUP_NAMES: &[&str] = &[
+    "Proxy",
+    "GLOBAL",
+    "proxy",
+    "SELECT",
+    "节点选择",
+    "手动选择",
+    "自动选择",
+];
+
+/// A name is a real leaf proxy iff it exists, is not a group/pseudo type
+/// (Direct/Reject/Pass/Selector… — i.e. not DIRECT), and is not a junk entry.
+fn is_real_leaf(proxies: &serde_json::Map<String, Value>, name: &str) -> bool {
+    let Some(p) = proxies.get(name) else {
+        return false;
+    };
+    let t = p.get("type").and_then(|x| x.as_str()).unwrap_or("");
+    if ignore_type(t) {
+        return false;
+    }
+    !is_junk_name(name)
+}
+
+/// If group `g` exists and its `now` points at a real leaf node, return it.
+fn group_now_leaf(proxies: &serde_json::Map<String, Value>, g: &str) -> Option<String> {
+    let now = proxies.get(g)?.get("now").and_then(|n| n.as_str())?;
+    if is_real_leaf(proxies, now) {
+        Some(now.to_string())
+    } else {
+        None
+    }
+}
+
+/// Resolve the node the user is actually on. Never surfaces DIRECT/PASS/REJECT
+/// or a group name. Falls back to a single unambiguous selector group; returns
+/// None when several groups disagree (rule mode) so the UI shows "—" honestly.
+pub fn resolve_current_proxy(proxies: &serde_json::Map<String, Value>) -> Option<String> {
+    for g in PREFER_GROUP_NAMES {
+        if let Some(n) = group_now_leaf(proxies, g) {
+            return Some(n);
+        }
+    }
+    let mut distinct: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for (_name, p) in proxies {
+        let t = p.get("type").and_then(|x| x.as_str()).unwrap_or("");
+        if !GROUP_TYPES.contains(&t) {
+            continue;
+        }
+        if let Some(now) = p.get("now").and_then(|x| x.as_str()) {
+            if is_real_leaf(proxies, now) {
+                distinct.insert(now.to_string());
+            }
+        }
+    }
+    if distinct.len() == 1 {
+        distinct.into_iter().next()
+    } else {
+        None
+    }
+}
+
 /// Parse /proxies JSON into a slim node list (no history arrays).
 pub fn slim_nodes_from_proxies_json(body: &str) -> Result<ListNodesResult, String> {
     let root: Value = serde_json::from_str(body).map_err(|e| format!("json: {e}"))?;
@@ -26,15 +115,7 @@ pub fn slim_nodes_from_proxies_json(body: &str) -> Result<ListNodesResult, Strin
         .and_then(|v| v.as_object())
         .ok_or_else(|| "missing proxies object".to_string())?;
 
-    let current_proxy = ["Proxy", "GLOBAL", "proxy"]
-        .iter()
-        .find_map(|g| {
-            proxies
-                .get(*g)
-                .and_then(|p| p.get("now"))
-                .and_then(|n| n.as_str())
-                .map(|s| s.to_string())
-        });
+    let current_proxy = resolve_current_proxy(proxies);
 
     let mut nodes: Vec<SlimNode> = Vec::new();
     for (name, p) in proxies {
@@ -46,10 +127,7 @@ pub fn slim_nodes_from_proxies_json(body: &str) -> Result<ListNodesResult, Strin
         if ignore_type(&node_type) || is_junk_name(name) {
             continue;
         }
-        nodes.push(SlimNode {
-            name: name.clone(),
-            node_type,
-        });
+        nodes.push(slim_node(name.clone(), node_type, p));
     }
 
     if nodes.is_empty() {
@@ -91,7 +169,7 @@ pub fn slim_nodes_from_proxies_json(body: &str) -> Result<ListNodesResult, Strin
                     .and_then(|t| t.as_str())
                     .unwrap_or("")
                     .to_string();
-                Some(SlimNode { name, node_type })
+                Some(slim_node(name, node_type, p))
             })
             .collect();
     }
@@ -275,6 +353,107 @@ mod tests {
         assert!(names.contains(&"hk-1"));
         assert!(names.contains(&"jp-1"));
         assert!(!names.iter().any(|n| *n == "Proxy" || *n == "DIRECT"));
+    }
+
+    #[test]
+    fn slim_nodes_reads_all_six_capability_flags() {
+        // A node with no flags (udp must NOT be assumed true), and a node with
+        // the full set lit — proves each flag is read independently.
+        let body = r#"{
+          "proxies": {
+            "Proxy": {"type":"Selector","now":"plain","all":["plain","rich"]},
+            "plain": {"type":"Shadowsocks"},
+            "rich": {"type":"Vless","udp":true,"xudp":true,"uot":true,"tfo":true,"smux":true,"mptcp":true}
+          }
+        }"#;
+        let slim = slim_nodes_from_proxies_json(body).unwrap();
+        let get = |n: &str| slim.nodes.iter().find(|x| x.name == n).unwrap();
+        let p = get("plain");
+        assert!(!p.udp && !p.xudp && !p.uot && !p.tfo && !p.smux && !p.mptcp);
+        let r = get("rich");
+        assert!(r.udp && r.xudp && r.uot && r.tfo && r.smux && r.mptcp);
+    }
+
+    #[test]
+    fn slim_nodes_partial_flags_independent() {
+        // Mirrors the real-world concern: some nodes have udp, some don't; a
+        // node can have udp but lack xudp, etc. Flags must not cross-contaminate.
+        let body = r#"{
+          "proxies": {
+            "Proxy": {"type":"Selector","now":"a","all":["a","b"]},
+            "a": {"type":"Hysteria2","udp":true},
+            "b": {"type":"Trojan","uot":true}
+          }
+        }"#;
+        let slim = slim_nodes_from_proxies_json(body).unwrap();
+        let a = slim.nodes.iter().find(|x| x.name == "a").unwrap();
+        let b = slim.nodes.iter().find(|x| x.name == "b").unwrap();
+        assert!(a.udp && !a.xudp && !a.uot);
+        assert!(!b.udp && b.uot);
+    }
+
+    #[test]
+    fn current_proxy_rule_mode_skips_direct_global_picks_节点选择() {
+        // Clash Verge in rule mode: GLOBAL pseudo-group sits at DIRECT while the
+        // user's real pick lives in the "节点选择" group. Must show HK17, not DIRECT.
+        let body = r#"{
+          "proxies": {
+            "GLOBAL": {"type":"Selector","now":"DIRECT","all":["DIRECT","HK17"]},
+            "节点选择": {"type":"Selector","now":"HK17","all":["HK17","SG2"]},
+            "NETFLIX": {"type":"Selector","now":"SG2","all":["HK17","SG2"]},
+            "HK17": {"type":"Hysteria2"},
+            "SG2": {"type":"Vmess"},
+            "DIRECT": {"type":"Direct"},
+            "REJECT": {"type":"Reject"}
+          }
+        }"#;
+        let slim = slim_nodes_from_proxies_json(body).unwrap();
+        assert_eq!(slim.current_proxy.as_deref(), Some("HK17"));
+    }
+
+    #[test]
+    fn current_proxy_global_mode_uses_global_real_leaf() {
+        let body = r#"{
+          "proxies": {
+            "GLOBAL": {"type":"Selector","now":"jp-2","all":["jp-2","hk-1"]},
+            "节点选择": {"type":"Selector","now":"hk-1","all":["jp-2","hk-1"]},
+            "jp-2": {"type":"Shadowsocks"},
+            "hk-1": {"type":"Vmess"},
+            "DIRECT": {"type":"Direct"}
+          }
+        }"#;
+        let slim = slim_nodes_from_proxies_json(body).unwrap();
+        // Proxy absent, GLOBAL present with a real leaf → GLOBAL wins first.
+        assert_eq!(slim.current_proxy.as_deref(), Some("jp-2"));
+    }
+
+    #[test]
+    fn current_proxy_ambiguous_rule_groups_returns_none() {
+        // No preferred group name matches and several sub-groups disagree →
+        // honest None (UI shows "—") rather than guessing a random group.
+        let body = r#"{
+          "proxies": {
+            "人工智能": {"type":"Selector","now":"us-1","all":["us-1"]},
+            "NETFLIX": {"type":"Selector","now":"sg-9","all":["sg-9"]},
+            "us-1": {"type":"Vmess"},
+            "sg-9": {"type":"Trojan"},
+            "DIRECT": {"type":"Direct"}
+          }
+        }"#;
+        let slim = slim_nodes_from_proxies_json(body).unwrap();
+        assert_eq!(slim.current_proxy, None);
+    }
+
+    #[test]
+    fn current_proxy_pure_direct_mode_returns_none() {
+        let body = r#"{
+          "proxies": {
+            "GLOBAL": {"type":"Selector","now":"DIRECT","all":["DIRECT"]},
+            "DIRECT": {"type":"Direct"}
+          }
+        }"#;
+        let slim = slim_nodes_from_proxies_json(body).unwrap();
+        assert_eq!(slim.current_proxy, None);
     }
 
     #[test]

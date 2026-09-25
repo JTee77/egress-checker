@@ -11,28 +11,28 @@ export async function runLightGate(connection: ConnectionState): Promise<GateRes
     if (connection.status === "unknown") {
       return {
         ok: false,
-        message: "还没检查连接。请先选择你在用的软件，再点「刷新连接」。",
+        message: "请先在上方选择软件，再点「获取节点」。",
       };
     }
     if (connection.status === "unreachable") {
       return {
         ok: false,
         message:
-          "这边连不上你的代理软件。请确认软件已打开、节点已连接，然后点「刷新连接」。",
+          "连不上VPN软件。确认它已打开并连上节点后，再点「获取节点」。",
         process: connection.message,
       };
     }
     if (connection.status === "unauthorized") {
       return {
         ok: false,
-        message: "代理软件拒绝了连接。请展开「高级」，核对密钥后再刷新。",
+        message: "密钥被VPN软件拒绝。展开「高级」核对密钥后重试。",
         process: connection.proxiesError ?? connection.message,
       };
     }
     if (connection.status !== "connected" && connection.status !== "mock") {
       return {
         ok: false,
-        message: "当前还没准备好测节点。请先刷新连接，确认状态为已连上。",
+        message: "请先点「获取节点」，确认已连上。",
         process: connection.message,
       };
     }
@@ -44,7 +44,7 @@ export async function runLightGate(connection: ConnectionState): Promise<GateRes
     return {
       ok: false,
       message:
-        "代理软件看起来已连上，但访问海外站点的探测都失败了。请确认节点真的能用，或先在客户端里换一个节点后再来。",
+        "软件在线，但海外探测全部失败。请换个节点再试。",
       process: reach.process,
     };
   }
@@ -54,7 +54,7 @@ export async function runLightGate(connection: ConnectionState): Promise<GateRes
     return {
       ok: false,
       message:
-        "现在更像「代理没生效、流量可能未走代理」。请到代理软件里打开系统代理或 TUN，确认连上后再测节点。",
+        "流量可能没走代理。请在软件里开启系统代理或 TUN 后再测。",
       process: bare.process,
     };
   }

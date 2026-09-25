@@ -144,7 +144,7 @@ export async function checkReachability(
       level: "fail",
       conclusion: "无法经代理访问境外 HTTPS 探测点",
       process: results.map((r) => `${r.url} → HTTP ${r.status || "超时"}`).join("\n"),
-      suggestion: "请确认代理软件已打开、已连上节点，并开启系统代理或 TUN，然后重试。",
+      suggestion: "请确认VPN软件已打开、已连上节点，并开启系统代理或 TUN，然后重试。",
     };
   }
   const level: CheckLevel = ok.length === results.length ? "pass" : "warn";

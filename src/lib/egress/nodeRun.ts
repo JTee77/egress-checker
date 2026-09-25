@@ -134,7 +134,7 @@ export async function runNodeDiagnostics(
   const note =
     mixedPort != null && mixedPort > 0
       ? "只测当前出口相关项（连通、出口、带宽与服务检查）。环境项请用「环境泄漏检查」。"
-      : "未配置代理口时，部分探针可能走窗口直连。建议先刷新连接。";
+      : "未配置代理口时，部分探针可能走窗口直连。建议先获取节点。";
 
   const push = (c: CheckCard) => {
     onCard?.(c);
@@ -285,7 +285,7 @@ export async function runNodeDeepLight(
   const note =
     mixedPort != null && mixedPort > 0
       ? "测全部为简要检测（短连通、出口、小带宽抽样与关键服务）。环境项请用「环境泄漏检查」。"
-      : "未配置代理口时，部分探针可能走窗口直连。建议先刷新连接。";
+      : "未配置代理口时，部分探针可能走窗口直连。建议先获取节点。";
 
   const push = (c: CheckCard) => {
     onCard?.(c);

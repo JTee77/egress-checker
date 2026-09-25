@@ -9,16 +9,30 @@ export interface ControllerConfig {
   sockPath?: string | null;
 }
 
-export interface ProxyInfo {
+/**
+ * Per-node capability flags from mihomo `/proxies`. This is the full six-flag
+ * vocabulary the core can emit; whether a given subscription lights any of them
+ * depends on its node configs, so none is assumed always-on. `undefined` means
+ * the field was absent (treated as false when rendering chips).
+ */
+export interface NodeCapabilities {
+  udp?: boolean;
+  xudp?: boolean;
+  uot?: boolean;
+  tfo?: boolean;
+  smux?: boolean;
+  mptcp?: boolean;
+}
+
+export interface ProxyInfo extends NodeCapabilities {
   name: string;
   type: string;
-  udp?: boolean;
   history?: { time: string; delay: number }[];
   all?: string[];
   now?: string;
 }
 
-export interface ProxyNode {
+export interface ProxyNode extends NodeCapabilities {
   name: string;
   type: string;
   region: string;

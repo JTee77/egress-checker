@@ -54,6 +54,22 @@ pub struct SlimNode {
     pub name: String,
     #[serde(rename = "type")]
     pub node_type: String,
+    /// Capability flags from mihomo `/proxies`. Each is a real, independent
+    /// per-node boolean (absent → false). The full vocabulary mihomo emits is
+    /// these six; whether a given subscription lights any of them depends on
+    /// its node configs, so none is assumed always-on.
+    /// Forwards UDP traffic.
+    pub udp: bool,
+    /// XUDP transport.
+    pub xudp: bool,
+    /// UDP over TCP.
+    pub uot: bool,
+    /// TCP Fast Open.
+    pub tfo: bool,
+    /// Multiplexing (smux).
+    pub smux: bool,
+    /// Multipath TCP.
+    pub mptcp: bool,
 }
 
 #[derive(Debug, Serialize)]

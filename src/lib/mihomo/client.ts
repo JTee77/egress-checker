@@ -17,6 +17,7 @@ import {
   type ProxyNode,
 } from "./types";
 import { detectRegion } from "./regions";
+import { resolveCurrentProxy } from "./currentProxy";
 import { mockProxiesRaw } from "./mock";
 import {
   type ClientId,
@@ -203,6 +204,12 @@ function toNode(name: string, p: ProxyInfo): ProxyNode {
     name,
     type: p.type,
     region: detectRegion(name),
+    udp: p.udp,
+    xudp: p.xudp,
+    uot: p.uot,
+    tfo: p.tfo,
+    smux: p.smux,
+    mptcp: p.mptcp,
     raw: p,
   };
 }
@@ -210,8 +217,7 @@ function toNode(name: string, p: ProxyInfo): ProxyNode {
 export function filterNodes(
   proxies: Record<string, ProxyInfo>,
 ): { nodes: ProxyNode[]; currentProxy: string | null } {
-  const currentProxy =
-    proxies.Proxy?.now ?? proxies.GLOBAL?.now ?? proxies.proxy?.now ?? null;
+  const currentProxy = resolveCurrentProxy(proxies);
   const nodes: ProxyNode[] = [];
   for (const [name, p] of Object.entries(proxies)) {
     if (IGNORE_PROXY_TYPES.has(p.type)) continue;
@@ -228,8 +234,7 @@ export function filterNodes(
 export function resolveNodesFromGroups(
   proxies: Record<string, ProxyInfo>,
 ): { nodes: ProxyNode[]; currentProxy: string | null } {
-  const currentProxy =
-    proxies.Proxy?.now ?? proxies.GLOBAL?.now ?? proxies.proxy?.now ?? null;
+  const currentProxy = resolveCurrentProxy(proxies);
 
   const leafNames = new Set<string>();
   const preferGroups = ["Proxy", "GLOBAL", "proxy"];
@@ -475,7 +480,7 @@ async function probeWithConfig(
     status: "unreachable",
     message: clientId
       ? clientUnreachableHint(clientId)
-      : "请先打开并连上你的代理软件，再点刷新",
+      : "请先打开并连上你的VPN软件，再点「获取节点」",
     config,
     currentProxy: null,
     usingMock: false,
@@ -508,7 +513,16 @@ async function getProxiesViaSlimCommand(
   if (!isTauri()) return null;
   try {
     const res = await invoke<{
-      nodes: { name: string; type: string }[];
+      nodes: {
+        name: string;
+        type: string;
+        udp?: boolean;
+        xudp?: boolean;
+        uot?: boolean;
+        tfo?: boolean;
+        smux?: boolean;
+        mptcp?: boolean;
+      }[];
       currentProxy: string | null;
       status: number;
       error: string | null;
@@ -524,7 +538,16 @@ async function getProxiesViaSlimCommand(
       },
     });
     const nodes: ProxyNode[] = (res.nodes ?? []).map((n) =>
-      toNode(n.name, { name: n.name, type: n.type }),
+      toNode(n.name, {
+        name: n.name,
+        type: n.type,
+        udp: n.udp,
+        xudp: n.xudp,
+        uot: n.uot,
+        tfo: n.tfo,
+        smux: n.smux,
+        mptcp: n.mptcp,
+      }),
     );
     return {
       nodes,
@@ -566,7 +589,7 @@ export async function getProxies(config: ControllerConfig): Promise<GetProxiesRe
   // Fallback: full /proxies via TCP/unix/browser (dev / non-Tauri).
   const res = await httpApi(config, "GET", "/proxies", undefined, 18000);
   if (!res) {
-    return empty("暂时读不到节点列表，请确认软件已打开并点「刷新连接」");
+    return empty("暂时读不到节点列表，请确认软件已打开并点「获取节点」");
   }
   if (res.status === 401 || res.status === 403) {
     return empty(
@@ -577,11 +600,11 @@ export async function getProxies(config: ControllerConfig): Promise<GetProxiesRe
   if (!is2xx(res.status) || !res.json) {
     if (is2xx(res.status) && !res.json) {
       return empty(
-        `读节点列表失败（响应异常），请再点「刷新连接」`,
+        `读节点列表失败（响应异常），请再点「获取节点」`,
       );
     }
     return empty(
-      `读节点列表失败，请确认软件已打开并点「刷新连接」`,
+      `读节点列表失败，请确认软件已打开并点「获取节点」`,
     );
   }
 

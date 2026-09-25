@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCardView } from "../components/CheckCardView";
-import { StarRating } from "../components/StarRating";
-import {
-  TestProgress,
-  type ProgressInfo,
-} from "../components/TestProgress";
+import { NodeCard } from "../components/NodeCard";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { ProgressInfo } from "../components/TestProgress";
 import {
   mapPool,
   runEnvDiagnostics,
   runNodeDeepLight,
-  runNodeDiagnostics,
   type CheckCard,
   type EgressReport,
 } from "../lib/egress";
@@ -33,10 +30,8 @@ import {
   runLightGate,
   scoreDeadNode,
   scoreNodeFromCards,
-  scoreVpn,
   type GateResult,
   type NodeScoreResult,
-  type VpnScoreResult,
 } from "../lib/score";
 
 type TestMode = "current" | "all";
@@ -67,6 +62,11 @@ const DELAY_URL = "http://www.gstatic.com/generate_204";
 
 function asRunning(list: CheckCard[]): CheckCard[] {
   return list.map((c) => ({ ...c, level: "running" as const, conclusion: "检测中…" }));
+}
+
+/** 瀑布流列数：单卡固定 250px + 9px 列距，1–8 列封顶。40 为 .main 左右 padding。 */
+function colCountFor(vw: number): number {
+  return Math.min(8, Math.max(1, Math.floor((vw - 31) / 259)));
 }
 
 export function HomePage({
@@ -104,10 +104,7 @@ export function HomePage({
   const [refreshing, setRefreshing] = useState(false);
   const [mode, setMode] = useState<TestMode>("current");
   const [gate, setGate] = useState<GateResult | null>(null);
-  const [gateDetailOpen, setGateDetailOpen] = useState(false);
   const [nodeScores, setNodeScores] = useState<NodeScoreResult[]>([]);
-  const [selectedNodeName, setSelectedNodeName] = useState<string | null>(null);
-  const [vpnScore, setVpnScore] = useState<VpnScoreResult | null>(null);
   const [envOpen, setEnvOpen] = useState(false);
   const [envRunning, setEnvRunning] = useState(false);
   const [allConfirmOpen, setAllConfirmOpen] = useState(false);
@@ -115,6 +112,11 @@ export function HomePage({
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const abortAllRef = useRef(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [testingNode, setTestingNode] = useState<string | null>(null);
+  const [colCount, setColCount] = useState(() =>
+    typeof window === "undefined" ? 2 : colCountFor(window.innerWidth),
+  );
 
   const cfg = connection.config;
   const [host, setHost] = useState(manual.host ?? cfg?.host ?? "127.0.0.1");
@@ -164,28 +166,6 @@ export function HomePage({
   }, [nodes, connection.currentProxy, nodeScores, scoreByName]);
 
   const mixedPortNum = connection.config?.mixedPort ?? null;
-
-  const envReady = useMemo(
-    () =>
-      envCards.length > 0 &&
-      envCards.every(
-        (c) =>
-          c.conclusion !== "尚未检测" &&
-          c.conclusion !== "检测中…" &&
-          c.level !== "running",
-      ),
-    [envCards],
-  );
-
-  useEffect(() => {
-    if (!envReady || !selectedNodeName) {
-      setVpnScore(null);
-      return;
-    }
-    const scored = nodeScores.find((s) => s.nodeName === selectedNodeName);
-    if (scored) setVpnScore(scoreVpn(scored, envCards));
-    else setVpnScore(null);
-  }, [envReady, selectedNodeName, nodeScores, envCards]);
 
   const upsertNodeCard = (card: CheckCard) => {
     setNodeCards((prev) => {
@@ -244,7 +224,6 @@ export function HomePage({
           : connection;
       const g = await runLightGate(conn);
       setGate(g);
-      setGateDetailOpen(!g.ok);
     } finally {
       setRefreshing(false);
     }
@@ -254,57 +233,14 @@ export function HomePage({
     setProgress({ text: "测试条件检查中…" });
     const g = await runLightGate(connection);
     setGate(g);
-    setGateDetailOpen(!g.ok);
     setProgress(null);
     return g;
-  };
-
-  const testCurrent = async () => {
-    setRunning(true);
-    setNodeScores([]);
-    setVpnScore(null);
-    setSelectedNodeName(null);
-    setSwitchHint(null);
-    try {
-      const g = await ensureGate();
-      if (!g.ok) return;
-
-      setNodeCards(asRunning(NODE_PLACEHOLDERS));
-      setProgress({ text: "正在检测当前节点…" });
-      const r = await runNodeDiagnostics(upsertNodeCard, {
-        mixedPort: mixedPortNum,
-        mihomoConfig: connection.config,
-      });
-      setReport(r);
-      setNodeCards(r.cards);
-      const name = connection.currentProxy ?? "当前节点";
-      const scored = scoreNodeFromCards(name, r.cards, r.ranAt);
-      setNodeScores([scored]);
-      setSelectedNodeName(name);
-      setProgress(null);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setNodeCards(
-        NODE_PLACEHOLDERS.map((c) => ({
-          ...c,
-          level: "fail",
-          conclusion: "检测失败",
-          process: msg,
-          suggestion: "请确认代理软件已打开并已连接，然后重新检测。",
-        })),
-      );
-      setProgress(null);
-    } finally {
-      setRunning(false);
-    }
   };
 
   const testAll = async () => {
     abortAllRef.current = false;
     setRunning(true);
     setNodeScores([]);
-    setVpnScore(null);
-    setSelectedNodeName(null);
     setSwitchHint(null);
     setRestoreError(null);
 
@@ -333,9 +269,8 @@ export function HomePage({
         setGate({
           ok: false,
           message:
-            "还没有读到节点列表。请先点「刷新连接」，确认代理软件里已经加载了订阅。",
+            "还没有读到节点列表。请先点「获取节点」，确认VPN软件里已经加载了订阅。",
         });
-        setGateDetailOpen(true);
         return;
       }
 
@@ -478,7 +413,7 @@ export function HomePage({
       } else if (canSwitch) {
         // API 在，但读不到原先选中 / 策略组：仍尽量深测当前出口，并说明原因
         setSwitchHint(
-          "连上了代理软件，但读不到当前选中的节点或策略组，没法安全地临时切换。只检测当前节点。",
+          "连上了VPN软件，但读不到当前选中的节点或策略组，没法安全地临时切换。只检测当前节点。",
         );
         setProgress({
           text: "正在检测当前节点（无法安全切换）…",
@@ -526,31 +461,18 @@ export function HomePage({
 
       const sorted = sortScores(results);
       setNodeScores(sorted);
-      // 测完后自动选中一个合理节点（优先原先那台、否则首个有卡片的评分），
-      // 让结果网格与总评即时点亮，不必再手动点选。
-      const withCards = (s: NodeScoreResult) => s.cards.length > 0;
-      const origNow = originalSnap?.now ?? null;
-      const preferred =
-        (origNow
-          ? sorted.find((s) => s.nodeName === origNow && withCards(s))
-          : undefined) ?? sorted.find(withCards);
-      if (preferred) {
-        setSelectedNodeName(preferred.nodeName);
-        setNodeCards(preferred.cards);
-      }
       setProgress(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setProgress(null);
       setGate({ ok: false, message: `测全部节点时出错：${msg}` });
-      setGateDetailOpen(true);
     } finally {
       // 成功 / 中止 / 出错：只要切过，就必须尝试切回；失败要明确报错
       if (didSwitch && config && originalSnap?.now && originalSnap.group) {
         setProgress({ text: `正在切回原先节点：${originalSnap.now}…`, testingNode: undefined });
         const restored = await restoreProxy(config, originalSnap);
         if (!restored) {
-          const errMsg = `没法自动切回原先的节点「${originalSnap.now}」。请立刻到代理软件里手动选回去，否则你可能还停在别的节点上。`;
+          const errMsg = `没法自动切回原先的节点「${originalSnap.now}」。请立刻到VPN软件里手动选回去，否则你可能还停在别的节点上。`;
           setRestoreError(errMsg);
           setSwitchHint(errMsg);
         } else {
@@ -560,17 +482,13 @@ export function HomePage({
         setProgress(null);
       } else if (didSwitch && (!originalSnap?.now || !originalSnap.group)) {
         const errMsg =
-          "测全部时切换过节点，但应用没有记下原先选中的节点，没法自动切回。请到代理软件里确认当前节点。";
+          "测全部时切换过节点，但应用没有记下原先选中的节点，没法自动切回。请到VPN软件里确认当前节点。";
         setRestoreError(errMsg);
         setSwitchHint(errMsg);
       }
       setRunning(false);
       abortAllRef.current = false;
     }
-  };
-
-  const onPickNode = (name: string) => {
-    setSelectedNodeName(name);
   };
 
   const runEnv = async () => {
@@ -599,16 +517,6 @@ export function HomePage({
     }
   };
 
-  const onPrimary = () => {
-    if (mode === "current") {
-      setAllConfirmOpen(false);
-      void testCurrent();
-      return;
-    }
-    setRestoreError(null);
-    setAllConfirmOpen(true);
-  };
-
   const onConfirmAll = () => {
     setAllConfirmOpen(false);
     void testAll();
@@ -619,271 +527,345 @@ export function HomePage({
     setProgress({ text: "正在停止…", testingNode: undefined });
   };
 
-  const selectedScore = useMemo(
-    () => nodeScores.find((s) => s.nodeName === selectedNodeName) ?? null,
-    [nodeScores, selectedNodeName],
+  // v0.1.10：版本号进原生标题栏（玻璃窗口下正文不再放介绍卡）。
+  useEffect(() => {
+    if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+      void getCurrentWindow()
+        .setTitle(`Egress Checker ${__APP_VERSION__}`)
+        .catch(() => {});
+    }
+  }, []);
+
+  // 步骤③完成判定：三种检测路径（环境检查/测全部/测单节点）任一产出过结果
+  const envDone =
+    envCards.length > 0 &&
+    envCards.every(
+      (c) => c.level !== "unknown" && c.level !== "running",
+    );
+  const detectionDone = nodeScores.length > 0 || envDone;
+
+  const toggleExpand = (name: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+
+  // 瀑布流列数：Tauri 的 webview 宽度 = 窗口宽度，直接用 window.innerWidth +
+  // resize 事件，比 ResizeObserver 可靠 —— 不受"工作区条件渲染、挂载时序"影响。
+  useEffect(() => {
+    const onResize = () => setColCount(colCountFor(window.innerWidth));
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const nodeColumns: ProxyNode[][] = useMemo(
+    () => {
+      const cols: ProxyNode[][] = Array.from({ length: colCount }, () => []);
+      orderedNodes.forEach((n, i) => cols[i % colCount].push(n));
+      return cols;
+    },
+    [orderedNodes, colCount],
   );
 
-  // 网格优先显示「选中节点」的卡片；未选中（如测当前进行中）才回落实时 nodeCards。
-  // 修复：以前网格恒渲染游离的 nodeCards，点选别的节点后不跟着换，停在最后测的节点上。
-  const gridCards =
-    selectedScore && selectedScore.cards.length > 0 ? selectedScore.cards : nodeCards;
+  // 测全部的行内进度（0–100；无比例时 null）
+  const progressPct =
+    progress &&
+    typeof progress.current === "number" &&
+    typeof progress.total === "number" &&
+    progress.total > 0
+      ? Math.max(
+          0,
+          Math.min(100, Math.round((progress.current / progress.total) * 100)),
+        )
+      : null;
+
+  const allExpanded =
+    orderedNodes.length > 0 && orderedNodes.every((n) => expanded.has(n.name));
+
+  const toggleExpandAll = () =>
+    setExpanded(
+      allExpanded ? new Set() : new Set(orderedNodes.map((n) => n.name)),
+    );
+
+  // 单独测某个节点：非当前节点时临时切换、测完切回（复用测全部的机制）。
+  const testOneNode = async (node: ProxyNode) => {
+    if (running) return;
+    const config = connection.config;
+    let snap: SelectorSnapshot | null = null;
+    let didSwitch = false;
+    setRunning(true);
+    setTestingNode(node.name);
+    setRestoreError(null);
+    try {
+      const g = await ensureGate();
+      if (!g.ok) return;
+      const isCurrent = node.name === connection.currentProxy;
+      if (!isCurrent && config && !connection.usingMock && !forceMock) {
+        snap = await resolveSelectorSnapshot(config, connection.currentProxy);
+        const group =
+          (await findSelectorGroup(config, node.name)) ?? snap?.group;
+        if (!group) {
+          setSwitchHint("找不到可切换的策略组，没法单独测这个节点。");
+          return;
+        }
+        const ok = await switchProxy(config, group, node.name);
+        if (!ok) {
+          setSwitchHint("切换失败，没法测这个节点。");
+          return;
+        }
+        didSwitch = true;
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      setProgress({ text: `正在检测 ${node.name}…`, testingNode: node.name });
+      setNodeCards(asRunning(NODE_PLACEHOLDERS));
+      const r = await runNodeDeepLight(upsertNodeCard, {
+        mixedPort: mixedPortNum,
+        mihomoConfig: config,
+      });
+      setNodeCards(r.cards);
+      const scored = scoreNodeFromCards(node.name, r.cards, r.ranAt);
+      setNodeScores((prev) => {
+        const next = prev.filter((x) => x.nodeName !== node.name);
+        next.push(scored);
+        return next;
+      });
+      setExpanded((prev) => new Set(prev).add(node.name));
+    } catch (err) {
+      setSwitchHint(err instanceof Error ? err.message : String(err));
+    } finally {
+      if (didSwitch && config && snap?.now && snap.group) {
+        const restored = await restoreProxy(config, snap);
+        if (!restored)
+          setRestoreError(
+            `没能自动切回原先节点「${snap.now}」，请到VPN软件里手动选回。`,
+          );
+      }
+      setRunning(false);
+      setTestingNode(null);
+      setProgress(null);
+    }
+  };
 
   return (
     <div className="home-page">
-      <div className="about-block card home-about">
-        <p>
-          <strong>Egress Checker v{__APP_VERSION__}</strong>
-        </p>
-        <p>帮你检查代理有没有生效，并给节点打分，方便换节点。</p>
-        <p>
-          请先打开 Clash Verge 等已支持的客户端并连上，再在本软件里选同名软件、点刷新。
-        </p>
-        <p>
-          本软件不提供节点；「测全部」会临时切换节点，测完会切回。密钥只存在本机。
-          仅支持 macOS Apple Silicon。
-        </p>
+      <div className="flow-hint" aria-label="使用步骤">
+        <span className={`fh-step ${gate?.ok ? "done" : "cur"}`}>
+          <i>{gate?.ok ? "✓" : "1"}</i>打开你的VPN软件并连上一个可用节点
+        </span>
+        <span className="fh-arrow">→</span>
+        <span className={`fh-step ${gate?.ok ? "done" : "todo"}`}>
+          <i>2</i>在下方选择你使用的VPN软件 · 获取节点
+        </span>
+        <span className="fh-arrow">→</span>
+        <span
+          className={`fh-step ${!gate?.ok ? "todo" : detectionDone ? "done" : "cur"}`}
+        >
+          <i>{!gate?.ok ? "3" : detectionDone ? "✓" : "3"}</i>进行检测
+        </span>
       </div>
 
-      <div className="home-ops">
+      <div className="app-header">
         <div className="home-ops-controls">
-          <label className="client-picker-label" htmlFor="home-client-select">
-            你在用哪款软件？
-          </label>
-          <select
-            id="home-client-select"
-            className="client-picker-select"
-            value={clientId ?? ""}
-            onChange={(e) => onSelectClient(e.target.value)}
-            title={
-              clientUnset
-                ? "先选软件，再点刷新"
-                : CLIENT_OPTIONS.find((o) => o.id === clientId)?.hint
-            }
-          >
-            <option value="" disabled>
-              请选择…
-            </option>
-            {CLIENT_OPTIONS.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label}
+          <div className="picker-group">
+            <label className="client-picker-label" htmlFor="home-client-select">
+              你在用哪款软件？
+            </label>
+            <select
+              id="home-client-select"
+              className="client-picker-select"
+              value={clientId ?? ""}
+              onChange={(e) => onSelectClient(e.target.value)}
+              title={
+                clientUnset
+                  ? "先选软件，再点「获取节点」"
+                  : CLIENT_OPTIONS.find((o) => o.id === clientId)?.hint
+              }
+            >
+              <option value="" disabled>
+                请选择…
               </option>
-            ))}
-          </select>
+              {CLIENT_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <button
-            className="btn btn-sm home-ops-refresh"
+            className="btn btn-primary btn-sm home-ops-refresh action-btn"
             type="button"
             disabled={!!busy || refreshing || running || clientUnset}
             title={clientUnset ? "请先选择软件" : undefined}
             onClick={() => void refreshAndGate()}
           >
-            {busy || refreshing ? "刷新中…" : "刷新连接"}
+            {busy || refreshing ? "获取中…" : "获取节点"}
           </button>
         </div>
-        <div
-          className="status-pill status-pill-dense home-ops-status"
-          title={connection.message}
-        >
-          <span
-            className={`dot ${connection.status === "connected" ? "connected" : connection.usingMock ? "mock" : connection.status}`}
-          />
-          <span className="status-pill-text">{connection.message}</span>
-        </div>
+        {!refreshing &&
+        (connection.status === "connected" && gate?.ok ? (
+          <span className="fetch-ok" title={connection.message}>
+            <span className="status-ok-mark">✓</span>成功
+          </span>
+        ) : gate && !gate.ok ? (
+          <span className="fetch-fail" title={gate.message}>
+            <span className="status-fail-mark">✗</span>失败
+          </span>
+        ) : null)}
       </div>
 
-      {gate && !gate.ok ? (
+      {!refreshing && gate && !gate.ok ? (
         <div className="gate-banner gate-banner-block" role="status">
-          <div className="gate-banner-title">还不能测节点</div>
-          <div className="gate-banner-msg">{gate.message}</div>
-          {gate.process ? (
-            <>
-              <button
-                type="button"
-                className="card-process-toggle"
-                aria-expanded={gateDetailOpen}
-                onClick={() => setGateDetailOpen((v) => !v)}
-              >
-                {gateDetailOpen ? "收起过程" : "查看过程"}
-              </button>
-              {gateDetailOpen ? <pre className="gate-process">{gate.process}</pre> : null}
-            </>
-          ) : null}
-        </div>
-      ) : gate?.ok ? (
-        <div className="gate-banner gate-banner-ok" role="status">
           {gate.message}
         </div>
       ) : null}
 
 
       {gate?.ok && orderedNodes.length > 0 ? (
-        <div className="home-nodes card">
-          <div className="home-nodes-summary">
-            <span className="home-nodes-summary-text">
-              已识别 {orderedNodes.length} 个节点 · 当前：
-              <strong className="home-nodes-current-mark">
-                {connection.currentProxy ?? "—"}
-              </strong>
-            </span>
-          </div>
-          <div className="home-nodes-list">
-            {orderedNodes.map((n) => {
-              const isCurrent = n.name === connection.currentProxy;
-              const scored = scoreByName.get(n.name);
-              const selected = selectedNodeName === n.name;
-              const isTesting = progress?.testingNode === n.name;
-              const clickable = !!scored;
-              return (
-                <button
-                  key={n.name}
-                  type="button"
-                  className={`home-nodes-row${isCurrent ? " current" : ""}${selected ? " selected" : ""}${clickable ? " scored" : ""}${isTesting ? " testing" : ""}`}
-                  disabled={!clickable}
-                  onClick={() => {
-                    if (scored) onPickNode(n.name);
-                  }}
-                >
-                  <div className="home-nodes-row-top">
-                    <span className="home-nodes-name" title={n.name}>
-                      {n.name}
-                    </span>
-                    {isTesting ? (
-                      <span className="home-nodes-badge home-nodes-badge-testing">
-                        检测中
-                      </span>
-                    ) : null}
-                    {!isTesting && isCurrent ? (
-                      <span className="home-nodes-badge">当前</span>
-                    ) : null}
-                    {isTesting && isCurrent ? (
-                      <span className="home-nodes-badge">当前</span>
-                    ) : null}
-                  </div>
-                  {scored ? (
-                    <StarRating stars={scored.stars} size={13} />
-                  ) : (
-                    <span className="home-nodes-meta">
-                      {n.region && n.region !== "未知" ? n.region : n.type}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : refreshing && !clientUnset ? (
-        <div className="note note-compact">
-          <span className="note-line">正在检查…</span>
-        </div>
-      ) : null}
-
-      {selectedScore ? (
-        <div className="node-score-detail card">
-          <div className="node-score-detail-head">
-            <strong>{selectedScore.nodeName}</strong>
-            <StarRating stars={selectedScore.stars} size={15} />
-          </div>
-          <div className="score-breakdown">
-            {selectedScore.breakdown.map((b) => (
-              <div key={b.key} className="score-breakdown-row">
-                <strong>
-                  {b.label}（{Math.round(b.weight * 100)}%）
-                </strong>
-                ：{b.score} 分 — {b.note}
+        <>
+          <div className="env-section">
+            <div className="env-head">
+              <div className="env-head-labels">
+                <span className="t">环境泄漏检查</span>
+                <span className="s">对当前出口体检 · 不需先测节点</span>
               </div>
-            ))}
-            {selectedScore.fakeLowLatencyTip ? (
-              <div className="score-tip">{selectedScore.fakeLowLatencyTip}</div>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm action-btn"
+                disabled={envRunning || running}
+                onClick={() => void runEnv()}
+              >
+                {envRunning ? "检查中…" : envOpen ? "重新检查环境" : "开始环境检查"}
+              </button>
+            </div>
+            {envOpen ? (
+              <>
+                {mixedPortNum == null || mixedPortNum <= 0 ? (
+                  <div className="note note-compact" style={{ marginTop: 10 }}>
+                    当前未检测到代理，境外探测点不可达，结论不代表 VPN 表现。
+                  </div>
+                ) : null}
+                <div className="card-grid card-grid-home" style={{ marginTop: 10 }}>
+                  {envCards.map((c) => (
+                    <CheckCardView key={c.id} card={c} />
+                  ))}
+                </div>
+              </>
             ) : null}
           </div>
-        </div>
-      ) : null}
 
-      <div className="mode-toggle" role="group" aria-label="测评方式">
-        <button
-          type="button"
-          className={`mode-btn ${mode === "current" ? "active" : ""}`}
-          disabled={running || clientUnset}
-          onClick={() => {
-            setMode("current");
-            setAllConfirmOpen(false);
-            setRestoreError(null);
-            void testCurrent();
-          }}
-        >
-          测当前节点
-        </button>
-        <button
-          type="button"
-          className={`mode-btn ${mode === "all" ? "active" : ""}`}
-          disabled={running || clientUnset}
-          onClick={() => {
-            setMode("all");
-            setRestoreError(null);
-            setAllConfirmOpen(true);
-          }}
-        >
-          测全部节点
-        </button>
-      </div>
+          <div className="ws-ops">
+            <button type="button" className="btn btn-sm" onClick={toggleExpandAll}>
+              {allExpanded ? "收起全部详情" : "展开全部详情"}
+            </button>
+            <div className="ws-ops-right">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm action-btn"
+                disabled={running || clientUnset}
+                onClick={() => {
+                  setMode("all");
+                  setRestoreError(null);
+                  setAllConfirmOpen(true);
+                }}
+              >
+                {running && mode === "all" ? "测全部中…" : "测全部节点"}
+              </button>
+              {running && mode === "all" ? (
+                <>
+                  <div className="ws-progress" role="status" aria-live="polite">
+                    <span className="ws-progress-text">{progress?.text}</span>
+                    {progressPct != null ? (
+                      <span
+                        className="ws-progress-bar"
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={progressPct}
+                      >
+                        <span
+                          className="ws-progress-fill"
+                          style={{ width: `${progressPct}%` }}
+                        />
+                      </span>
+                    ) : null}
+                  </div>
+                  <button type="button" className="btn btn-sm" onClick={onAbortAll}>
+                    停止并切回
+                  </button>
+                </>
+              ) : null}
+              {!running && !allConfirmOpen ? (
+                <span className="ws-hint">
+                  「测全部」会先并行连通性预检、再逐个简要检测（约几分钟），期间临时切换你的节点、测完自动切回。
+                </span>
+              ) : null}
+            </div>
+          </div>
 
-      {mode === "all" && !running && !allConfirmOpen ? (
-        <div className="note note-compact switch-warn" role="status">
-          <span className="note-line">
-            「测全部」会先并行检查各节点能否连通，筛掉连不上的，再对能连通的节点做简要检测（大约几分钟）。检测时会临时切换你当前选中的节点，上网出口会跟着变；测完或中途停止后会自动切回原来的节点。
-          </span>
-        </div>
+          <div className="node-flow">
+            {nodeColumns.map((col, ci) => (
+              <div className="flow-col" key={ci}>
+                {col.map((n) => (
+                  <NodeCard
+                    key={n.name}
+                    node={n}
+                    score={scoreByName.get(n.name)}
+                    liveCards={testingNode === n.name ? nodeCards : undefined}
+                    isCurrent={n.name === connection.currentProxy}
+                    expanded={expanded.has(n.name)}
+                    testing={testingNode === n.name}
+                    onToggle={() => {
+                      if (scoreByName.get(n.name)) {
+                        toggleExpand(n.name);
+                      }
+                    }}
+                    onTest={() => void testOneNode(n)}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        </>
       ) : null}
 
       {allConfirmOpen && mode === "all" ? (
-        <div className="confirm-panel card" role="dialog" aria-labelledby="all-confirm-title">
-          <div id="all-confirm-title" className="confirm-title">
-            开始前请确认
-          </div>
-          <p className="confirm-body">
-            测全部节点时，应用会在节点之间来回切换，你的上网出口会跟着变。测完或中途停止后，会自动切回你现在选中的节点。若切回失败，界面会明确报错，请你到代理软件里手动改回。
-          </p>
-          <div className="toolbar" style={{ marginBottom: 0 }}>
-            <button
-              className="btn btn-primary"
-              type="button"
-              disabled={clientUnset}
-              onClick={onConfirmAll}
-            >
-              开始测全部（会切换节点）
-            </button>
-            <button
-              className="btn"
-              type="button"
-              onClick={() => setAllConfirmOpen(false)}
-            >
-              取消
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="toolbar" style={{ marginBottom: 12 }}>
-          <button
-            className="btn btn-primary"
-            type="button"
-            disabled={running || clientUnset}
-            onClick={onPrimary}
+        <div className="confirm-overlay">
+          <div
+            className="confirm-panel card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="all-confirm-title"
           >
-            {running
-              ? "检测中…"
-              : mode === "current"
-                ? "再测一次当前节点"
-                : "开始测全部（会切换节点）"}
-          </button>
-          {running && mode === "all" ? (
-            <button className="btn" type="button" onClick={onAbortAll}>
-              停止并切回
-            </button>
-          ) : null}
+            <div id="all-confirm-title" className="confirm-title">
+              开始前请确认
+            </div>
+            <p className="confirm-body">
+              测全部节点时，应用会在节点之间来回切换，你的上网出口会跟着变。测完或中途停止后，会自动切回你现在选中的节点。若切回失败，界面会明确报错，请你到VPN软件里手动改回。
+            </p>
+            <div className="toolbar" style={{ marginBottom: 0 }}>
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={clientUnset}
+                onClick={onConfirmAll}
+              >
+                开始测全部（会切换节点）
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setAllConfirmOpen(false)}
+              >
+                取消
+              </button>
+            </div>
+          </div>
         </div>
-      )}
+      ) : null}
 
-      {progress ? <TestProgress progress={progress} /> : null}
       {restoreError ? (
         <div className="gate-banner gate-banner-block" role="alert">
           <div className="gate-banner-title">没能切回原先节点</div>
@@ -892,71 +874,6 @@ export function HomePage({
       ) : null}
       {switchHint && !restoreError ? (
         <div className="note note-compact">{switchHint}</div>
-      ) : null}
-
-      {(selectedScore && selectedScore.cards.length > 0) ||
-      (running && mode === "current") ? (
-        <>
-          <h2 className="section-title">当前节点检测结果</h2>
-          <div className="card-grid card-grid-home">
-            {gridCards.map((c) => (
-              <CheckCardView key={c.id} card={c} />
-            ))}
-          </div>
-        </>
-      ) : null}
-
-      <div className="env-entry card">
-        <div className="env-entry-head">
-          <div>
-            <strong>环境泄漏检查</strong>
-            <div className="muted">
-              DNS / IPv6 / WebRTC / 分流 / 直连旁路（不默认每次强跑）
-            </div>
-          </div>
-          <button
-            type="button"
-            className="btn btn-sm"
-            disabled={envRunning || running}
-            onClick={() => void runEnv()}
-          >
-            {envRunning ? "检查中…" : envOpen ? "重新检查环境" : "开始环境检查"}
-          </button>
-        </div>
-        {envOpen ? (
-          <>
-            {mixedPortNum == null || mixedPortNum <= 0 ? (
-              <div className="note note-compact" role="status" style={{ marginTop: 12 }}>
-                当前未检测到代理，境外探测点不可达，结论不代表VPN表现，要看总评请先连上代理再重测。
-              </div>
-            ) : null}
-            <div className="card-grid card-grid-home" style={{ marginTop: 12 }}>
-              {envCards.map((c) => (
-                <CheckCardView key={c.id} card={c} />
-              ))}
-            </div>
-          </>
-        ) : null}
-      </div>
-
-      {envReady && vpnScore ? (
-        <div className="vpn-score-card card">
-          <div className="vpn-score-head">
-            <span className={`vpn-tier${vpnScore.tier === "完美" ? " vpn-tier-perfect" : ""}`}>{vpnScore.tier}</span>
-            <span className="muted vpn-score-dep">按环境检查 + 你点选的节点</span>
-          </div>
-          <div className="vpn-reason">{vpnScore.reason}</div>
-          <div className="muted" style={{ marginTop: 6 }}>
-            基于节点：{vpnScore.selectedNodeName}
-          </div>
-        </div>
-      ) : null}
-
-      {!vpnScore && !running && !envRunning && (envReady || nodeScores.length > 0) ? (
-        <div className="note note-compact">
-          「整份 VPN 总评」需要两步都有结果：环境检查完成 <strong>+</strong> 测过节点并在上方点选一个节点。
-          环境检查重跑期间总评会暂时消失，跑完自动回来。
-        </div>
       ) : null}
 
       <div className="fold-panel card">
@@ -1059,6 +976,23 @@ export function HomePage({
         ) : null}
       </div>
 
+      <details className="about-footer">
+        <summary>关于 Egress Checker</summary>
+        <div className="a-body">
+          仓库：
+          <a
+            href="https://github.com/JTee77/egress-checker"
+            target="_blank"
+            rel="noreferrer"
+          >
+            github.com/JTee77/egress-checker
+          </a>
+          <br />
+          致谢：Clash Verge / mihomo 社区。
+          <br />
+          请我喝杯咖啡 ☕（占位：链接或二维码待定）
+        </div>
+      </details>
     </div>
   );
 }
