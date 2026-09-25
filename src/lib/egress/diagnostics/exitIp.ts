@@ -169,6 +169,38 @@ export async function fetchExitIp(
   return emptyExitIp();
 }
 
+/**
+ * 查询任意 IP 的归属国（供 DNS/WebRTC 归属判定用）。
+ * 两个源顺序兜底（house convention：顺序而非并发），全失败返回 null。
+ */
+export async function fetchIpCountry(
+  ip: string,
+  mixedPort?: number | null,
+): Promise<string | null> {
+  const urls = [
+    `https://ipwho.is/${encodeURIComponent(ip)}`,
+    `https://get.geojs.io/v1/ip/geo.json?ip=${encodeURIComponent(ip)}`,
+  ];
+  for (const url of urls) {
+    const r = await fetchTextViaProxy(url, {
+      mixedPort: mixedPort ?? null,
+      timeoutMs: 3000,
+    });
+    if (!r.ok || !r.text) continue;
+    try {
+      const d = JSON.parse(r.text) as {
+        country_code?: string;
+        countryCode?: string;
+      };
+      const cc = d.country_code ?? d.countryCode ?? null;
+      if (cc) return cc.toUpperCase();
+    } catch {
+      // 解析失败 → 尝试下一个源
+    }
+  }
+  return null;
+}
+
 export function exitIpCard(info: ExitIpInfo): CheckCard {
   if (!info.ip) {
     return {

@@ -1,6 +1,7 @@
 //! WebRTC 泄漏检测：浏览器 STUN 收集 ICE 候选，与代理出口比对判泄漏。
-import { classifyWebRtc, candidateScope } from "../leakMatrix";
+import { classifyWebRtc, candidateScope, localeCountry } from "../leakMatrix";
 import type { WebRtcCandidateType } from "../leakMatrix";
+import { fetchIpCountry } from "./exitIp";
 import type { CheckCard, ExitIpInfo } from "../types";
 
 type IceCand = {
@@ -17,6 +18,9 @@ type IceCand = {
  */
 export async function checkWebRtcLeak(
   exit?: ExitIpInfo | null,
+  mixedPort?: number | null,
+  /** 真实归属参照（由 envRun 实测/推断后传入）；不传时退回系统区域启发式 */
+  realCountryOverride?: string | null,
 ): Promise<CheckCard> {
   const RTCPeer =
     typeof window !== "undefined"
@@ -104,10 +108,33 @@ export async function checkWebRtcLeak(
   }
   const list = [...uniq.values()];
 
+  // 归属地判定要素：对"公网、非 relay、≠出口"的候选查归属国（最多 3 个，顺序），
+  // 真实归属参照来自系统区域。查不到归属的地址保持未知 → 按旧口径处理。
+  const geoCountryByAddr: Record<string, string | null> = {};
+  const realCountry =
+    realCountryOverride !== undefined ? realCountryOverride : localeCountry();
+  const needGeo = [
+    ...new Set(
+      list
+        .filter(
+          (c) =>
+            c.scope === "public" &&
+            normalizeIceType(c.type) !== "relay" &&
+            !proxyExitIps.includes(c.address),
+        )
+        .map((c) => c.address),
+    ),
+  ].slice(0, 3);
+  for (const addr of needGeo) {
+    geoCountryByAddr[addr] = await fetchIpCountry(addr, mixedPort ?? null);
+  }
+
   const verdict = classifyWebRtc({
     apiAvailable: true,
     gatherFailed: !!failMsg,
     proxyExitIps,
+    geoCountryByAddr,
+    realCountry,
     candidates: list.map((c) => ({
       type: normalizeIceType(c.type),
       address: c.address,

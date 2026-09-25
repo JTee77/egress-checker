@@ -210,6 +210,13 @@ function toNode(name: string, p: ProxyInfo): ProxyNode {
     tfo: p.tfo,
     smux: p.smux,
     mptcp: p.mptcp,
+    alive: p.alive,
+    lastDelay: p.history?.length
+      ? p.history[p.history.length - 1].delay
+      : undefined,
+    lastDelayAt: p.history?.length
+      ? p.history[p.history.length - 1].time
+      : undefined,
     raw: p,
   };
 }
@@ -522,6 +529,9 @@ async function getProxiesViaSlimCommand(
         tfo?: boolean;
         smux?: boolean;
         mptcp?: boolean;
+        alive?: boolean | null;
+        lastDelay?: number | null;
+        lastDelayAt?: string | null;
       }[];
       currentProxy: string | null;
       status: number;
@@ -537,8 +547,8 @@ async function getProxiesViaSlimCommand(
         sockPath: config.sockPath ?? null,
       },
     });
-    const nodes: ProxyNode[] = (res.nodes ?? []).map((n) =>
-      toNode(n.name, {
+    const nodes: ProxyNode[] = (res.nodes ?? []).map((n) => ({
+      ...toNode(n.name, {
         name: n.name,
         type: n.type,
         udp: n.udp,
@@ -548,7 +558,10 @@ async function getProxiesViaSlimCommand(
         smux: n.smux,
         mptcp: n.mptcp,
       }),
-    );
+      alive: n.alive ?? undefined,
+      lastDelay: n.lastDelay ?? undefined,
+      lastDelayAt: n.lastDelayAt ?? undefined,
+    }));
     return {
       nodes,
       currentProxy: res.currentProxy ?? null,

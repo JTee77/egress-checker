@@ -138,12 +138,17 @@ export function HomePage({
     const current = connection.currentProxy;
     const ordered = [...nodes];
     if (nodeScores.length > 0) {
+      // 三桶排序：已测活的在前（按星级/总分），没测的居中（保持订阅顺序，
+      // 当前节点优先），不可用的垫底——测全部过程中死节点边测边出分，
+      // 不能让它们反而浮到最前面干扰阅读。
+      const bucket = (s?: NodeScoreResult) =>
+        !s ? 1 : s.stars === "unavailable" ? 2 : 0;
       ordered.sort((a, b) => {
         const sa = scoreByName.get(a.name);
         const sb = scoreByName.get(b.name);
-        const aHas = sa ? 1 : 0;
-        const bHas = sb ? 1 : 0;
-        if (aHas !== bHas) return bHas - aHas;
+        const ka = bucket(sa);
+        const kb = bucket(sb);
+        if (ka !== kb) return ka - kb;
         if (sa && sb) {
           const byStar = starRank(sb.stars) - starRank(sa.stars);
           if (byStar !== 0) return byStar;
@@ -315,18 +320,33 @@ export function HomePage({
         }
       }
 
-      setProgress({ text: `连通性预检 0/${list.length}`, current: 0, total: list.length, testingNode: undefined });
+      // 客户端"最近"测失败（10 分钟内）的节点直接跳过预检。客户端的失败
+      // 记录可能过期（实测有 2 小时前判死、现在已恢复的节点），所以只信
+      // 新鲜记录：过期的失败记录一律仍走预检实测。
+      const CLIENT_DEAD_FRESH_MS = 10 * 60 * 1000;
+      const clientDead = list.filter((n) => {
+        if (n.lastDelay !== 0 || !n.lastDelayAt) return false;
+        // mihomo 时间戳可能带 6 位小数秒，Date.parse 只保证 3 位
+        const t = Date.parse(n.lastDelayAt.replace(/(\.\d{3})\d+/, "$1"));
+        return Number.isFinite(t) && Date.now() - t <= CLIENT_DEAD_FRESH_MS;
+      });
+      for (const n of clientDead) {
+        upsertScore(scoreDeadNode(n.name, "客户端最近测速失败，按不可用处理。"));
+      }
+      const toCheck = list.filter((n) => !clientDead.includes(n));
+
+      setProgress({ text: `连通性预检 0/${toCheck.length}`, current: 0, total: toCheck.length, testingNode: undefined });
       if (!canSwitch) {
-        for (let i = 0; i < list.length; i++) {
+        for (let i = 0; i < toCheck.length; i++) {
           if (abortAllRef.current) break;
-          const n = list[i];
+          const n = toCheck[i];
           setProgress({
-            text: `连通性预检 ${i + 1}/${list.length}`,
+            text: `连通性预检 ${i + 1}/${toCheck.length}`,
             current: i + 1,
-            total: list.length,
+            total: toCheck.length,
             testingNode: n.name,
           });
-          if (i === list.length - 1 && list.length > 1) {
+          if (i === toCheck.length - 1 && toCheck.length > 1) {
             upsertScore(
               scoreDeadNode(n.name, "演示：延迟探测失败，按不可用处理。"),
             );
@@ -336,16 +356,16 @@ export function HomePage({
         }
       } else {
         let cullDone = 0;
-        const cullOut = await mapPool(list, CULL_CONCURRENCY, async (n) => {
+        const cullOut = await mapPool(toCheck, CULL_CONCURRENCY, async (n) => {
           if (abortAllRef.current) {
             return { n, delay: null as number | null, skipped: true };
           }
-          const delay = await probeDelay(config!, n.name, DELAY_URL, 2500);
+          const delay = await probeDelay(config!, n.name, DELAY_URL, 5000);
           cullDone += 1;
           setProgress({
-            text: `连通性预检 ${cullDone}/${list.length}`,
+            text: `连通性预检 ${cullDone}/${toCheck.length}`,
             current: cullDone,
-            total: list.length,
+            total: toCheck.length,
             testingNode: n.name,
           });
           if (delay == null) {
@@ -362,15 +382,9 @@ export function HomePage({
         }
       }
 
-      if (abortAllRef.current) {
-        setSwitchHint("已停止。");
-      } else if (canSwitch && originalSnap?.group && originalSnap.now) {
-        setSwitchHint(
-          `测全部会临时切换节点。原先选中：${originalSnap.now}。测完后会自动切回去。`,
-        );
+      if (canSwitch && !abortAllRef.current && originalSnap?.group && originalSnap.now) {
         for (let i = 0; i < alive.length; i++) {
           if (abortAllRef.current) {
-            setSwitchHint("已停止，正在切回原先节点…");
             break;
           }
           const n = alive[i];
@@ -477,7 +491,6 @@ export function HomePage({
           setSwitchHint(errMsg);
         } else {
           setRestoreError(null);
-          setSwitchHint(`已切回原先节点：${originalSnap.now}`);
         }
         setProgress(null);
       } else if (didSwitch && (!originalSnap?.now || !originalSnap.group)) {
@@ -710,18 +723,16 @@ export function HomePage({
             <span className="status-ok-mark">✓</span>成功
           </span>
         ) : gate && !gate.ok ? (
-          <span className="fetch-fail" title={gate.message}>
-            <span className="status-fail-mark">✗</span>失败
-          </span>
+          <>
+            <span className="fetch-fail">
+              <span className="status-fail-mark">✗</span>失败
+            </span>
+            <span className="fetch-fail-msg" role="status">
+              {gate.message}
+            </span>
+          </>
         ) : null)}
       </div>
-
-      {!refreshing && gate && !gate.ok ? (
-        <div className="gate-banner gate-banner-block" role="status">
-          {gate.message}
-        </div>
-      ) : null}
-
 
       {gate?.ok && orderedNodes.length > 0 ? (
         <>
@@ -797,9 +808,9 @@ export function HomePage({
                   </button>
                 </>
               ) : null}
-              {!running && !allConfirmOpen ? (
-                <span className="ws-hint">
-                  「测全部」会先并行连通性预检、再逐个简要检测（约几分钟），期间临时切换你的节点、测完自动切回。
+              {switchHint && !restoreError ? (
+                <span className="ws-error" role="alert">
+                  {switchHint}
                 </span>
               ) : null}
             </div>
@@ -837,13 +848,10 @@ export function HomePage({
             className="confirm-panel card"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="all-confirm-title"
+            aria-label="确认测全部"
           >
-            <div id="all-confirm-title" className="confirm-title">
-              开始前请确认
-            </div>
             <p className="confirm-body">
-              测全部节点时，应用会在节点之间来回切换，你的上网出口会跟着变。测完或中途停止后，会自动切回你现在选中的节点。若切回失败，界面会明确报错，请你到VPN软件里手动改回。
+              点击「确定」后，将逐个检测所有节点（约几分钟），期间会切换出口节点并消耗流量，建议暂时不要进行支付、登录等重要操作。测完会自动切回原节点。
             </p>
             <div className="toolbar" style={{ marginBottom: 0 }}>
               <button
@@ -852,7 +860,7 @@ export function HomePage({
                 disabled={clientUnset}
                 onClick={onConfirmAll}
               >
-                开始测全部（会切换节点）
+                确定
               </button>
               <button
                 className="btn"
@@ -871,9 +879,6 @@ export function HomePage({
           <div className="gate-banner-title">没能切回原先节点</div>
           <div className="gate-banner-msg">{restoreError}</div>
         </div>
-      ) : null}
-      {switchHint && !restoreError ? (
-        <div className="note note-compact">{switchHint}</div>
       ) : null}
 
       <div className="fold-panel card">

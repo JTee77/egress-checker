@@ -22,7 +22,7 @@
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   line-height: 1.45;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -99,7 +99,7 @@ select {
 
 .brand-sub {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 11px;
   margin-top: 2px;
 }
 
@@ -151,12 +151,12 @@ select {
 
 .page-header h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
   letter-spacing: -0.03em;
 }
 
 .page-header-dense h1 {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .page-header p {
@@ -254,7 +254,7 @@ select {
   background: var(--pass);
   color: #fff;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   flex: none;
 }
 /* 获取失败：与成功对称的行内状态；详细解释与过程仍在下方横幅 */
@@ -279,8 +279,16 @@ select {
   background: var(--fail);
   color: #fff;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   flex: none;
+}
+/* 失败原因紧跟「失败」标：宽窗同行排下，窄窗自动折行（header 本身 flex-wrap） */
+.fetch-fail-msg {
+  font-size: 12px;
+  color: var(--fail);
+  line-height: 1.4;
+  min-width: 0;
+  flex: 1 1 160px;
 }
 
 .client-picker-hint {
@@ -434,7 +442,7 @@ select {
 
 .card-dense .badge {
   padding: 1px 6px;
-  font-size: 10px;
+  font-size: 10.5px;
 }
 
 .badge.pass {
@@ -456,16 +464,16 @@ select {
 }
 
 .card-conclusion {
-  margin-top: 1px;
-  font-size: 11px;
+  margin-top: 2px;
+  font-size: 12px;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 .card-suggestion {
-  margin-top: 1px;
-  font-size: 9px;
-  line-height: 1.22;
+  margin-top: 2px;
+  font-size: 10.5px;
+  line-height: 1.3;
   color: var(--accent);
 }
 
@@ -475,8 +483,8 @@ select {
   border: none;
   background: none;
   color: var(--text-muted);
-  font-size: 9px;
-  line-height: 1.22;
+  font-size: 10.5px;
+  line-height: 1.3;
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -489,8 +497,8 @@ select {
 .card-process {
   margin-top: 1px;
   color: var(--text-muted);
-  font-size: 9px;
-  line-height: 1.22;
+  font-size: 10.5px;
+  line-height: 1.3;
   white-space: pre-wrap;
 }
 
@@ -746,7 +754,7 @@ table.data tr:last-child td {
   color: var(--fail);
 }
 .gate-banner-title {
-  font-weight: 650;
+  font-weight: 600;
   margin-bottom: 4px;
   color: inherit;
 }
@@ -800,15 +808,15 @@ table.data tr:last-child td {
   background: var(--warn-bg);
 }
 
-.confirm-title {
-  font-weight: 700;
-  margin-bottom: 8px;
-}
-
 .confirm-body {
   margin: 0 0 12px;
   font-size: 13px;
   line-height: 1.5;
+}
+
+/* 弹窗按钮组居中（确认/取消是对称动作，不沿左缘动作列对齐） */
+.confirm-panel .toolbar {
+  justify-content: center;
 }
 
 .progress-line {
@@ -828,8 +836,8 @@ table.data tr:last-child td {
   margin-bottom: 6px;
 }
 .vpn-tier {
-  font-size: 22px;
-  font-weight: 750;
+  font-size: 20px;
+  font-weight: 700;
 }
 .vpn-tier-perfect {
   color: var(--accent);
@@ -845,6 +853,7 @@ table.data tr:last-child td {
 
 .section-title {
   font-size: 16px;
+  font-weight: 600;
   margin: 16px 0 6px;
 }
 .section-hint {
@@ -865,7 +874,7 @@ table.data tr:last-child td {
 }
 .score-breakdown {
   margin-top: 8px;
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.45;
 }
 .score-breakdown-row {
@@ -998,7 +1007,7 @@ table.data tr:last-child td {
   min-width: 0;
   flex: 1;
   overflow: hidden;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.35;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -1032,8 +1041,8 @@ table.data tr:last-child td {
   align-items: center;
   border-radius: 999px;
   padding: 0 6px;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 10.5px;
+  font-weight: 600;
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   letter-spacing: 0.02em;
@@ -1054,8 +1063,8 @@ table.data tr:last-child td {
   padding: 0 5px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 10.5px;
+  font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--text-muted);
   vertical-align: middle;
@@ -1081,7 +1090,7 @@ table.data tr:last-child td {
 
 .test-progress-text {
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1190,7 +1199,7 @@ table.data tr:last-child td {
 }
 .star-rating-na {
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--fail);
 }
 .star-glyph {
@@ -1213,21 +1222,20 @@ table.data tr:last-child td {
    / 环境检查上移 / 底部关于 / 玻璃地基
    ============================================================ */
 :root {
-  /* 收起卡高度 */
-  --nc-h: 84px;
+  /* 收起卡高度（摘要内容 ~52px + 上下 padding） */
+  --nc-h: 68px;
   /* 展开卡内摘要区高度：压到自然内容高，省出的空间全部让给详情 */
-  --nc-sum-h: 66px;
-  /* 卡片纵向间距（展开总高必须把它算进去：2*--nc-h + --nc-gap） */
+  --nc-sum-h: 56px;
+  /* 展开卡总高：与收起高解耦（详情 3 排需要的高度），收起变矮不改变展开高 */
+  --nc-exp-h: 180px;
+  /* 卡片纵向间距（展开总高必须把它算进去） */
   --nc-gap: 9px;
   /* 动作列：三个主按钮左缘统一的竖线 */
   --action-x: 376px;
 }
 
-/* 吸顶头部工具条（选软件 · 刷新 · 连接状态） */
+/* 头部工具条（选软件 · 刷新 · 连接状态）：普通文档流，随页面滚动 */
 .app-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1285,10 +1293,11 @@ table.data tr:last-child td {
   gap: 10px;
   width: 100%;
 }
-.ws-hint {
-  font-size: 11px;
-  color: var(--text-muted);
-  line-height: 1.5;
+/* 动作条上的错误通报：只在出错时出现（成功/过程状态不落字条，进度消失即反馈） */
+.ws-error {
+  font-size: 12px;
+  color: var(--fail);
+  line-height: 1.4;
   min-width: 0;
 }
 /* 三大动作按钮（获取节点 / 开始环境检查 / 测全部节点）：
@@ -1335,9 +1344,12 @@ table.data tr:last-child td {
   border-color: var(--accent);
 }
 .ncard.exp {
-  /* 不变量：总高 = 邻列两张收起卡 + 一个空行（含空行对齐网格节奏） */
-  height: calc(var(--nc-h) * 2 + var(--nc-gap));
+  /* 总高固定（--nc-exp-h）：摘要压到自然高，余量全给详情 3 排 */
+  height: var(--nc-exp-h);
   border-color: var(--accent);
+}
+.ncard.exp .nc-sum {
+  height: var(--nc-sum-h);
 }
 .nc-sum {
   display: flex;
@@ -1355,15 +1367,15 @@ table.data tr:last-child td {
   gap: 6px;
 }
 .nc-nm {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .nc-badge {
-  font-size: 9px;
-  font-weight: 800;
+  font-size: 10px;
+  font-weight: 700;
   color: #fff;
   background: var(--pass);
   border-radius: 5px;
@@ -1371,7 +1383,7 @@ table.data tr:last-child td {
   flex: none;
 }
 .nc-tags {
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--text-muted);
   margin-top: 4px;
   display: flex;
@@ -1380,37 +1392,12 @@ table.data tr:last-child td {
   flex-wrap: wrap;
 }
 .nc-chip {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-muted);
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 0 5px;
-  font-size: 9.5px;
-}
-.nc-dots {
-  display: flex;
-  gap: 4px;
-  margin-top: 6px;
-}
-.nc-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-}
-.nc-dot.ok {
-  background: var(--pass);
-}
-.nc-dot.warn {
-  background: var(--warn);
-}
-.nc-dot.fail {
-  background: var(--fail);
-}
-.nc-dot.run {
-  background: var(--accent);
-}
-.nc-dot.unk {
-  background: var(--unknown);
+  font-size: 10.5px;
 }
 .nc-side {
   flex: none;
@@ -1425,28 +1412,31 @@ table.data tr:last-child td {
 }
 .nc-act {
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--accent);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   border-radius: 8px;
   padding: 4px 8px;
-  background: var(--bg-elevated);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
   cursor: pointer;
   white-space: nowrap;
+}
+.nc-act:hover {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
 }
 .nc-act:disabled {
   opacity: 0.5;
   cursor: default;
 }
 .nc-full {
-  height: var(--nc-h);
+  height: calc(var(--nc-exp-h) - var(--nc-sum-h));
   padding: 8px 11px 9px;
   border-top: 1px dashed var(--border);
   overflow: hidden;
 }
 .nc-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 7px 8px;
   align-content: start;
 }
@@ -1459,8 +1449,8 @@ table.data tr:last-child td {
   align-items: center;
   gap: 4px;
   min-width: 0;
-  font-size: 9.5px;
-  font-weight: 600;
+  font-size: 10.5px;
+  font-weight: 500;
   color: var(--text-muted);
 }
 .nc-t {
@@ -1491,8 +1481,8 @@ table.data tr:last-child td {
 }
 /* 内容行：正常展示、放不下单行省略，悬停见全文 */
 .nc-cv {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
@@ -1532,7 +1522,7 @@ table.data tr:last-child td {
 }
 .about-footer summary {
   cursor: pointer;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
   list-style: none;
@@ -1559,7 +1549,7 @@ table.data tr:last-child td {
 
 /* 玻璃地基：仅在 Tauri 透明窗口下（html.glass）生效。
    桌面模糊由原生 NSVisualEffectView（tauri windowEffects）提供，
-   面板只作半透明填充、不各自 backdrop-filter；仅吸顶头部做实时模糊。 */
+   面板只作半透明填充、不各自 backdrop-filter。 */
 html.glass,
 html.glass body,
 html.glass #root,
@@ -1576,10 +1566,6 @@ html.glass .fold-panel,
 html.glass .vpn-score-card,
 html.glass .gate-banner {
   background: color-mix(in srgb, var(--bg-elevated) 74%, transparent);
-}
-html.glass .app-header {
-  backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
 }
 @media (prefers-reduced-transparency: reduce) {
   html.glass,
@@ -1599,10 +1585,10 @@ html.glass .app-header {
   html.glass .gate-banner {
     background: var(--bg-elevated);
   }
-  html.glass .app-header {
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
+}
+/* 模态确认框不参与玻璃半透明：底色必须实，保证正文可读 */
+html.glass .confirm-panel {
+  background: var(--bg-elevated);
 }
 
 /* 顶部步骤条：状态驱动（哪步完成哪步打勾），替代静态使用说明文字 */
@@ -1632,7 +1618,7 @@ html.glass .app-header {
   display: grid;
   place-items: center;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   color: #fff;
   background: var(--unknown);
   flex: none;
@@ -1665,7 +1651,8 @@ html.glass .app-header {
   padding: 20px;
 }
 .confirm-overlay .confirm-panel {
-  max-width: 480px;
+  /* 宽度按正文恰好两行整定：过窄会挤成三行 */
+  max-width: 490px;
   width: 100%;
   margin: 0;
 }

@@ -129,6 +129,61 @@ describe("classifyWebRtc", () => {
     );
     expect(r.level).toBe("warn");
   });
+
+  // 归属地判定（v0.1.11）：候选 ≠ 出口不再必然 fail
+  it("公网候选 ≠ 出口，但归属(DE) ≠ 真实归属(CN) → pass（供应商基础设施）", () => {
+    const r = classifyWebRtc(
+      wr({
+        candidates: [{ type: "srflx", address: "2a0c:59c0::1", scope: "public" }],
+        proxyExitIps: ["157.119.102.175"],
+        geoCountryByAddr: { "2a0c:59c0::1": "DE" },
+        realCountry: "CN",
+      }),
+    );
+    expect(r.level).toBe("pass");
+    expect(r.conclusion).toContain("供应商基础设施");
+  });
+
+  it("公网候选归属 == 真实归属(CN) → fail（真泄漏）", () => {
+    const r = classifyWebRtc(
+      wr({
+        candidates: [{ type: "srflx", address: "240e::1", scope: "public" }],
+        proxyExitIps: ["157.119.102.175"],
+        geoCountryByAddr: { "240e::1": "CN" },
+        realCountry: "CN",
+      }),
+    );
+    expect(r.level).toBe("fail");
+  });
+
+  it("归属未知 → 维持旧口径 fail（不放过疑似）", () => {
+    const r = classifyWebRtc(
+      wr({
+        candidates: [{ type: "srflx", address: "8.8.8.8", scope: "public" }],
+        proxyExitIps: ["2.2.2.2"],
+        geoCountryByAddr: { "8.8.8.8": null },
+        realCountry: "CN",
+      }),
+    );
+    expect(r.level).toBe("fail");
+  });
+
+  it("混合：部分候选属供应商、部分疑似真实 → fail（只列疑似项）", () => {
+    const r = classifyWebRtc(
+      wr({
+        candidates: [
+          { type: "srflx", address: "2a0c:59c0::1", scope: "public" },
+          { type: "srflx", address: "240e::9", scope: "public" },
+        ],
+        proxyExitIps: ["157.119.102.175"],
+        geoCountryByAddr: { "2a0c:59c0::1": "DE", "240e::9": "CN" },
+        realCountry: "CN",
+      }),
+    );
+    expect(r.level).toBe("fail");
+    expect(r.conclusion).toContain("240e::9");
+    expect(r.conclusion).toContain("供应商基础设施");
+  });
 });
 
 describe("candidateScope", () => {

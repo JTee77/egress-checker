@@ -23,6 +23,24 @@ function extractIpBody(text: string): string | null {
  * 若走代理后 IPv4 出口改变，证明直连/代理是两条真不同的路，此时 v6 才谈得上旁路；
  * IPv4 两路同源则说明被统一隧道接管，v6 同址是健康。判定下沉到纯函数 classifyIpv6Leak。
  */
+/** v4 出口采样（api.ipify.org），供 IPv6 卡与"真实归属参照"共用。 */
+export async function probeV4Via(
+  port: number | null,
+  timeoutMs: number,
+): Promise<string | null> {
+  const r = await fetchTextViaProxy("https://api.ipify.org", {
+    mixedPort: port,
+    timeoutMs,
+  });
+  const ip = extractIpBody(r.text);
+  return r.ok && ip && !isIpv6Literal(ip) ? ip : null;
+}
+
+/** 不走代理的直连 v4 出口（非 TUN 时即真实 ISP 出口，作归属判定参照）。 */
+export function probeDirectV4(timeoutMs = 4500): Promise<string | null> {
+  return probeV4Via(null, timeoutMs);
+}
+
 export async function checkIpv6Leak(
   mixedPort?: number | null,
 ): Promise<CheckCard> {
@@ -55,12 +73,7 @@ export async function checkIpv6Leak(
     port: number | null,
     timeout: number,
   ): Promise<string | null> {
-    const r = await fetchTextViaProxy("https://api.ipify.org", {
-      mixedPort: port,
-      timeoutMs: timeout,
-    });
-    const ip = extractIpBody(r.text);
-    return r.ok && ip && !isIpv6Literal(ip) ? ip : null;
+    return probeV4Via(port, timeout);
   }
 
   // 直连两路并行；代理两路并行；直连组先于代理组，保持与 v0.1.8 相同的在飞并发上界
