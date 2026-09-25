@@ -27,6 +27,8 @@ export interface NodeCapabilities {
 export interface ProxyInfo extends NodeCapabilities {
   name: string;
   type: string;
+  /** mihomo health flag; absent in some payloads. */
+  alive?: boolean;
   history?: { time: string; delay: number }[];
   all?: string[];
   now?: string;
@@ -37,6 +39,15 @@ export interface ProxyNode extends NodeCapabilities {
   type: string;
   region: string;
   raw: ProxyInfo;
+  /** Client-reported health: mihomo `alive` flag (undefined = absent). */
+  alive?: boolean;
+  /**
+   * Client's most recent delay-test result (ms); 0 = that test failed.
+   * undefined = the client has never tested this node (not the same as dead).
+   */
+  lastDelay?: number;
+  /** ISO-8601 time of that last client test (freshness check for skip logic). */
+  lastDelayAt?: string;
 }
 
 export type ConnectionStatus =

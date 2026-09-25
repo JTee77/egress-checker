@@ -20,9 +20,6 @@ function levelClass(level: CheckCard["level"]): string {
   }
 }
 
-// 摘要行里挑几个关键维度做状态点：连通 / 延迟 / AI / 串流
-const KEY_CARD_IDS = ["reachability", "latency", "gemini", "netflix"];
-
 export function NodeCard({
   node,
   score,
@@ -48,11 +45,6 @@ export function NodeCard({
   // scoreDeadNode 返回 stars=不可用 但 cards=[]，旧逻辑会把它误显示为"未测"。
   const hasResult = !!score;
   const cards = score && score.cards.length > 0 ? score.cards : (liveCards ?? []);
-  const byId = new Map(cards.map((c) => [c.id, c]));
-  const dots = KEY_CARD_IDS.map((id) => {
-    const c = byId.get(id);
-    return <span key={id} className={`nc-dot ${c ? levelClass(c.level) : "unk"}`} />;
-  });
 
   const action = hasResult ? (
     <button
@@ -95,7 +87,6 @@ export function NodeCard({
               </span>
             ))}
           </div>
-          {hasResult && cards.length ? <div className="nc-dots">{dots}</div> : null}
         </div>
         <div className="nc-side">
           {hasResult ? (

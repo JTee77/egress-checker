@@ -151,7 +151,22 @@ export type WebRtcSignal = {
   candidates: WebRtcCandidate[];
   /** 已知代理侧公网出口 IP（来自 exit-ip 卡）；用于比对判定候选是否为出口 */
   proxyExitIps?: string[];
+  /** 候选地址 → 归属国（无法取得的地址省略/置 null）。供归属地判定用。 */
+  geoCountryByAddr?: Record<string, string | null>;
+  /** 真实归属国（由系统区域推断），用于区分"供应商基础设施"与"真实 ISP 暴露" */
+  realCountry?: string | null;
 };
+
+/** 从系统区域（navigator.language，如 zh-CN）推断"真实归属国"；取不到返回 null。 */
+export function localeCountry(): string | null {
+  try {
+    const lang = typeof navigator !== "undefined" ? navigator.language || "" : "";
+    const m = /^[a-zA-Z]{2,3}-([A-Za-z]{2})\b/.exec(lang);
+    return m ? m[1].toUpperCase() : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * ICE 候选地址 → scope 归类（纯函数，可单测）。
@@ -199,9 +214,13 @@ function matchesProxyExit(addr: string, exits: string[]): boolean {
 /**
  * WebRTC 泄漏判定。确定性来源：把候选公网地址与"已知代理出口"比对。
  *  · 等于出口 → 正常（STUN 也走了代理）
- *  · 是公网但不等于出口 → 疑似暴露真实地址 → fail
+ *  · 是公网但不等于出口 → 归属地判定：与真实归属不同（供应商基础设施）→ pass；
+ *    与真实归属一致或归属未知 → 疑似暴露真实地址 → fail
  *  · 拿到公网但根本没有出口可比 → warn（无法确证）
  *  · 仅内网/本地候选 → pass
+ *
+ * 归属地判定存在的意义：v6 普及后，"候选 ≠ 出口"不再等于泄漏——节点/供应商
+ * 常有 v4 出口 + v6 出口（甚至解析基础设施在别国）的组合，字符串比对必然误报。
  */
 export function classifyWebRtc(s: WebRtcSignal): LeakVerdict {
   if (!s.apiAvailable) {
@@ -240,6 +259,27 @@ export function classifyWebRtc(s: WebRtcSignal): LeakVerdict {
 
   if (exposed.length > 0) {
     const addrs = [...new Set(exposed.map((c) => c.address))];
+    const geo = s.geoCountryByAddr ?? {};
+    const real = s.realCountry ?? null;
+    // 归属地判定：归属已知且 ≠ 真实归属 → 供应商基础设施，不算暴露
+    const benign: string[] = [];
+    const suspect: string[] = [];
+    for (const a of addrs) {
+      const cc = geo[a] ?? null;
+      if (cc && real && cc !== real) benign.push(`${a}（${cc}）`);
+      else suspect.push(cc && real ? `${a}（${cc}）` : a);
+    }
+    if (benign.length > 0 && suspect.length === 0) {
+      return {
+        level: "pass",
+        conclusion: `WebRTC 公网候选（${benign.join(", ")}）≠ 代理出口，但归属地与真实归属（${real}）不同 —— 属节点/供应商基础设施，未泄漏真实身份。`,
+        rationale: [
+          `公网候选 ${addrs}`,
+          `归属 ${[...new Set(Object.values(geo).filter(Boolean))]}`,
+          `真实归属 ${real}`,
+        ],
+      };
+    }
     if (onlyWhenNoExit) {
       // 没有代理出口可比对 → 无法确证，诚实标警
       return {
@@ -251,9 +291,11 @@ export function classifyWebRtc(s: WebRtcSignal): LeakVerdict {
     }
     return {
       level: "fail",
-      conclusion: `WebRTC 暴露了 ≠ 代理出口的公网地址（${addrs.join(", ")}）—— 可能泄漏真实 IP。`,
+      conclusion: `WebRTC 暴露了 ≠ 代理出口的公网地址（${suspect.join(", ")}）—— 可能泄漏真实 IP。${
+        benign.length ? `另有 ${benign.length} 个候选属供应商基础设施，不算暴露。` : ""
+      }`,
       suggestion: "在意暴露时禁用 WebRTC，或仅允许代理路径；客户端可开 WebRTC 泄露防护后重测。",
-      rationale: [`疑似真实地址 ${addrs}`, `代理出口 ${exits.join(", ")}`],
+      rationale: [`疑似真实地址 ${suspect}`, `代理出口 ${exits.join(", ")}`],
     };
   }
 

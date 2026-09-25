@@ -14,9 +14,9 @@
 
 export type { ReachabilityOptions } from "./probe";
 export { checkReachability, withFailRetry, withFailRetryUnlock } from "./probe";
-export { inferHosting, fetchExitIp, exitIpCard } from "./exitIp";
+export { inferHosting, fetchExitIp, exitIpCard, fetchIpCountry } from "./exitIp";
 export { checkDnsResolvers, checkDnsLeakApproach } from "./dns";
-export { checkIpv6Leak } from "./ipv6";
+export { checkIpv6Leak, probeDirectV4, probeV4Via } from "./ipv6";
 export { checkWebRtcLeak, webrtcCard } from "./webrtc";
 export { probeGeminiUnlock, probeChatgptUnlock } from "./aiUnlock";
 export type { BandwidthSampleOptions } from "./performance";

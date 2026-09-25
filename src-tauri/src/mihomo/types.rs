@@ -70,6 +70,13 @@ pub struct SlimNode {
     pub smux: bool,
     /// Multipath TCP.
     pub mptcp: bool,
+    /// Client-reported health: mihomo `alive` flag. None = field absent.
+    pub alive: Option<bool>,
+    /// Last delay-test result from the client (`history` last entry, ms).
+    /// 0 = the client's most recent test failed. None = client never tested.
+    pub last_delay: Option<u32>,
+    /// ISO-8601 time of that last delay test (freshness check for skip logic).
+    pub last_delay_at: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

@@ -1,5 +1,6 @@
 //! `/proxies` handling: slim the controller's proxy JSON down to real leaf
-//! nodes (dropping selector/urltest groups, history arrays, junk names) and the
+//! nodes (dropping selector/urltest groups, junk names; keeping only the
+//! client's last delay result instead of full history arrays) and the
 //! TCP→Unix fallback that fetches it for the node list.
 
 use serde_json::Value;
@@ -23,10 +24,33 @@ fn read_bool(p: &Value, key: &str) -> bool {
     p.get(key).and_then(|v| v.as_bool()).unwrap_or(false)
 }
 
+/// Client-side health from a proxy object: `alive` flag (None when absent).
+fn read_alive(p: &Value) -> Option<bool> {
+    p.get("alive").and_then(|v| v.as_bool())
+}
+
+/// Client's most recent delay-test result: last `history` entry's delay (ms),
+/// 0 = that test failed. Returns (delay, time) — time is the ISO-8601 stamp
+/// of that test, needed to tell "failed just now" from "failed hours ago".
+fn read_last_delay(p: &Value) -> (Option<u32>, Option<String>) {
+    let Some(last) = p.get("history").and_then(|v| v.as_array()).and_then(|a| a.last())
+    else {
+        return (None, None);
+    };
+    let delay = last.get("delay").and_then(|d| d.as_u64());
+    let time = last
+        .get("time")
+        .and_then(|t| t.as_str())
+        .map(|s| s.to_string());
+    let delay = delay.map(|d| u32::try_from(d).unwrap_or(u32::MAX));
+    (delay, time)
+}
+
 /// Build a slim node from a proxy object, reading the full six-flag mihomo
 /// capability vocabulary in one place. Adding a future flag only means touching
 /// this function + the `SlimNode` struct — no call-site churn.
 fn slim_node(name: String, node_type: String, p: &Value) -> SlimNode {
+    let (last_delay, last_delay_at) = read_last_delay(p);
     SlimNode {
         name,
         node_type,
@@ -36,6 +60,9 @@ fn slim_node(name: String, node_type: String, p: &Value) -> SlimNode {
         tfo: read_bool(p, "tfo"),
         smux: read_bool(p, "smux"),
         mptcp: read_bool(p, "mptcp"),
+        alive: read_alive(p),
+        last_delay,
+        last_delay_at,
     }
 }
 
@@ -107,7 +134,8 @@ pub fn resolve_current_proxy(proxies: &serde_json::Map<String, Value>) -> Option
     }
 }
 
-/// Parse /proxies JSON into a slim node list (no history arrays).
+/// Parse /proxies JSON into a slim node list (no history arrays; only the
+/// last delay result + alive flag are kept).
 pub fn slim_nodes_from_proxies_json(body: &str) -> Result<ListNodesResult, String> {
     let root: Value = serde_json::from_str(body).map_err(|e| format!("json: {e}"))?;
     let proxies = root
@@ -353,6 +381,35 @@ mod tests {
         assert!(names.contains(&"hk-1"));
         assert!(names.contains(&"jp-1"));
         assert!(!names.iter().any(|n| *n == "Proxy" || *n == "DIRECT"));
+    }
+
+    #[test]
+    fn slim_nodes_keeps_client_health() {
+        // alive + last delay survive slimming: dead (delay 0), alive, and
+        // never-tested (no history at all) must be distinguishable, and the
+        // failure time must come through for freshness checks.
+        let body = r#"{
+          "proxies": {
+            "Proxy": {"type":"Selector","now":"dead","all":["dead","ok","fresh"]},
+            "dead": {"type":"Shadowsocks","alive":false,"history":[{"time":"t","delay":120},{"time":"t2","delay":0}]},
+            "ok": {"type":"Vmess","alive":true,"history":[{"time":"t","delay":88}]},
+            "fresh": {"type":"Trojan"}
+          }
+        }"#;
+        let slim = slim_nodes_from_proxies_json(body).unwrap();
+        let get = |n: &str| slim.nodes.iter().find(|x| x.name == n).unwrap();
+        let dead = get("dead");
+        assert_eq!(dead.alive, Some(false));
+        assert_eq!(dead.last_delay, Some(0));
+        assert_eq!(dead.last_delay_at.as_deref(), Some("t2"));
+        let ok = get("ok");
+        assert_eq!(ok.alive, Some(true));
+        assert_eq!(ok.last_delay, Some(88));
+        assert_eq!(ok.last_delay_at.as_deref(), Some("t"));
+        let fresh = get("fresh");
+        assert_eq!(fresh.alive, None);
+        assert_eq!(fresh.last_delay, None);
+        assert_eq!(fresh.last_delay_at, None);
     }
 
     #[test]

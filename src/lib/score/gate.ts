@@ -18,7 +18,7 @@ export async function runLightGate(connection: ConnectionState): Promise<GateRes
       return {
         ok: false,
         message:
-          "连不上VPN软件。确认它已打开并连上节点后，再点「获取节点」。",
+          "连不上VPN软件。确认它已打开并连上一个可用节点后，再点「获取节点」。",
         process: connection.message,
       };
     }
