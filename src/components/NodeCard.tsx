@@ -47,16 +47,29 @@ export function NodeCard({
   const cards = score && score.cards.length > 0 ? score.cards : (liveCards ?? []);
 
   const action = hasResult ? (
-    <button
-      type="button"
-      className="nc-act"
-      onClick={(e) => {
-        e.stopPropagation();
-        onToggle();
-      }}
-    >
-      {expanded ? "收起 ▴" : "详情 ▾"}
-    </button>
+    <div className="nc-acts">
+      <button
+        type="button"
+        className="nc-act"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+      >
+        {expanded ? "收起 ▴" : "详情 ▾"}
+      </button>
+      <button
+        type="button"
+        className="nc-act"
+        disabled={testing}
+        onClick={(e) => {
+          e.stopPropagation();
+          onTest();
+        }}
+      >
+        {testing ? "检测中…" : "再测"}
+      </button>
+    </div>
   ) : (
     <button
       type="button"

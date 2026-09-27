@@ -1469,6 +1469,12 @@ table.data tr:last-child td {
   align-items: flex-end;
   gap: 6px;
 }
+.nc-acts {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
 .nc-untested {
   font-size: 11px;
   color: var(--text-muted);
