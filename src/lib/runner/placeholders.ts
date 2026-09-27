@@ -15,11 +15,11 @@ export const NODE_PLACEHOLDERS: CheckCard[] = [
 ];
 
 export const ENV_PLACEHOLDERS: CheckCard[] = [
+  { id: "bare-egress", title: "直连旁路检查", level: "unknown", conclusion: "尚未检测" },
   { id: "dns-leak", title: "DNS 解析器", level: "unknown", conclusion: "尚未检测" },
   { id: "ipv6-leak", title: "IPv6 泄漏", level: "unknown", conclusion: "尚未检测" },
   { id: "webrtc", title: "WebRTC", level: "unknown", conclusion: "尚未检测" },
   { id: "split-routing", title: "分流检查", level: "unknown", conclusion: "尚未检测" },
-  { id: "bare-egress", title: "直连旁路检查", level: "unknown", conclusion: "尚未检测" },
 ];
 
 export const DELAY_URL = "http://www.gstatic.com/generate_204";

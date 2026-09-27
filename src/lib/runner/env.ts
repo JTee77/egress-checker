@@ -1,7 +1,7 @@
 /**
  * 环境泄漏检查：无 React，HomePage 只负责把结果塞进 state。
  */
-import { runEnvDiagnostics } from "../egress";
+import { ENV_CARD_IDS, runEnvDiagnostics } from "../egress";
 import { ENV_PLACEHOLDERS, asRunning } from "./placeholders";
 import type { RunEnvContext, RunnerHooks } from "./types";
 
@@ -16,7 +16,12 @@ export async function runEnv(
       mihomoConfig: ctx.connection.config,
       exitIp: ctx.exitIp ?? null,
     });
-    hooks.onEnvCards?.(cards);
+    const cardsById = new Map(cards.map((card) => [card.id, card]));
+    hooks.onEnvCards?.(
+      ENV_CARD_IDS.map((id) => cardsById.get(id)).filter(
+        (card): card is (typeof cards)[number] => card !== undefined,
+      ),
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     hooks.onEnvCards?.(
