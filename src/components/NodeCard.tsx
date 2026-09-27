@@ -111,7 +111,7 @@ export function NodeCard({
         </div>
       </div>
 
-      {expanded && hasResult ? (
+      {expanded ? (
         <div className="nc-full">
           {cards.length ? (
             <div className="nc-grid">
@@ -131,8 +131,10 @@ export function NodeCard({
                 </div>
               ))}
             </div>
+          ) : score ? (
+            <div className="nc-dead">{score.blurb}</div>
           ) : (
-            <div className="nc-dead">{score!.blurb}</div>
+            <div className="nc-dead">暂无检测详情</div>
           )}
         </div>
       ) : null}

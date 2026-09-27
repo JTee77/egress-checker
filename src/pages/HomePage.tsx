@@ -534,11 +534,7 @@ export function HomePage({
                     isCurrent={n.name === connection.currentProxy}
                     expanded={expanded.has(n.name)}
                     testing={testingNode === n.name}
-                    onToggle={() => {
-                      if (scoreByName.get(n.name)) {
-                        toggleExpand(n.name);
-                      }
-                    }}
+                    onToggle={() => toggleExpand(n.name)}
                     onTest={() => void testOneNode(n)}
                   />
                 ))}
