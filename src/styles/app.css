@@ -1285,6 +1285,8 @@ table.data tr:last-child td {
    / 环境检查上移 / 底部关于 / 玻璃地基
    ============================================================ */
 :root {
+  /* 节点卡固定宽度；窗口变宽只增加列数，不拉伸卡片 */
+  --nc-w: 310px;
   /* 收起卡高度（摘要内容 ~52px + 上下 padding） */
   --nc-h: 68px;
   /* 展开卡内摘要区高度：压到自然内容高，省出的空间全部让给详情 */
@@ -1388,7 +1390,7 @@ table.data tr:last-child td {
 }
 .flow-col {
   flex: none;
-  width: 250px;
+  width: var(--nc-w);
   min-width: 0;
   display: flex;
   flex-direction: column;
