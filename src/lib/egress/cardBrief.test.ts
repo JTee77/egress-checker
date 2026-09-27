@@ -65,7 +65,7 @@ describe("formatCardBrief", () => {
     ).toBe("失败");
   });
 
-  it("bandwidth：↓x ↑y（有 metrics）", () => {
+  it("bandwidth：↓x / ↑y 两行（有 metrics）", () => {
     expect(
       formatCardBrief(
         card("bandwidth", "pass", "文案可很长 ↓ 60 Mbps · ↑ 20 Mbps", {
@@ -73,12 +73,12 @@ describe("formatCardBrief", () => {
           upMbps: 20,
         }),
       ),
-    ).toBe("↓60 ↑20");
+    ).toBe("↓60\n↑20");
     expect(
       formatCardBrief(
         card("bandwidth", "warn", "偏慢", { downMbps: 2.5, upMbps: 1.25 }),
       ),
-    ).toBe("↓2.5 ↑1.25");
+    ).toBe("↓2.5\n↑1.25");
     expect(
       formatCardBrief(
         card("bandwidth", "fail", "抽样失败", { downMbps: null, upMbps: null }),

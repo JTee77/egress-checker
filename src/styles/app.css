@@ -1578,9 +1578,9 @@ table.data tr:last-child td {
   font-size: 11px;
   font-weight: 600;
   line-height: 1.25;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* 带宽格的下行/上行值分两行；不要裁掉第二行。 */
+  white-space: pre-line;
+  overflow: visible;
 }
 .nc-cv.ok {
   color: var(--pass);

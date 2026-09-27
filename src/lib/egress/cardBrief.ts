@@ -52,7 +52,7 @@ export function formatCardBrief(card: CheckCard): string {
     if (m && (m.downMbps != null || m.upMbps != null)) {
       const d = m.downMbps != null ? fmtMbps(m.downMbps) : "—";
       const u = m.upMbps != null ? fmtMbps(m.upMbps) : "—";
-      return `↓${d} ↑${u}`;
+      return `↓${d}\n↑${u}`;
     }
     if (card.level === "fail") return "失败";
     return shortConclusion(card);
