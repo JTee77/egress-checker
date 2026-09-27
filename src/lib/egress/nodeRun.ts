@@ -175,20 +175,20 @@ export async function runNodeDiagnostics(
   const jobs: Job[] = [
     {
       id: "gemini",
-      title: "Gemini（换节点对照）",
+      title: "Gemini",
       deadlineMs: 16000,
       run: async () => {
         gemini = await withFailRetryUnlock(() => probeGeminiUnlock(mixedPort));
-        return unlockCard("gemini", "Gemini（换节点对照）", gemini);
+        return unlockCard("gemini", "Gemini", gemini);
       },
     },
     {
       id: "chatgpt",
-      title: "ChatGPT（换节点对照）",
+      title: "ChatGPT",
       deadlineMs: 22000,
       run: async () => {
         chatgpt = await withFailRetryUnlock(() => probeChatgptUnlock(mixedPort));
-        return unlockCard("chatgpt", "ChatGPT（换节点对照）", chatgpt);
+        return unlockCard("chatgpt", "ChatGPT", chatgpt);
       },
     },
     {
@@ -350,20 +350,20 @@ export async function runNodeDeepLight(
     },
     {
       id: "chatgpt",
-      title: "ChatGPT（换节点对照）",
+      title: "ChatGPT",
       deadlineMs: 12000,
       run: async () => {
         chatgpt = await withFailRetryUnlock(() => probeChatgptUnlock(mixedPort));
-        return unlockCard("chatgpt", "ChatGPT（换节点对照）", chatgpt);
+        return unlockCard("chatgpt", "ChatGPT", chatgpt);
       },
     },
     {
       id: "gemini",
-      title: "Gemini（换节点对照）",
+      title: "Gemini",
       deadlineMs: 10000,
       run: async () => {
         gemini = await withFailRetryUnlock(() => probeGeminiUnlock(mixedPort));
-        return unlockCard("gemini", "Gemini（换节点对照）", gemini);
+        return unlockCard("gemini", "Gemini", gemini);
       },
     },
   ];
@@ -381,8 +381,8 @@ export async function runNodeDeepLight(
     byId.get("bandwidth") ?? timeoutCard("bandwidth", "抽样带宽"),
     byId.get("netflix") ?? timeoutCard("netflix", "Netflix"),
     byId.get("youtube") ?? timeoutCard("youtube", "YouTube Premium"),
-    byId.get("chatgpt") ?? timeoutCard("chatgpt", "ChatGPT（换节点对照）"),
-    byId.get("gemini") ?? timeoutCard("gemini", "Gemini（换节点对照）"),
+    byId.get("chatgpt") ?? timeoutCard("chatgpt", "ChatGPT"),
+    byId.get("gemini") ?? timeoutCard("gemini", "Gemini"),
   ];
 
   return {
