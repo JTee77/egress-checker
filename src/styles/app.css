@@ -1636,39 +1636,6 @@ html.glass .vpn-score-card,
 html.glass .gate-banner {
   background: color-mix(in srgb, var(--bg-elevated) 74%, transparent);
 }
-/* 强制浅色/深色：整窗壳层改回实色，避免透出系统 NSVisualEffectView
-   （系统外观可能与软件主题不一致，例如系统浅色 + 软件深色时底栏发白）。
-   data-theme="system" 仍走上方透明玻璃。 */
-html.glass[data-theme="dark"],
-html.glass[data-theme="dark"] body,
-html.glass[data-theme="dark"] #root,
-html.glass[data-theme="dark"] .app-shell,
-html.glass[data-theme="dark"] .main,
-html.glass[data-theme="dark"] .home-page,
-html.glass[data-theme="light"],
-html.glass[data-theme="light"] body,
-html.glass[data-theme="light"] #root,
-html.glass[data-theme="light"] .app-shell,
-html.glass[data-theme="light"] .main,
-html.glass[data-theme="light"] .home-page {
-  background: var(--bg);
-}
-html.glass[data-theme="dark"] .app-header,
-html.glass[data-theme="dark"] .ncard,
-html.glass[data-theme="dark"] .env-section,
-html.glass[data-theme="dark"] .card,
-html.glass[data-theme="dark"] .fold-panel,
-html.glass[data-theme="dark"] .vpn-score-card,
-html.glass[data-theme="dark"] .gate-banner,
-html.glass[data-theme="light"] .app-header,
-html.glass[data-theme="light"] .ncard,
-html.glass[data-theme="light"] .env-section,
-html.glass[data-theme="light"] .card,
-html.glass[data-theme="light"] .fold-panel,
-html.glass[data-theme="light"] .vpn-score-card,
-html.glass[data-theme="light"] .gate-banner {
-  background: var(--bg-elevated);
-}
 @media (prefers-reduced-transparency: reduce) {
   html.glass,
   html.glass body,
