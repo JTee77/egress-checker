@@ -1,6 +1,7 @@
 //! 基础探测层：浏览器/Rust 代理取文本、可达性判定、失败重试、超时截止与并发池。
 import { fetchTextViaProxy, canBrowserFallback } from "../fetchVia";
 import type { CheckCard, CheckLevel, UnlockResult } from "../types";
+import { mapPool } from "../pool";
 
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
@@ -250,24 +251,6 @@ async function withCardDeadline(
   } finally {
     if (timer) clearTimeout(timer);
   }
-}
-
-async function mapPool<T, R>(
-  items: T[],
-  concurrency: number,
-  worker: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    while (true) {
-      const i = next++;
-      if (i >= items.length) return;
-      results[i] = await worker(items[i]);
-    }
-  });
-  await Promise.all(runners);
-  return results;
 }
 
 export {

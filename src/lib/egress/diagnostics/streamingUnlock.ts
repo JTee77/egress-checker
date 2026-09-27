@@ -434,6 +434,10 @@ function serviceCardFromLine(
     conclusion: line.conclusion,
     process: [line.process, mixedPortPathNote(mixedPort)].join("\n"),
     suggestion: tip,
+    metrics: {
+      unlockSupported: line.level === "pass" || line.level === "warn",
+      unlockLevel: line.level,
+    },
   };
 }
 

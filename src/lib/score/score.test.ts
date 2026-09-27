@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { CheckCard, CheckLevel } from "../egress/types";
 import {
-  parseDownMbps,
   starRank,
   formatStars,
   scoreNodeFromCards,
@@ -17,44 +16,68 @@ function card(
   level: CheckLevel,
   conclusion: string,
   process?: string,
+  metrics?: CheckCard["metrics"],
 ): CheckCard {
-  return process
-    ? { id, title: id, level, conclusion, process }
-    : { id, title: id, level, conclusion };
+  const base: CheckCard = { id, title: id, level, conclusion };
+  if (process) base.process = process;
+  if (metrics) base.metrics = metrics;
+  return base;
 }
 
 /** 一组「几乎全绿」的节点卡片，用于锁定高分/完美路径的算术。 */
 function greenNodeCards(): CheckCard[] {
-  const svc = SERVICE_IDS.map((id) => card(id, "pass", "可访问"));
+  const svc = SERVICE_IDS.map((id) =>
+    card(id, "pass", "可访问", undefined, { unlockSupported: true, unlockLevel: "full" }),
+  );
   return [
     card("reachability", "pass", "4/4 境外探测点能通（约 30 ms）"),
-    card("bandwidth", "pass", "带宽抽样 ↓ 60 Mbps"),
+    card("bandwidth", "pass", "带宽抽样 ↓ 60 Mbps", undefined, {
+      downMbps: 60,
+      upMbps: 20,
+    }),
     ...svc,
-    card("exit-ip", "pass", "1.2.3.4 · US · 住宅线路"),
+    card("exit-ip", "pass", "1.2.3.4 · US · 住宅线路", undefined, {
+      exitIp: "1.2.3.4",
+      countryCode: "US",
+      hosting: false,
+    }),
   ];
 }
 
-describe("parseDownMbps", () => {
-  it("无卡片返回 null", () => {
-    expect(parseDownMbps(undefined)).toBeNull();
+describe("scoreNodeFromCards · metrics.downMbps", () => {
+  it("无 metrics 时吞吐退回 level 分，不靠文案反解", () => {
+    const cards = [
+      card("reachability", "pass", "通"),
+      card("bandwidth", "pass", "带宽抽样 ↓ 60 Mbps"), // 故意无 metrics
+      card("exit-ip", "pass", "x", undefined, { hosting: false }),
+    ];
+    const r = scoreNodeFromCards("无 metrics", cards);
+    // thr = levelToScore(pass)=100（无数字时按 level），不依赖 ↓ 60
+    expect(r.breakdown.find((b) => b.key === "throughput")?.score).toBe(100);
   });
-  it("优先匹配 ↓ 前缀", () => {
-    expect(parseDownMbps(card("bandwidth", "pass", "实测 ↓ 42.5 Mbps"))).toBe(42.5);
-    expect(parseDownMbps(card("bandwidth", "pass", "↓12.3Mbps"))).toBe(12.3);
+  it("读 metrics.downMbps 评分（2 Mbps → thr 50）", () => {
+    const cards = greenNodeCards().map((c) =>
+      c.id === "bandwidth"
+        ? card("bandwidth", "pass", "文案可乱写", undefined, { downMbps: 2, upMbps: 1 })
+        : c,
+    );
+    const r = scoreNodeFromCards("慢", cards);
+    expect(r.breakdown.find((b) => b.key === "throughput")?.score).toBe(50);
+    expect(r.totalScore).toBe(84);
+    expect(r.stars).toBe(4);
   });
-  it("退化到「下行」中文标签", () => {
-    expect(parseDownMbps(card("bandwidth", "pass", "下行速度 18 Mbps 稳定"))).toBe(18);
-  });
-  it("再退化到裸 Mbps", () => {
-    expect(parseDownMbps(card("bandwidth", "pass", "带宽 5 Mbps"))).toBe(5);
-  });
-  it("读 process 字段", () => {
-    expect(
-      parseDownMbps(card("bandwidth", "pass", "抽样完成", "峰值 ↓ 33 Mbps")),
-    ).toBe(33);
-  });
-  it("无数字返回 null", () => {
-    expect(parseDownMbps(card("bandwidth", "warn", "抽样失败"))).toBeNull();
+  it("metrics.hosting=true 按机房降分，无视文案「住宅」", () => {
+    const cards = greenNodeCards().map((c) =>
+      c.id === "exit-ip"
+        ? card("exit-ip", "pass", "1.2.3.4 · US · 住宅线路", undefined, {
+            exitIp: "1.2.3.4",
+            countryCode: "US",
+            hosting: true,
+          })
+        : c,
+    );
+    const r = scoreNodeFromCards("机房 metrics", cards);
+    expect(r.breakdown.find((b) => b.key === "exit")?.score).toBe(55);
   });
 });
 
@@ -97,7 +120,13 @@ describe("scoreNodeFromCards", () => {
   // total = round(100*.25 + 100*.3 + 100*.3 + 55*.15) = round(93.25) = 93 → 5 星（>=92）
   it("机房出口降分但仍 5 星", () => {
     const cards = greenNodeCards().map((c) =>
-      c.id === "exit-ip" ? card("exit-ip", "pass", "1.2.3.4 · US · 机房 IP") : c,
+      c.id === "exit-ip"
+        ? card("exit-ip", "pass", "1.2.3.4 · US · 机房 IP", undefined, {
+            exitIp: "1.2.3.4",
+            countryCode: "US",
+            hosting: true,
+          })
+        : c,
     );
     const r = scoreNodeFromCards("机房", cards);
     expect(r.breakdown.find((b) => b.key === "exit")?.score).toBe(55);
@@ -109,7 +138,12 @@ describe("scoreNodeFromCards", () => {
   // total = round(100*.25 + 50*.3 + 100*.3 + 95*.15) = round(25+15+30+14.25)=round(84.25)=84 → 4 星(>=78)
   it("吞吐偏慢把星级从 5 拉到 4", () => {
     const cards = greenNodeCards().map((c) =>
-      c.id === "bandwidth" ? card("bandwidth", "pass", "带宽抽样 ↓ 2 Mbps") : c,
+      c.id === "bandwidth"
+        ? card("bandwidth", "pass", "带宽抽样 ↓ 2 Mbps", undefined, {
+            downMbps: 2,
+            upMbps: 1,
+          })
+        : c,
     );
     const r = scoreNodeFromCards("慢", cards);
     expect(r.totalScore).toBe(84);

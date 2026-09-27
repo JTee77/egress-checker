@@ -10,6 +10,10 @@ const LABELS: Record<CheckLevel, string> = {
 
 /** Prefer conclusion-specific labels when level is unknown. */
 export function badgeLabel(level: CheckLevel, conclusion?: string | null): string {
+  const c0 = (conclusion ?? "").trim();
+  if (c0 === "全通" || c0 === "部分" || c0 === "全不通" || c0 === "检测中") {
+    return c0;
+  }
   if (level === "unknown") {
     const c = (conclusion ?? "").trim();
     if (!c || c === "尚未检测") return "待测";

@@ -209,6 +209,7 @@ export function exitIpCard(info: ExitIpInfo): CheckCard {
       level: "fail",
       conclusion: "无法获取出口 IP",
       suggestion: "检查网络或临时关闭拦截局域网流量的规则。",
+      metrics: { exitIp: null, countryCode: null, hosting: null },
     };
   }
   const level: CheckLevel = info.hosting ? "warn" : "pass";
@@ -227,5 +228,10 @@ export function exitIpCard(info: ExitIpInfo): CheckCard {
     suggestion: info.hosting
       ? "机房 IP 可能导致部分 AI / 流媒体风控；可尝试住宅/家宽节点。"
       : undefined,
+    metrics: {
+      exitIp: info.ip,
+      countryCode: info.countryCode,
+      hosting: info.hosting,
+    },
   };
 }

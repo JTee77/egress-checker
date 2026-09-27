@@ -19,6 +19,8 @@ import {
   withFailRetryUnlock,
 } from "./diagnostics";
 import type { CheckCard, EgressReport, UnlockResult } from "./types";
+import { mapPool } from "./pool";
+export { mapPool } from "./pool";
 
 export const NODE_CARD_IDS = [
   "reachability",
@@ -50,7 +52,6 @@ function unlockCard(
     result.probed?.length ? `测了什么：${result.probed.join("；")}` : "",
     result.notProbed?.length ? `没测什么：${result.notProbed.join("；")}` : "",
     result.region ? `出口提示地区：${result.region}` : "",
-    "换节点时一次对照用，不能替代你自己打开网站。",
   ].filter(Boolean);
   return {
     id,
@@ -58,6 +59,11 @@ function unlockCard(
     level,
     conclusion: result.status,
     process: processParts.join("\n"),
+    metrics: {
+      unlockSupported: result.supported,
+      unlockLevel: result.level ?? null,
+      unlockRegion: result.region,
+    },
   };
 }
 
@@ -97,27 +103,6 @@ async function withDeadline(
   } finally {
     if (timer) clearTimeout(timer);
   }
-}
-
-export async function mapPool<T, R>(
-  items: T[],
-  concurrency: number,
-  worker: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  const runners = Array.from(
-    { length: Math.min(concurrency, items.length || 1) },
-    async () => {
-      while (true) {
-        const i = next++;
-        if (i >= items.length) return;
-        results[i] = await worker(items[i]);
-      }
-    },
-  );
-  await Promise.all(runners);
-  return results;
 }
 
 export type NodeRunOptions = {
@@ -189,20 +174,20 @@ export async function runNodeDiagnostics(
   const jobs: Job[] = [
     {
       id: "gemini",
-      title: "Gemini（换节点对照）",
+      title: "Gemini",
       deadlineMs: 16000,
       run: async () => {
         gemini = await withFailRetryUnlock(() => probeGeminiUnlock(mixedPort));
-        return unlockCard("gemini", "Gemini（换节点对照）", gemini);
+        return unlockCard("gemini", "Gemini", gemini);
       },
     },
     {
       id: "chatgpt",
-      title: "ChatGPT（换节点对照）",
+      title: "ChatGPT",
       deadlineMs: 22000,
       run: async () => {
         chatgpt = await withFailRetryUnlock(() => probeChatgptUnlock(mixedPort));
-        return unlockCard("chatgpt", "ChatGPT（换节点对照）", chatgpt);
+        return unlockCard("chatgpt", "ChatGPT", chatgpt);
       },
     },
     {
@@ -364,20 +349,20 @@ export async function runNodeDeepLight(
     },
     {
       id: "chatgpt",
-      title: "ChatGPT（换节点对照）",
+      title: "ChatGPT",
       deadlineMs: 12000,
       run: async () => {
         chatgpt = await withFailRetryUnlock(() => probeChatgptUnlock(mixedPort));
-        return unlockCard("chatgpt", "ChatGPT（换节点对照）", chatgpt);
+        return unlockCard("chatgpt", "ChatGPT", chatgpt);
       },
     },
     {
       id: "gemini",
-      title: "Gemini（换节点对照）",
+      title: "Gemini",
       deadlineMs: 10000,
       run: async () => {
         gemini = await withFailRetryUnlock(() => probeGeminiUnlock(mixedPort));
-        return unlockCard("gemini", "Gemini（换节点对照）", gemini);
+        return unlockCard("gemini", "Gemini", gemini);
       },
     },
   ];
@@ -395,8 +380,8 @@ export async function runNodeDeepLight(
     byId.get("bandwidth") ?? timeoutCard("bandwidth", "抽样带宽"),
     byId.get("netflix") ?? timeoutCard("netflix", "Netflix"),
     byId.get("youtube") ?? timeoutCard("youtube", "YouTube Premium"),
-    byId.get("chatgpt") ?? timeoutCard("chatgpt", "ChatGPT（换节点对照）"),
-    byId.get("gemini") ?? timeoutCard("gemini", "Gemini（换节点对照）"),
+    byId.get("chatgpt") ?? timeoutCard("chatgpt", "ChatGPT"),
+    byId.get("gemini") ?? timeoutCard("gemini", "Gemini"),
   ];
 
   return {

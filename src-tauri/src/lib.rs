@@ -310,10 +310,57 @@ fn show_vite_dead_page(win: &tauri::WebviewWindow, reason: &str) {
     let _ = win.eval(&js);
 }
 
+
+/// CLI mode: argv as seen by the process (includes binary path).
+#[tauri::command]
+fn get_cli_argv() -> Vec<String> {
+    std::env::args().collect()
+}
+
+/// True when process was launched with `--cli` (or first meaningful arg is a CLI verb).
+#[tauri::command]
+fn is_cli_mode() -> bool {
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--cli" || a == "--help" || a == "-h") {
+        return true;
+    }
+    // bare: egress-checker discover …
+    let skip = |s: &str| s.starts_with('-') || s.contains('/') || s.ends_with(".exe");
+    for a in args.iter().skip(1) {
+        if skip(a) {
+            continue;
+        }
+        return matches!(
+            a.as_str(),
+            "help" | "discover" | "gate" | "check" | "env"
+        );
+    }
+    false
+}
+
+/// Print one line to process stdout (JSON envelope or help text).
+#[tauri::command]
+fn cli_stdout(line: String) -> Result<(), String> {
+    use std::io::Write;
+    let mut out = std::io::stdout().lock();
+    writeln!(out, "{line}").map_err(|e| e.to_string())?;
+    out.flush().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Exit the process after CLI finishes (code 0 = ok envelope, 1 = error).
+#[tauri::command]
+fn cli_exit(code: i32) -> Result<(), String> {
+    // Give stdout a tick to flush on some terminals.
+    let _ = std::io::Write::flush(&mut std::io::stdout());
+    std::process::exit(code);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            use tauri::Manager;
             let frontend_url = app
                 .config()
                 .build
@@ -325,9 +372,17 @@ pub fn run() {
                 "startup frontend_url={frontend_url} (no data-url navigate)"
             ));
 
+            // --cli：隐藏主窗，由前端跑完后 cli_exit。
+            if is_cli_mode() {
+                append_app_log("cli_mode=1 hide main window");
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.hide();
+                }
+            }
+
             #[cfg(debug_assertions)]
             {
-                use tauri::Manager;
+                if !is_cli_mode() {
                 let handle = app.handle().clone();
                 let probe_url = frontend_url.clone();
                 tauri::async_runtime::spawn(async move {
@@ -373,6 +428,7 @@ pub fn run() {
                         .await;
                     }
                 });
+                } // !is_cli_mode
             }
 
             Ok(())
@@ -387,7 +443,11 @@ pub fn run() {
             egress_proxy_fetch,
             egress_proxy_timed_transfer,
             egress_list_dns_resolvers,
-            egress_dns_whoami
+            egress_dns_whoami,
+            get_cli_argv,
+            is_cli_mode,
+            cli_stdout,
+            cli_exit
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

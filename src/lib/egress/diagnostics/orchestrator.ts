@@ -34,8 +34,8 @@ export async function runEgressDiagnostics(
   const mihomoConfig = options?.mihomoConfig ?? null;
   const note =
     mixedPort != null && mixedPort > 0
-      ? "探针优先经代理口发出。结果用来换节点时对照线路，不是替代你自己打开网站。请确保VPN软件已连接。"
-      : "部分探针可能走窗口直连。建议先「获取节点」并开启系统代理或 TUN。结果用于换节点对照。";
+      ? "探针优先经代理口发出。请确保 VPN 软件已连接。"
+      : "部分探针可能走窗口直连。建议先「获取节点」并开启系统代理或 TUN。";
 
   const push = (c: CheckCard) => {
     onCard?.(c);
@@ -110,20 +110,20 @@ export async function runEgressDiagnostics(
     },
     {
       id: "gemini",
-      title: "Gemini（换节点对照）",
+      title: "Gemini",
       deadlineMs: 16000,
       run: async () => {
         gemini = await withFailRetryUnlock(() => probeGeminiUnlock(mixedPort));
-        return unlockCard("gemini", "Gemini（换节点对照）", gemini);
+        return unlockCard("gemini", "Gemini", gemini);
       },
     },
     {
       id: "chatgpt",
-      title: "ChatGPT（换节点对照）",
+      title: "ChatGPT",
       deadlineMs: 22000,
       run: async () => {
         chatgpt = await withFailRetryUnlock(() => probeChatgptUnlock(mixedPort));
-        return unlockCard("chatgpt", "ChatGPT（换节点对照）", chatgpt);
+        return unlockCard("chatgpt", "ChatGPT", chatgpt);
       },
     },
     {

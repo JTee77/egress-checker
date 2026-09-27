@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --bg: #f4f5f7;
   --bg-elevated: #ffffff;
   --bg-sidebar: #eef0f3;
@@ -25,8 +25,34 @@
   font-size: 13px;
 }
 
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #0f1115;
+  --bg-elevated: #171a21;
+  --bg-sidebar: #12151b;
+  --border: #2a303b;
+  --text: #e8eaed;
+  --text-muted: #9aa3b2;
+  --accent: #60a5fa;
+  --accent-soft: #1e3a5f;
+  --pass: #4ade80;
+  --pass-bg: #052e16;
+  --warn: #fbbf24;
+  --warn-bg: #422006;
+  --fail: #f87171;
+  --fail-bg: #450a0a;
+  --unknown: #94a3b8;
+  --unknown-bg: #1e293b;
+  --on-accent: #0f1115;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  [data-theme="system"] {
     --bg: #0f1115;
     --bg-elevated: #171a21;
     --bg-sidebar: #12151b;
@@ -45,6 +71,7 @@
     --unknown-bg: #1e293b;
     --on-accent: #0f1115;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
   }
 }
 
@@ -69,12 +96,48 @@ select {
 }
 
 .app-shell {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   overflow: hidden;
 }
+
+/* 右上角主题切换：浅色 / 深色 / 跟随系统 */
+.theme-toggle {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 40;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+}
+.theme-toggle-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 7px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.theme-toggle-btn:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.theme-toggle-btn.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
 
 .sidebar {
   background: var(--bg-sidebar);
@@ -1222,19 +1285,29 @@ table.data tr:last-child td {
    / 环境检查上移 / 底部关于 / 玻璃地基
    ============================================================ */
 :root {
+  /* 节点卡固定宽度；窗口变宽只增加列数，不拉伸卡片 */
+  --nc-w: 310px;
   /* 收起卡高度（摘要内容 ~52px + 上下 padding） */
   --nc-h: 68px;
-  /* 展开卡内摘要区高度：压到自然内容高，省出的空间全部让给详情 */
-  --nc-sum-h: 56px;
-  /* 展开卡总高：与收起高解耦（详情 3 排需要的高度），收起变矮不改变展开高 */
-  --nc-exp-h: 180px;
-  /* 卡片纵向间距（展开总高必须把它算进去） */
+  /* 卡片纵向间距（瀑布流列内 gap） */
   --nc-gap: 9px;
+  /* 展开卡摘要区高度 */
+  --nc-sum-h: 56px;
+  /* 上行按单行格高锁死；抽样带宽（第4格）可溢出侵入下行空位 */
+  --nc-grid-row1-h: 32px;
+  /* 两行 metrics 区（源码量）；展开总高由 --nc-exp-h 锁死，本变量仅注释对照 */
+  --nc-metrics-h: 66px;
+  /* nc-full 上下 padding：8 + 9 */
+  --nc-full-pad-y: 17px;
+  /* 展开锁死 = 两张收起卡 + 中间间距：68+9+68=145；超出裁切 */
+  --nc-exp-h: calc(var(--nc-h) * 2 + var(--nc-gap));
   /* 动作列：三个主按钮左缘统一的竖线 */
   --action-x: 376px;
 }
 
-/* 头部工具条（选软件 · 刷新 · 连接状态）：普通文档流，随页面滚动 */
+/* 头部工具条（选软件 · 刷新 · 连接状态）。
+   内边距 16 + picker-group 352 + controls gap 8 = --action-x(376)，
+   「获取节点」左缘与环境检查 / 测全部动作列对齐。 */
 .app-header {
   display: flex;
   align-items: center;
@@ -1250,19 +1323,20 @@ table.data tr:last-child td {
   min-width: 160px;
 }
 
-/* 环境检查（上移到节点列表之前） */
+/* 环境检查：区块无底色/描边；左右 16px 与 .app-header 内文对齐
+   （「环境泄漏检查」左齐「你在用哪款软件」）。动作钮仍落在 --action-x。 */
 .env-section {
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--bg-elevated);
-  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  padding: 0 16px;
   margin-bottom: 14px;
 }
 .env-head {
   display: grid;
+  /* 左内边距 16 → 首列宽 action-x-16，第 2 列起点仍 = --action-x */
   grid-template-columns: calc(var(--action-x) - 16px) auto;
   align-items: center;
-  justify-items: start; /* 网格子项默认拉伸，必须关掉，按钮才会保持自然宽度 */
+  justify-items: start;
 }
 .env-head-labels {
   display: flex;
@@ -1279,12 +1353,12 @@ table.data tr:last-child td {
   color: var(--text-muted);
 }
 
-/* 工作区操作条 */
+/* 工作区操作条：与 .env-head / 获取节点 共用 --action-x 动作列 */
 .ws-ops {
   display: grid;
   grid-template-columns: var(--action-x) 1fr;
   align-items: center;
-  justify-items: start; /* 同上：按钮保持自然宽度，不被轨道拉伸 */
+  justify-items: start;
   margin-bottom: 12px;
 }
 .ws-ops-right {
@@ -1300,6 +1374,38 @@ table.data tr:last-child td {
   line-height: 1.4;
   min-width: 0;
 }
+
+/* 动作条行内进度（测全部）：紧凑条，复用 test-progress 色系 */
+.ws-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.ws-progress-text {
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-progress-bar {
+  flex: 0 0 72px;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 70%, var(--bg));
+  overflow: hidden;
+}
+.ws-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.18s ease-out;
+}
+
 /* 三大动作按钮（获取节点 / 开始环境检查 / 测全部节点）：
    统一样式与宽度，右缘对齐成一条"动作列" */
 .action-btn {
@@ -1319,17 +1425,17 @@ table.data tr:last-child td {
 /* 节点瀑布流：JS 定列（列数随容器宽度自适应），展开只向下推、无侧留白 */
 .node-flow {
   display: flex;
-  gap: 9px;
+  gap: var(--nc-gap);
   align-items: flex-start;
   justify-content: center; /* 固定卡宽：列数由窗口宽决定，余量对称留白 */
 }
 .flow-col {
   flex: none;
-  width: 250px;
+  width: var(--nc-w);
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--nc-gap);
 }
 .ncard {
   height: var(--nc-h);
@@ -1344,8 +1450,11 @@ table.data tr:last-child td {
   border-color: var(--accent);
 }
 .ncard.exp {
-  /* 总高固定（--nc-exp-h）：摘要压到自然高，余量全给详情 3 排 */
+  /* 高度锁死：只能是 --nc-exp-h，禁止 auto/min-height 随内容变 */
   height: var(--nc-exp-h);
+  max-height: var(--nc-exp-h);
+  min-height: 0;
+  overflow: hidden;
   border-color: var(--accent);
 }
 .ncard.exp .nc-sum {
@@ -1406,6 +1515,12 @@ table.data tr:last-child td {
   align-items: flex-end;
   gap: 6px;
 }
+.nc-acts {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
 .nc-untested {
   font-size: 11px;
   color: var(--text-muted);
@@ -1429,20 +1544,62 @@ table.data tr:last-child td {
   cursor: default;
 }
 .nc-full {
-  height: calc(var(--nc-exp-h) - var(--nc-sum-h));
+  height: calc(var(--nc-exp-h) - var(--nc-sum-h) - 2px);
+  min-height: 0;
+  /* 摘要↔明细舒适间距（保留）；行内 metrics 另紧凑 */
   padding: 8px 11px 9px;
   border-top: 1px dashed var(--border);
   overflow: hidden;
 }
 .nc-grid {
+  /* 固定卡宽 ~310：上行 4（连通/出口/延迟/带宽）下行 3（流媒体/AI/商店），末项不单吊 */
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* 行距略收（原 2px → 1px），第二行略上提；上行锁单行，带宽可侵入下行空位 */
+  gap: 1px 6px;
+  grid-template-rows: var(--nc-grid-row1-h) auto;
+  align-items: start; /* 四格顶对齐 */
   align-content: start;
 }
-/* 只显小标题；完整结论放 title 悬停（卡片 overflow:hidden，CSS 气泡会被裁） */
+/* 抽样带宽：两行 ↓↑ 可突破上行行高，侵入下行空列，不把第二行顶下去 */
+.nc-cell:nth-child(4) {
+  z-index: 1;
+  overflow: visible;
+}
+.nc-cell:nth-child(4) .nc-cv {
+  overflow: visible;
+}
+/* 极简格子：点单项开外置面板（卡片 overflow:hidden，详情挂在 .nc-wrap 外） */
+.nc-wrap {
+  position: relative;
+  width: 100%;
+}
 .nc-cell {
+  /* button 在 min-height>内容时 UA 会垂直居中；用 column+flex-start 强制标题+值顶排 */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  align-self: start;
+  min-height: 0;
+  width: 100%;
   min-width: 0;
+  margin: 0;
+  padding: 1px 3px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.nc-cell:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.nc-cell.on {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .nc-cl {
   display: flex;
@@ -1451,6 +1608,7 @@ table.data tr:last-child td {
   min-width: 0;
   font-size: 10.5px;
   font-weight: 500;
+  line-height: 1.15;
   color: var(--text-muted);
 }
 .nc-t {
@@ -1479,14 +1637,16 @@ table.data tr:last-child td {
 .nc-dot-mini.unk {
   background: var(--unknown);
 }
-/* 内容行：正常展示、放不下单行省略，悬停见全文 */
+/* 内容行：metrics 极简值，缩进到标题文字起点，放不下单行省略 */
 .nc-cv {
+  margin-top: 3px;
+  padding-left: 10px; /* 圆点 6px + 标题间距 4px */
   font-size: 11px;
   font-weight: 600;
-  line-height: 1.25;
-  white-space: nowrap;
+  line-height: 1.1;
+  /* 默认裁切；抽样带宽格另设 overflow:visible 以侵入下行空位 */
+  white-space: pre-line;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .nc-cv.ok {
   color: var(--pass);
@@ -1510,8 +1670,104 @@ table.data tr:last-child td {
   line-height: 1.6;
   padding: 4px 2px;
 }
-.nc-cell:hover .nc-cl {
+.nc-cell:hover .nc-cl,
+.nc-cell.on .nc-cl {
   color: var(--text);
+}
+
+/* 单项外置详情：贴在卡下方，宽度跟死列宽，不撑开瀑布列 */
+.nc-detail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 11px 11px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  box-shadow: 0 8px 24px color-mix(in srgb, #000 18%, transparent);
+  cursor: default;
+}
+.nc-detail-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.nc-detail-head {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.nc-detail-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.nc-detail-close {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.nc-detail-close:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text);
+}
+.nc-detail-conclusion {
+  margin-top: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.nc-detail-suggestion {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--warn);
+}
+.nc-detail-process-toggle {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.nc-detail-process-toggle:hover {
+  color: var(--text);
+}
+.nc-detail-process {
+  margin: 8px 0 0;
+  padding: 8px 9px;
+  max-height: 160px;
+  overflow: auto;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 80%, var(--border));
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 /* 底部关于 */
@@ -1560,7 +1816,6 @@ html.glass .home-page {
 }
 html.glass .app-header,
 html.glass .ncard,
-html.glass .env-section,
 html.glass .card,
 html.glass .fold-panel,
 html.glass .vpn-score-card,
@@ -1578,7 +1833,6 @@ html.glass .gate-banner {
   }
   html.glass .app-header,
   html.glass .ncard,
-  html.glass .env-section,
   html.glass .card,
   html.glass .fold-panel,
   html.glass .vpn-score-card,
@@ -1586,8 +1840,9 @@ html.glass .gate-banner {
     background: var(--bg-elevated);
   }
 }
-/* 模态确认框不参与玻璃半透明：底色必须实，保证正文可读 */
-html.glass .confirm-panel {
+/* 模态确认框 / 外置详情不参与玻璃半透明：实底遮住下层卡片字 */
+html.glass .confirm-panel,
+html.glass .nc-detail {
   background: var(--bg-elevated);
 }
 
