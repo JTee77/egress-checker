@@ -1506,9 +1506,10 @@ table.data tr:last-child td {
   overflow: hidden;
 }
 .nc-grid {
+  /* 固定卡宽 ~310：上行 4（连通/出口/延迟/带宽）下行 3（流媒体/AI/商店），末项不单吊 */
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px 6px;
   align-content: start;
 }
 /* 极简格子：点单项开外置面板（卡片 overflow:hidden，详情挂在 .nc-wrap 外） */
@@ -1749,7 +1750,6 @@ html.glass .home-page {
 }
 html.glass .app-header,
 html.glass .ncard,
-html.glass .nc-detail,
 html.glass .env-section,
 html.glass .card,
 html.glass .fold-panel,
@@ -1768,7 +1768,6 @@ html.glass .gate-banner {
   }
   html.glass .app-header,
   html.glass .ncard,
-  html.glass .nc-detail,
   html.glass .env-section,
   html.glass .card,
   html.glass .fold-panel,
@@ -1777,8 +1776,9 @@ html.glass .gate-banner {
     background: var(--bg-elevated);
   }
 }
-/* 模态确认框不参与玻璃半透明：底色必须实，保证正文可读 */
-html.glass .confirm-panel {
+/* 模态确认框 / 外置详情不参与玻璃半透明：实底遮住下层卡片字 */
+html.glass .confirm-panel,
+html.glass .nc-detail {
   background: var(--bg-elevated);
 }
 

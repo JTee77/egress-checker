@@ -35,8 +35,8 @@ describe("summarizeServiceCards", () => {
     const out = summarizeServiceCards(cards);
     expect(out.map((c) => c.id)).toEqual([
       "reachability",
-      "svc-ai",
       "svc-streaming",
+      "svc-ai",
       "svc-store",
     ]);
     const ai = out.find((c) => c.id === "svc-ai")!;

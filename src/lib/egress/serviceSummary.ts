@@ -150,6 +150,22 @@ export function summarizeServiceCards(cards: CheckCard[]): CheckCard[] {
   const byId = new Map(cards.map((c) => [c.id, c]));
   const emitted = new Set<string>();
   const out: CheckCard[] = [];
+  let servicesFlushed = false;
+
+  /** 首次碰到服务成员时，按 SERVICE_GROUPS 顺序一次刷出（流媒体 / AI / 商店）。 */
+  const flushServiceSummaries = () => {
+    if (servicesFlushed) return;
+    servicesFlushed = true;
+    for (const group of SERVICE_GROUPS) {
+      if (emitted.has(group.id)) continue;
+      const members = group.memberIds
+        .map((id) => byId.get(id))
+        .filter((c): c is CheckCard => !!c);
+      if (!members.length) continue;
+      emitted.add(group.id);
+      out.push(buildServiceSummaryCard(group, members));
+    }
+  };
 
   for (const card of cards) {
     const group = MEMBER_TO_GROUP.get(card.id);
@@ -165,13 +181,7 @@ export function summarizeServiceCards(cards: CheckCard[]): CheckCard[] {
       out.push(card);
       continue;
     }
-    if (emitted.has(group.id)) continue;
-    emitted.add(group.id);
-    const members = group.memberIds
-      .map((id) => byId.get(id))
-      .filter((c): c is CheckCard => !!c);
-    if (!members.length) continue;
-    out.push(buildServiceSummaryCard(group, members));
+    flushServiceSummaries();
   }
 
   return out;
