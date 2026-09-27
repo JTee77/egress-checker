@@ -1291,12 +1291,12 @@ table.data tr:last-child td {
   --nc-h: 68px;
   /* 展开卡摘要区高度 */
   --nc-sum-h: 56px;
-  /* 两行 metrics 自然高（源码量）：上行带宽 标签12.075+两行值24.2+pad2≈38
-     + gap2 + 下行单行≈26 → 66；带宽可略高出单行格 */
-  --nc-metrics-h: 66px;
+  /* 两行 metrics 自然高（源码量）：上行带宽标签12.075+间距3+两行值24.2+pad2≈41
+     + gap2 + 下行单行（含间距3）≈29 → 72；带宽可略高出单行格 */
+  --nc-metrics-h: 72px;
   /* nc-full 上下 padding：8 + 9（ae84c7f 舒适级，勿再压） */
   --nc-full-pad-y: 17px;
-  /* 展开最小高：摘要 + full padding + 两行 metrics = 56+17+66=139；
+  /* 展开最小高：摘要 + full padding + 两行 metrics = 56+17+72=145；
      未测仅「尚未检测」时与测过展开同高，避免 min-height:0 塌矮 */
   --nc-exp-min-h: calc(var(--nc-sum-h) + var(--nc-full-pad-y) + var(--nc-metrics-h));
   /* 卡片纵向间距 */
@@ -1592,8 +1592,10 @@ table.data tr:last-child td {
 .nc-dot-mini.unk {
   background: var(--unknown);
 }
-/* 内容行：metrics 极简值，放不下单行省略 */
+/* 内容行：metrics 极简值，缩进到标题文字起点，放不下单行省略 */
 .nc-cv {
+  margin-top: 3px;
+  padding-left: 10px; /* 圆点 6px + 标题间距 4px */
   font-size: 11px;
   font-weight: 600;
   line-height: 1.1;
