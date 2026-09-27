@@ -1293,7 +1293,9 @@ table.data tr:last-child td {
   --nc-gap: 9px;
   /* 展开卡摘要区高度 */
   --nc-sum-h: 56px;
-  /* 两行 metrics 区（源码量）；展开总高由下方公式锁死，本变量仅注释对照 */
+  /* 上行按单行格高锁死；抽样带宽（第4格）可溢出侵入下行空位 */
+  --nc-grid-row1-h: 32px;
+  /* 两行 metrics 区（源码量）；展开总高由 --nc-exp-h 锁死，本变量仅注释对照 */
   --nc-metrics-h: 66px;
   /* nc-full 上下 padding：8 + 9 */
   --nc-full-pad-y: 17px;
@@ -1518,10 +1520,19 @@ table.data tr:last-child td {
   /* 固定卡宽 ~310：上行 4（连通/出口/延迟/带宽）下行 3（流媒体/AI/商店），末项不单吊 */
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  /* 行距略紧；行高随内容；勿 stretch 把单行格相对带宽垂直居中 */
-  gap: 2px 6px;
+  /* 行距收紧为 0，第二行上提；上行行高锁单行，带宽可侵入下行第4空位 */
+  gap: 0 6px;
+  grid-template-rows: var(--nc-grid-row1-h) auto;
   align-items: start; /* 四格顶对齐 */
   align-content: start;
+}
+/* 抽样带宽：两行 ↓↑ 可突破上行行高，侵入下行空列，不把第二行顶下去 */
+.nc-cell:nth-child(4) {
+  z-index: 1;
+  overflow: visible;
+}
+.nc-cell:nth-child(4) .nc-cv {
+  overflow: visible;
 }
 /* 极简格子：点单项开外置面板（卡片 overflow:hidden，详情挂在 .nc-wrap 外） */
 .nc-wrap {
@@ -1598,7 +1609,7 @@ table.data tr:last-child td {
   font-size: 11px;
   font-weight: 600;
   line-height: 1.1;
-  /* 带宽 ↓↑ 两行：可略侵入第二排 gap；卡高已锁死，超出裁切 */
+  /* 默认裁切；抽样带宽格另设 overflow:visible 以侵入下行空位 */
   white-space: pre-line;
   overflow: hidden;
 }
