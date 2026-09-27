@@ -1,6 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CheckCard } from "../lib/egress/types";
 import { formatCardBrief } from "../lib/egress/cardBrief";
+import {
+  isServiceSummaryId,
+  summarizeServiceCards,
+} from "../lib/egress/serviceSummary";
 import type { NodeScoreResult } from "../lib/score";
 import type { ProxyNode } from "../lib/mihomo";
 import { nodeCapabilityChips } from "../lib/mihomo";
@@ -47,8 +51,11 @@ export function NodeCard({
   // 判定"测过"看有没有评分结果（含"不可用"），而非有没有明细卡：
   // scoreDeadNode 返回 stars=不可用 但 cards=[]，旧逻辑会把它误显示为"未测"。
   const hasResult = !!score;
-  const cards = score && score.cards.length > 0 ? score.cards : (liveCards ?? []);
+  const rawCards = score && score.cards.length > 0 ? score.cards : (liveCards ?? []);
+  // 卡墙：流媒体 / AI / 商店合成汇总；评分仍用原始单项卡。
+  const cards = useMemo(() => summarizeServiceCards(rawCards), [rawCards]);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [processOpen, setProcessOpen] = useState(false);
 
   // 收起摘要墙时关掉外置详情，避免悬空面板。
   useEffect(() => {
@@ -60,7 +67,20 @@ export function NodeCard({
     if (detailId && !cards.some((c) => c.id === detailId)) setDetailId(null);
   }, [cards, detailId]);
 
+  // 换详情项时收起过程，默认不对用户展示测法。
+  useEffect(() => {
+    setProcessOpen(false);
+  }, [detailId]);
+
   const detailCard = detailId ? cards.find((c) => c.id === detailId) : undefined;
+  const detailProcess = detailCard?.process ?? detailCard?.detail;
+  const hasProcess = !!(detailProcess && detailProcess.trim());
+  // 汇总卡徽章用「全通/部分/…」；其它卡仍用 conclusion。
+  const detailBadgeConclusion = detailCard
+    ? isServiceSummaryId(detailCard.id)
+      ? formatCardBrief(detailCard)
+      : (detailCard.conclusion ?? detailCard.summary)
+    : undefined;
 
   const action = hasResult ? (
     <div className="nc-acts">
@@ -140,7 +160,7 @@ export function NodeCard({
                       key={c.id}
                       type="button"
                       className={`nc-cell${on ? " on" : ""}`}
-                      title={c.conclusion ?? c.summary ?? undefined}
+                      title={brief}
                       onClick={(e) => {
                         e.stopPropagation();
                         setDetailId((prev) => (prev === c.id ? null : c.id));
@@ -176,7 +196,7 @@ export function NodeCard({
               <span className="nc-detail-title">{detailCard.title}</span>
               <StatusBadge
                 level={detailCard.level}
-                conclusion={detailCard.conclusion ?? detailCard.summary}
+                conclusion={detailBadgeConclusion}
               />
             </div>
             <button
@@ -199,10 +219,23 @@ export function NodeCard({
               {detailCard.suggestion ?? detailCard.tip}
             </div>
           ) : null}
-          {detailCard.process ?? detailCard.detail ? (
-            <pre className="nc-detail-process">
-              {detailCard.process ?? detailCard.detail}
-            </pre>
+          {hasProcess ? (
+            <>
+              <button
+                type="button"
+                className="nc-detail-process-toggle"
+                aria-expanded={processOpen}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setProcessOpen((v) => !v);
+                }}
+              >
+                {processOpen ? "收起过程" : "查看过程"}
+              </button>
+              {processOpen ? (
+                <pre className="nc-detail-process">{detailProcess}</pre>
+              ) : null}
+            </>
           ) : null}
         </aside>
       ) : null}

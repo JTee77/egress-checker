@@ -66,6 +66,19 @@ export function formatCardBrief(card: CheckCard): string {
     return shortConclusion(card);
   }
 
+  // 服务解锁汇总卡：全通 / 部分 / 全不通（检测中已在入口处理）
+  if (
+    id === "svc-streaming" ||
+    id === "svc-ai" ||
+    id === "svc-store" ||
+    id.startsWith("svc-")
+  ) {
+    if (card.level === "pass") return "全通";
+    if (card.level === "warn") return "部分";
+    if (card.level === "fail") return "全不通";
+    return shortConclusion(card, 6);
+  }
+
   // 解锁 / 服务类：区码优先，其次开/锁
   if (m && (m.unlockSupported != null || m.unlockRegion || m.unlockLevel)) {
     const region = m.unlockRegion?.trim();

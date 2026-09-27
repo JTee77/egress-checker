@@ -1673,6 +1673,21 @@ table.data tr:last-child td {
   line-height: 1.45;
   color: var(--warn);
 }
+.nc-detail-process-toggle {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.nc-detail-process-toggle:hover {
+  color: var(--text);
+}
 .nc-detail-process {
   margin: 8px 0 0;
   padding: 8px 9px;

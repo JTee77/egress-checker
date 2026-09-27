@@ -5,3 +5,4 @@ export * from "./nodeRun";
 export * from "./envRun";
 export * from "./pool";
 export * from "./cardBrief";
+export * from "./serviceSummary";
