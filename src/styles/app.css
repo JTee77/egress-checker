@@ -1289,17 +1289,16 @@ table.data tr:last-child td {
   --nc-w: 310px;
   /* 收起卡高度（摘要内容 ~52px + 上下 padding） */
   --nc-h: 68px;
+  /* 卡片纵向间距（瀑布流列内 gap） */
+  --nc-gap: 9px;
   /* 展开卡摘要区高度 */
   --nc-sum-h: 56px;
-  /* 两行 metrics 区（源码量，含标题↔结果 3px）：上行≈38 + gap2 + 下行≈26 → 66 */
+  /* 两行 metrics 区（源码量）；展开总高由下方公式锁死，本变量仅注释对照 */
   --nc-metrics-h: 66px;
-  /* nc-full 上下 padding：8 + 9（摘要↔明细舒适间距，勿再压） */
+  /* nc-full 上下 padding：8 + 9 */
   --nc-full-pad-y: 17px;
-  /* 展开外轮廓数值锁死：摘要56 + pad17 + metrics66 = 139。
-     与 0d5fedc 用户认可高度一致；超出由 overflow:hidden 裁切，禁止内容撑高。 */
-  --nc-exp-h: 139px;
-  /* 卡片纵向间距 */
-  --nc-gap: 9px;
+  /* 展开锁死 = 两张收起卡 + 中间间距：68+9+68=145；超出裁切 */
+  --nc-exp-h: calc(var(--nc-h) * 2 + var(--nc-gap));
   /* 动作列：三个主按钮左缘统一的竖线 */
   --action-x: 376px;
 }
