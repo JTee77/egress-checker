@@ -1323,18 +1323,18 @@ table.data tr:last-child td {
   min-width: 160px;
 }
 
-/* 环境检查：区块本身无底色/描边，底色只落在内部 CheckCard 上。
-   标题行与下方 ws-ops、上方获取节点共用 --action-x 动作列右缘对齐。 */
+/* 环境检查：区块无底色/描边；左右 16px 与 .app-header 内文对齐
+   （「环境泄漏检查」左齐「你在用哪款软件」）。动作钮仍落在 --action-x。 */
 .env-section {
   background: transparent;
   border: none;
-  padding: 0;
+  padding: 0 16px;
   margin-bottom: 14px;
 }
 .env-head {
   display: grid;
-  /* 去内边距后不再减 16；与 .ws-ops 同轨：第 2 列起点 = --action-x */
-  grid-template-columns: var(--action-x) auto;
+  /* 左内边距 16 → 首列宽 action-x-16，第 2 列起点仍 = --action-x */
+  grid-template-columns: calc(var(--action-x) - 16px) auto;
   align-items: center;
   justify-items: start;
 }
