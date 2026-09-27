@@ -2,67 +2,33 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCardView } from "../components/CheckCardView";
 import { NodeCard } from "../components/NodeCard";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { ProgressInfo } from "../components/TestProgress";
-import {
-  mapPool,
-  runEnvDiagnostics,
-  runNodeDeepLight,
-  type CheckCard,
-  type EgressReport,
-} from "../lib/egress";
+import type { CheckCard, EgressReport } from "../lib/egress";
 import {
   CLIENT_OPTIONS,
   clientLabel,
-  findSelectorGroup,
   normalizeClientId,
-  probeDelay,
-  resolveSelectorSnapshot,
-  restoreProxy,
-  switchProxy,
   type ClientId,
   type ConnectionState,
   type ControllerConfig,
   type ProxyNode,
-  type SelectorSnapshot,
 } from "../lib/mihomo";
 import {
   starRank,
   runLightGate,
-  scoreDeadNode,
-  scoreNodeFromCards,
   type GateResult,
   type NodeScoreResult,
 } from "../lib/score";
+import {
+  ENV_PLACEHOLDERS,
+  NODE_PLACEHOLDERS,
+  runEnv,
+  testAll as runTestAll,
+  testOne,
+  type RunnerHooks,
+  type RunnerProgress,
+} from "../lib/runner";
 
 type TestMode = "current" | "all";
-
-const NODE_PLACEHOLDERS: CheckCard[] = [
-  { id: "reachability", title: "连通性", level: "unknown", conclusion: "尚未检测" },
-  { id: "exit-ip", title: "出口 IP", level: "unknown", conclusion: "尚未检测" },
-  { id: "latency", title: "延迟采样", level: "unknown", conclusion: "尚未检测" },
-  { id: "bandwidth", title: "抽样带宽", level: "unknown", conclusion: "尚未检测" },
-  { id: "gemini", title: "Gemini（换节点对照）", level: "unknown", conclusion: "尚未检测" },
-  { id: "chatgpt", title: "ChatGPT（换节点对照）", level: "unknown", conclusion: "尚未检测" },
-  { id: "netflix", title: "Netflix", level: "unknown", conclusion: "尚未检测" },
-  { id: "disney", title: "Disney+", level: "unknown", conclusion: "尚未检测" },
-  { id: "youtube", title: "YouTube Premium", level: "unknown", conclusion: "尚未检测" },
-  { id: "app-store", title: "App Store", level: "unknown", conclusion: "尚未检测" },
-  { id: "google-play", title: "Google Play", level: "unknown", conclusion: "尚未检测" },
-];
-
-const ENV_PLACEHOLDERS: CheckCard[] = [
-  { id: "dns-leak", title: "DNS 解析器", level: "unknown", conclusion: "尚未检测" },
-  { id: "ipv6-leak", title: "IPv6 泄漏", level: "unknown", conclusion: "尚未检测" },
-  { id: "webrtc", title: "WebRTC", level: "unknown", conclusion: "尚未检测" },
-  { id: "split-routing", title: "分流检查", level: "unknown", conclusion: "尚未检测" },
-  { id: "bare-egress", title: "直连旁路检查", level: "unknown", conclusion: "尚未检测" },
-];
-
-const DELAY_URL = "http://www.gstatic.com/generate_204";
-
-function asRunning(list: CheckCard[]): CheckCard[] {
-  return list.map((c) => ({ ...c, level: "running" as const, conclusion: "检测中…" }));
-}
 
 /** 瀑布流列数：单卡固定 250px + 9px 列距，1–8 列封顶。40 为 .main 左右 padding。 */
 function colCountFor(vw: number): number {
@@ -100,7 +66,7 @@ export function HomePage({
   const [envCards, setEnvCards] = useState<CheckCard[]>(ENV_PLACEHOLDERS);
   const [report, setReport] = useState<EgressReport | null>(null);
   const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState<ProgressInfo | null>(null);
+  const [progress, setProgress] = useState<RunnerProgress | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [mode, setMode] = useState<TestMode>("current");
   const [gate, setGate] = useState<GateResult | null>(null);
@@ -242,288 +208,62 @@ export function HomePage({
     return g;
   };
 
-  const testAll = async () => {
-    abortAllRef.current = false;
-    setRunning(true);
-    setNodeScores([]);
-    setSwitchHint(null);
-    setRestoreError(null);
-
-    let originalSnap: SelectorSnapshot | null = null;
-    let didSwitch = false;
-    const config = connection.config;
-
-    try {
-      const g = await ensureGate();
-      if (!g.ok) return;
-
-      const list: ProxyNode[] = nodes.length
-        ? nodes
-        : connection.currentProxy
-          ? [
-              {
-                name: connection.currentProxy,
-                type: "Unknown",
-                region: "未知",
-                raw: { name: connection.currentProxy, type: "Unknown" },
-              },
-            ]
-          : [];
-
-      if (!list.length) {
-        setGate({
-          ok: false,
-          message:
-            "还没有读到节点列表。请先点「获取节点」，确认VPN软件里已经加载了订阅。",
-        });
-        return;
-      }
-
-      const results: NodeScoreResult[] = [];
-      const alive: ProxyNode[] = [];
-      const canSwitch =
-        !!config && !connection.usingMock && !forceMock;
-      /** 并发连通性预检：对齐参考脚本 ThreadPool ~10，取 12 */
-      const CULL_CONCURRENCY = 12;
-
-      const sortScores = (list: NodeScoreResult[]) =>
-        [...list].sort((a, b) => {
+  const buildHooks = (): RunnerHooks => ({
+    onProgress: setProgress,
+    onNodeCards: setNodeCards,
+    onUpsertNodeCard: upsertNodeCard,
+    onReport: setReport,
+    onUpsertScore: (score) => {
+      setNodeScores((prev) => {
+        const next = prev.filter((x) => x.nodeName !== score.nodeName);
+        next.push(score);
+        return [...next].sort((a, b) => {
           const byStar = starRank(b.stars) - starRank(a.stars);
           if (byStar !== 0) return byStar;
           return b.totalScore - a.totalScore;
         });
-
-      /** Flush one score to the grid immediately (safe under concurrent cull). */
-      const upsertScore = (score: NodeScoreResult) => {
-        const i = results.findIndex((r) => r.nodeName === score.nodeName);
-        if (i >= 0) results[i] = score;
-        else results.push(score);
-        setNodeScores((prev) => {
-          const next = prev.filter((x) => x.nodeName !== score.nodeName);
-          next.push(score);
-          return sortScores(next);
-        });
-      };
-
-      if (canSwitch) {
-        originalSnap = await resolveSelectorSnapshot(
-          config,
-          connection.currentProxy,
-        );
-        if (!originalSnap?.now && connection.currentProxy) {
-          const group =
-            (await findSelectorGroup(config, connection.currentProxy)) ??
-            originalSnap?.group;
-          if (group) {
-            originalSnap = { group, now: connection.currentProxy };
-          }
-        }
-      }
-
-      // 客户端"最近"测失败（10 分钟内）的节点直接跳过预检。客户端的失败
-      // 记录可能过期（实测有 2 小时前判死、现在已恢复的节点），所以只信
-      // 新鲜记录：过期的失败记录一律仍走预检实测。
-      const CLIENT_DEAD_FRESH_MS = 10 * 60 * 1000;
-      const clientDead = list.filter((n) => {
-        if (n.lastDelay !== 0 || !n.lastDelayAt) return false;
-        // mihomo 时间戳可能带 6 位小数秒，Date.parse 只保证 3 位
-        const t = Date.parse(n.lastDelayAt.replace(/(\.\d{3})\d+/, "$1"));
-        return Number.isFinite(t) && Date.now() - t <= CLIENT_DEAD_FRESH_MS;
       });
-      for (const n of clientDead) {
-        upsertScore(scoreDeadNode(n.name, "客户端最近测速失败，按不可用处理。"));
-      }
-      const toCheck = list.filter((n) => !clientDead.includes(n));
+    },
+    onScores: setNodeScores,
+    onHint: setSwitchHint,
+    onRestoreError: setRestoreError,
+    onGate: setGate,
+    onEnvCards: setEnvCards,
+    onUpsertEnvCard: upsertEnvCard,
+  });
 
-      setProgress({ text: `连通性预检 0/${toCheck.length}`, current: 0, total: toCheck.length, testingNode: undefined });
-      if (!canSwitch) {
-        for (let i = 0; i < toCheck.length; i++) {
-          if (abortAllRef.current) break;
-          const n = toCheck[i];
-          setProgress({
-            text: `连通性预检 ${i + 1}/${toCheck.length}`,
-            current: i + 1,
-            total: toCheck.length,
-            testingNode: n.name,
-          });
-          if (i === toCheck.length - 1 && toCheck.length > 1) {
-            upsertScore(
-              scoreDeadNode(n.name, "演示：延迟探测失败，按不可用处理。"),
-            );
-          } else {
-            alive.push(n);
-          }
-        }
-      } else {
-        let cullDone = 0;
-        const cullOut = await mapPool(toCheck, CULL_CONCURRENCY, async (n) => {
-          if (abortAllRef.current) {
-            return { n, delay: null as number | null, skipped: true };
-          }
-          const delay = await probeDelay(config!, n.name, DELAY_URL, 5000);
-          cullDone += 1;
-          setProgress({
-            text: `连通性预检 ${cullDone}/${toCheck.length}`,
-            current: cullDone,
-            total: toCheck.length,
-            testingNode: n.name,
-          });
-          if (delay == null) {
-            upsertScore(
-              scoreDeadNode(n.name, "延迟探测失败，按不可用处理。"),
-            );
-          }
-          return { n, delay, skipped: false };
-        });
-        for (const row of cullOut) {
-          if (row.skipped) continue;
-          if (row.delay == null) continue;
-          alive.push(row.n);
-        }
-      }
-
-      if (canSwitch && !abortAllRef.current && originalSnap?.group && originalSnap.now) {
-        for (let i = 0; i < alive.length; i++) {
-          if (abortAllRef.current) {
-            break;
-          }
-          const n = alive[i];
-          setProgress({
-            text: `检测 ${i + 1}/${alive.length}（${n.name}）`,
-            current: i + 1,
-            total: alive.length,
-            testingNode: n.name,
-          });
-          const group =
-            (await findSelectorGroup(config!, n.name)) ?? originalSnap.group;
-          if (!group) {
-            upsertScore(
-              scoreDeadNode(
-                n.name,
-                "找不到可切换的策略组，没法检测这个节点。",
-              ),
-            );
-            continue;
-          }
-          const ok = await switchProxy(config!, group, n.name);
-          if (!ok) {
-            upsertScore(
-              scoreDeadNode(n.name, "切换失败，没法检测这个节点。"),
-            );
-            continue;
-          }
-          didSwitch = true;
-          await new Promise((r) => setTimeout(r, 250));
-          if (abortAllRef.current) break;
-          setNodeCards(asRunning(NODE_PLACEHOLDERS));
-          const r = await runNodeDeepLight(upsertNodeCard, {
-            mixedPort: mixedPortNum,
-            mihomoConfig: config,
-          });
-          setReport(r);
-          setNodeCards(r.cards);
-          upsertScore(scoreNodeFromCards(n.name, r.cards, r.ranAt));
-        }
-      } else if (canSwitch) {
-        // API 在，但读不到原先选中 / 策略组：仍尽量深测当前出口，并说明原因
-        setSwitchHint(
-          "连上了VPN软件，但读不到当前选中的节点或策略组，没法安全地临时切换。只检测当前节点。",
-        );
-        setProgress({
-          text: "正在检测当前节点（无法安全切换）…",
-          testingNode: connection.currentProxy ?? undefined,
-        });
-        setNodeCards(asRunning(NODE_PLACEHOLDERS));
-        const r = await runNodeDeepLight(upsertNodeCard, {
+  const testAll = async () => {
+    abortAllRef.current = false;
+    setRunning(true);
+    try {
+      await runTestAll(
+        {
+          connection,
+          nodes,
+          forceMock,
           mixedPort: mixedPortNum,
-          mihomoConfig: config,
-        });
-        setReport(r);
-        setNodeCards(r.cards);
-        const currentName = connection.currentProxy ?? "当前节点";
-        upsertScore(scoreNodeFromCards(currentName, r.cards, r.ranAt));
-        for (const n of alive) {
-          if (n.name === currentName) continue;
-          upsertScore(
-            scoreDeadNode(
-              n.name,
-              "没法切换到该节点做检测（读不到策略组或当前选中）。",
-            ),
-          );
-        }
-      } else {
-        // Mock / 无配置：演示轻量深测，不切换
-        for (let i = 0; i < alive.length; i++) {
-          if (abortAllRef.current) break;
-          const n = alive[i];
-          setProgress({
-            text: `检测 ${i + 1}/${alive.length}（演示）`,
-            current: i + 1,
-            total: alive.length,
-            testingNode: n.name,
-          });
-          setNodeCards(asRunning(NODE_PLACEHOLDERS));
-          const r = await runNodeDeepLight(upsertNodeCard, {
-            mixedPort: mixedPortNum,
-            mihomoConfig: config,
-          });
-          setReport(r);
-          setNodeCards(r.cards);
-          upsertScore(scoreNodeFromCards(n.name, r.cards, r.ranAt));
-        }
-      }
-
-      const sorted = sortScores(results);
-      setNodeScores(sorted);
-      setProgress(null);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setProgress(null);
-      setGate({ ok: false, message: `测全部节点时出错：${msg}` });
+          ensureGate,
+          shouldAbort: () => abortAllRef.current,
+        },
+        buildHooks(),
+      );
     } finally {
-      // 成功 / 中止 / 出错：只要切过，就必须尝试切回；失败要明确报错
-      if (didSwitch && config && originalSnap?.now && originalSnap.group) {
-        setProgress({ text: `正在切回原先节点：${originalSnap.now}…`, testingNode: undefined });
-        const restored = await restoreProxy(config, originalSnap);
-        if (!restored) {
-          const errMsg = `没法自动切回原先的节点「${originalSnap.now}」。请立刻到VPN软件里手动选回去，否则你可能还停在别的节点上。`;
-          setRestoreError(errMsg);
-          setSwitchHint(errMsg);
-        } else {
-          setRestoreError(null);
-        }
-        setProgress(null);
-      } else if (didSwitch && (!originalSnap?.now || !originalSnap.group)) {
-        const errMsg =
-          "测全部时切换过节点，但应用没有记下原先选中的节点，没法自动切回。请到VPN软件里确认当前节点。";
-        setRestoreError(errMsg);
-        setSwitchHint(errMsg);
-      }
       setRunning(false);
       abortAllRef.current = false;
     }
   };
 
-  const runEnv = async () => {
+  const runEnvCheck = async () => {
     setEnvRunning(true);
     setEnvOpen(true);
-    setEnvCards(asRunning(ENV_PLACEHOLDERS));
     try {
-      const cards = await runEnvDiagnostics(upsertEnvCard, {
-        mixedPort: mixedPortNum,
-        mihomoConfig: connection.config,
-        exitIp: report?.exitIp ?? null,
-      });
-      setEnvCards(cards);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setEnvCards(
-        ENV_PLACEHOLDERS.map((c) => ({
-          ...c,
-          level: "fail",
-          conclusion: "环境检查失败",
-          process: msg,
-        })),
+      await runEnv(
+        {
+          connection,
+          mixedPort: mixedPortNum,
+          exitIp: report?.exitIp ?? null,
+        },
+        buildHooks(),
       );
     } finally {
       setEnvRunning(false);
@@ -603,59 +343,25 @@ export function HomePage({
       allExpanded ? new Set() : new Set(orderedNodes.map((n) => n.name)),
     );
 
-  // 单独测某个节点：非当前节点时临时切换、测完切回（复用测全部的机制）。
+  // 单独测某个节点：完整深测（runNodeDiagnostics）；非当前节点临时切换后切回。
+  // NodeCard「再测」由 Ellie 接 onTest；此处保持接口稳定。
   const testOneNode = async (node: ProxyNode) => {
     if (running) return;
-    const config = connection.config;
-    let snap: SelectorSnapshot | null = null;
-    let didSwitch = false;
     setRunning(true);
     setTestingNode(node.name);
-    setRestoreError(null);
     try {
-      const g = await ensureGate();
-      if (!g.ok) return;
-      const isCurrent = node.name === connection.currentProxy;
-      if (!isCurrent && config && !connection.usingMock && !forceMock) {
-        snap = await resolveSelectorSnapshot(config, connection.currentProxy);
-        const group =
-          (await findSelectorGroup(config, node.name)) ?? snap?.group;
-        if (!group) {
-          setSwitchHint("找不到可切换的策略组，没法单独测这个节点。");
-          return;
-        }
-        const ok = await switchProxy(config, group, node.name);
-        if (!ok) {
-          setSwitchHint("切换失败，没法测这个节点。");
-          return;
-        }
-        didSwitch = true;
-        await new Promise((r) => setTimeout(r, 250));
-      }
-      setProgress({ text: `正在检测 ${node.name}…`, testingNode: node.name });
-      setNodeCards(asRunning(NODE_PLACEHOLDERS));
-      const r = await runNodeDeepLight(upsertNodeCard, {
-        mixedPort: mixedPortNum,
-        mihomoConfig: config,
-      });
-      setNodeCards(r.cards);
-      const scored = scoreNodeFromCards(node.name, r.cards, r.ranAt);
-      setNodeScores((prev) => {
-        const next = prev.filter((x) => x.nodeName !== node.name);
-        next.push(scored);
-        return next;
-      });
+      await testOne(
+        {
+          node,
+          connection,
+          forceMock,
+          mixedPort: mixedPortNum,
+          ensureGate,
+        },
+        buildHooks(),
+      );
       setExpanded((prev) => new Set(prev).add(node.name));
-    } catch (err) {
-      setSwitchHint(err instanceof Error ? err.message : String(err));
     } finally {
-      if (didSwitch && config && snap?.now && snap.group) {
-        const restored = await restoreProxy(config, snap);
-        if (!restored)
-          setRestoreError(
-            `没能自动切回原先节点「${snap.now}」，请到VPN软件里手动选回。`,
-          );
-      }
       setRunning(false);
       setTestingNode(null);
       setProgress(null);
@@ -746,7 +452,7 @@ export function HomePage({
                 type="button"
                 className="btn btn-primary btn-sm action-btn"
                 disabled={envRunning || running}
-                onClick={() => void runEnv()}
+                onClick={() => void runEnvCheck()}
               >
                 {envRunning ? "检查中…" : envOpen ? "重新检查环境" : "开始环境检查"}
               </button>
