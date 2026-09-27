@@ -27,6 +27,8 @@ function levelClass(level: CheckCard["level"]): string {
   }
 }
 
+const EMPTY_METRIC_TITLES = ["连通性", "出口 IP", "延迟", "带宽", "流媒体", "AI", "商店"];
+
 export function NodeCard({
   node,
   score,
@@ -178,7 +180,17 @@ export function NodeCard({
             ) : score ? (
               <div className="nc-dead">{score.blurb}</div>
             ) : (
-              <div className="nc-dead">暂无检测详情</div>
+              <div className="nc-grid nc-grid-empty" aria-label="暂无检测详情">
+                {EMPTY_METRIC_TITLES.map((title) => (
+                  <div key={title} className="nc-cell nc-cell-empty" aria-hidden="true">
+                    <div className="nc-cl">
+                      <span className="nc-dot-mini unk" />
+                      <span className="nc-t">{title}</span>
+                    </div>
+                    <div className="nc-cv unk">—</div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         ) : null}

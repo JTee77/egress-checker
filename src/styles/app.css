@@ -1289,8 +1289,12 @@ table.data tr:last-child td {
   --nc-w: 310px;
   /* 收起卡高度（摘要内容 ~52px + 上下 padding） */
   --nc-h: 68px;
-  /* 展开卡摘要区高度；明细区随后按内容自然撑开 */
+  /* 展开卡摘要区高度；明细格按两行 metrics 对齐 */
   --nc-sum-h: 56px;
+  /* 展开态统一最小高度：摘要 + 两行 metrics + 卡内留白 */
+  --nc-exp-min-h: 166px;
+  /* 带宽值两行时的格子行高，避免单卡被内容额外撑高 */
+  --nc-grid-row-h: 44px;
   /* 卡片纵向间距 */
   --nc-gap: 9px;
   /* 动作列：三个主按钮左缘统一的竖线 */
@@ -1407,9 +1411,9 @@ table.data tr:last-child td {
   border-color: var(--accent);
 }
 .ncard.exp {
-  /* 明细格按内容自然撑开，避免固定高度在网格下方留下空白。 */
+  /* 内容仍可自然增长，但所有展开卡至少与两行 metrics 对齐。 */
   height: auto;
-  min-height: var(--nc-h);
+  min-height: var(--nc-exp-min-h);
   border-color: var(--accent);
 }
 .ncard.exp .nc-sum {
@@ -1500,7 +1504,8 @@ table.data tr:last-child td {
 }
 .nc-full {
   height: auto;
-  min-height: 0;
+  /* 与摘要合计到统一展开高度；外置详情不参与这里的高度。 */
+  min-height: calc(var(--nc-exp-min-h) - var(--nc-sum-h));
   padding: 8px 11px 9px;
   border-top: 1px dashed var(--border);
   overflow: hidden;
@@ -1510,6 +1515,7 @@ table.data tr:last-child td {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px 6px;
+  grid-auto-rows: var(--nc-grid-row-h);
   align-content: start;
 }
 /* 极简格子：点单项开外置面板（卡片 overflow:hidden，详情挂在 .nc-wrap 外） */
@@ -1519,6 +1525,7 @@ table.data tr:last-child td {
 }
 .nc-cell {
   display: block;
+  min-height: var(--nc-grid-row-h);
   width: 100%;
   min-width: 0;
   margin: 0;
