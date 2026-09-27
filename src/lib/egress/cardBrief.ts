@@ -76,7 +76,7 @@ export function formatCardBrief(card: CheckCard): string {
     if (card.level === "pass") return "全通";
     if (card.level === "warn") return "部分";
     if (card.level === "fail") return "全不通";
-    return shortConclusion(card, 6);
+    return "未测";
   }
 
   // 解锁 / 服务类：区码优先，其次开/锁

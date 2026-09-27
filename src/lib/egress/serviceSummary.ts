@@ -116,7 +116,7 @@ function briefForLevel(level: CheckLevel): string {
     case "running":
       return "检测中";
     default:
-      return "—";
+      return "未测";
   }
 }
 

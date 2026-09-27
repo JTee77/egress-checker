@@ -136,13 +136,14 @@ describe("formatCardBrief", () => {
     ).toBe("可用，会员信号偏弱且文…");
   });
 
-  it("服务汇总：全通 / 部分 / 全不通 / 检测中", () => {
+  it("服务汇总：全通 / 部分 / 全不通 / 检测中 / 未测", () => {
     expect(formatCardBrief(card("svc-streaming", "pass", "Netflix：通"))).toBe("全通");
     expect(formatCardBrief(card("svc-ai", "warn", "Gemini：通\nChatGPT：不通"))).toBe(
       "部分",
     );
     expect(formatCardBrief(card("svc-store", "fail", "App Store：不通"))).toBe("全不通");
     expect(formatCardBrief(card("svc-streaming", "running", "检测中…"))).toBe("检测中");
+    expect(formatCardBrief(card("svc-streaming", "unknown", "Netflix：未测；原因很长"))).toBe("未测");
   });
 
   it("running / 尚未检测", () => {

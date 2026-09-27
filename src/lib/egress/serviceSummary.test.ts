@@ -75,6 +75,12 @@ describe("summarizeServiceCards", () => {
         card("chatgpt", "ChatGPT", "pass", "可用"),
       ])[0].level,
     ).toBe("running");
+    const untested = summarizeServiceCards([
+      card("gemini", "Gemini", "unknown", "尚未检测"),
+      card("chatgpt", "ChatGPT", "unknown", "尚未检测"),
+    ])[0];
+    expect(untested.level).toBe("unknown");
+    expect(untested.metrics?.unlockLevel).toBe("未测");
   });
 
   it("DeepLight 仅部分成员时仍合成对应组", () => {
