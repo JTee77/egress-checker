@@ -1294,11 +1294,10 @@ table.data tr:last-child td {
   /* 两行 metrics 自然高（源码量）：上行带宽标签12.075+间距3+两行值24.2+pad2≈41
      + gap2 + 下行单行（含间距3）≈29 → 72；带宽可略高出单行格 */
   --nc-metrics-h: 72px;
-  /* nc-full 上下 padding：8 + 9（ae84c7f 舒适级，勿再压） */
+  /* nc-full 上下 padding：8 + 9（保留标题↔结果间距） */
   --nc-full-pad-y: 17px;
-  /* 展开最小高：摘要 + full padding + 两行 metrics = 56+17+72=145；
-     未测仅「尚未检测」时与测过展开同高，避免 min-height:0 塌矮 */
-  --nc-exp-min-h: calc(var(--nc-sum-h) + var(--nc-full-pad-y) + var(--nc-metrics-h));
+  /* 展开卡外轮廓锁高；超出内容由 .ncard/.nc-full 的 overflow:hidden 裁切 */
+  --nc-exp-h: 153px;
   /* 卡片纵向间距 */
   --nc-gap: 9px;
   /* 动作列：三个主按钮左缘统一的竖线 */
@@ -1415,9 +1414,9 @@ table.data tr:last-child td {
   border-color: var(--accent);
 }
 .ncard.exp {
-  /* 内容可再长；未测/测过至少同一自然展开高，勿 min-height:0 塌矮、勿 180 空撑 */
-  height: auto;
-  min-height: var(--nc-exp-min-h);
+  /* 外轮廓固定；内容超出时裁切，避免带 metrics 的卡被自然高抬高 */
+  height: var(--nc-exp-h);
+  min-height: 0;
   border-color: var(--accent);
 }
 .ncard.exp .nc-sum {
@@ -1507,10 +1506,9 @@ table.data tr:last-child td {
   cursor: default;
 }
 .nc-full {
-  height: auto;
-  /* 与摘要合计到 --nc-exp-min-h；未测一句提示也占同高 */
-  min-height: calc(var(--nc-exp-min-h) - var(--nc-sum-h));
-  /* 摘要↔明细舒适间距（ae84c7f，勿再压）；行内 metrics 另紧凑 */
+  height: calc(var(--nc-exp-h) - var(--nc-sum-h) - 2px);
+  min-height: 0;
+  /* 摘要↔明细舒适间距（保留）；行内 metrics 另紧凑 */
   padding: 8px 11px 9px;
   border-top: 1px dashed var(--border);
   overflow: hidden;
