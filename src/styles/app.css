@@ -1305,7 +1305,9 @@ table.data tr:last-child td {
   --action-x: 376px;
 }
 
-/* 头部工具条（选软件 · 刷新 · 连接状态）：普通文档流，随页面滚动 */
+/* 头部工具条（选软件 · 刷新 · 连接状态）。
+   内边距 16 + picker-group 352 + controls gap 8 = --action-x(376)，
+   「获取节点」左缘与环境检查 / 测全部动作列对齐。 */
 .app-header {
   display: flex;
   align-items: center;
@@ -1321,7 +1323,8 @@ table.data tr:last-child td {
   min-width: 160px;
 }
 
-/* 环境检查：区块本身无底色/描边，底色只落在内部 CheckCard 上 */
+/* 环境检查：区块本身无底色/描边，底色只落在内部 CheckCard 上。
+   标题行与下方 ws-ops、上方获取节点共用 --action-x 动作列右缘对齐。 */
 .env-section {
   background: transparent;
   border: none;
@@ -1330,9 +1333,10 @@ table.data tr:last-child td {
 }
 .env-head {
   display: grid;
-  grid-template-columns: calc(var(--action-x) - 16px) auto;
+  /* 去内边距后不再减 16；与 .ws-ops 同轨：第 2 列起点 = --action-x */
+  grid-template-columns: var(--action-x) auto;
   align-items: center;
-  justify-items: start; /* 网格子项默认拉伸，必须关掉，按钮才会保持自然宽度 */
+  justify-items: start;
 }
 .env-head-labels {
   display: flex;
@@ -1349,12 +1353,12 @@ table.data tr:last-child td {
   color: var(--text-muted);
 }
 
-/* 工作区操作条 */
+/* 工作区操作条：与 .env-head / 获取节点 共用 --action-x 动作列 */
 .ws-ops {
   display: grid;
   grid-template-columns: var(--action-x) 1fr;
   align-items: center;
-  justify-items: start; /* 同上：按钮保持自然宽度，不被轨道拉伸 */
+  justify-items: start;
   margin-bottom: 12px;
 }
 .ws-ops-right {
