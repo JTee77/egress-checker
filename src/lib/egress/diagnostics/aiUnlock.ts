@@ -175,7 +175,6 @@ function unlockCard(
     probed ? `测了什么：${probed}` : "",
     notProbed ? `没测什么：${notProbed}` : "",
     result.region ? `出口提示地区：${result.region}` : "",
-    "换节点时一次对照用，不能替代你自己打开网站。",
   ].filter(Boolean);
 
   const suggestion: string | undefined = undefined;
