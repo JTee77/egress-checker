@@ -19,6 +19,22 @@ function applyThemeAttr(mode: ThemeMode) {
   document.documentElement.setAttribute("data-theme", mode);
 }
 
+/**
+ * 同步原生窗口主题，让 titlebar / vibrancy 跟软件主题对齐。
+ * system → null（跟随系统）；非 Tauri 或 API 失败时静默忽略。
+ */
+async function syncNativeWindowTheme(mode: ThemeMode) {
+  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) {
+    return;
+  }
+  try {
+    const { getCurrentWindow } = await import("@tauri-apps/api/window");
+    await getCurrentWindow().setTheme(mode === "system" ? null : mode);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function useTheme() {
   const [theme, setThemeState] = useState<ThemeMode>(() => {
     const mode = readStored();
@@ -33,6 +49,7 @@ export function useTheme() {
     } catch {
       /* ignore */
     }
+    void syncNativeWindowTheme(theme);
   }, [theme]);
 
   // system 时监听系统配色变化；仍保持 data-theme="system"（CSS 媒体查询负责换肤）
