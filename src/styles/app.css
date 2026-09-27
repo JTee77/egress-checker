@@ -1511,9 +1511,31 @@ table.data tr:last-child td {
   gap: 7px 8px;
   align-content: start;
 }
-/* 只显小标题；完整结论放 title 悬停（卡片 overflow:hidden，CSS 气泡会被裁） */
+/* 极简格子：点单项开外置面板（卡片 overflow:hidden，详情挂在 .nc-wrap 外） */
+.nc-wrap {
+  position: relative;
+  width: 100%;
+}
 .nc-cell {
+  display: block;
+  width: 100%;
   min-width: 0;
+  margin: 0;
+  padding: 2px 3px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.nc-cell:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.nc-cell.on {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .nc-cl {
   display: flex;
@@ -1550,7 +1572,7 @@ table.data tr:last-child td {
 .nc-dot-mini.unk {
   background: var(--unknown);
 }
-/* 内容行：正常展示、放不下单行省略，悬停见全文 */
+/* 内容行：metrics 极简值，放不下单行省略 */
 .nc-cv {
   font-size: 11px;
   font-weight: 600;
@@ -1581,8 +1603,89 @@ table.data tr:last-child td {
   line-height: 1.6;
   padding: 4px 2px;
 }
-.nc-cell:hover .nc-cl {
+.nc-cell:hover .nc-cl,
+.nc-cell.on .nc-cl {
   color: var(--text);
+}
+
+/* 单项外置详情：贴在卡下方，宽度跟死列宽，不撑开瀑布列 */
+.nc-detail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 11px 11px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  box-shadow: 0 8px 24px color-mix(in srgb, #000 18%, transparent);
+  cursor: default;
+}
+.nc-detail-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.nc-detail-head {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.nc-detail-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.nc-detail-close {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.nc-detail-close:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text);
+}
+.nc-detail-conclusion {
+  margin-top: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.nc-detail-suggestion {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--warn);
+}
+.nc-detail-process {
+  margin: 8px 0 0;
+  padding: 8px 9px;
+  max-height: 160px;
+  overflow: auto;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 80%, var(--border));
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 /* 底部关于 */
@@ -1631,6 +1734,7 @@ html.glass .home-page {
 }
 html.glass .app-header,
 html.glass .ncard,
+html.glass .nc-detail,
 html.glass .env-section,
 html.glass .card,
 html.glass .fold-panel,
@@ -1649,6 +1753,7 @@ html.glass .gate-banner {
   }
   html.glass .app-header,
   html.glass .ncard,
+  html.glass .nc-detail,
   html.glass .env-section,
   html.glass .card,
   html.glass .fold-panel,
