@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { HomePage } from "./pages/HomePage";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { useConnection } from "./hooks/useConnection";
 import "./styles/app.css";
 
@@ -28,6 +29,7 @@ function App() {
 
   return (
     <div className="app-shell">
+      <ThemeToggle />
       <main className="main">
         <HomePage
           connection={state}
