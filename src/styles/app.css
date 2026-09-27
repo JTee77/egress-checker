@@ -1374,6 +1374,38 @@ table.data tr:last-child td {
   line-height: 1.4;
   min-width: 0;
 }
+
+/* 动作条行内进度（测全部）：紧凑条，复用 test-progress 色系 */
+.ws-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.ws-progress-text {
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-progress-bar {
+  flex: 0 0 72px;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 70%, var(--bg));
+  overflow: hidden;
+}
+.ws-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.18s ease-out;
+}
+
 /* 三大动作按钮（获取节点 / 开始环境检查 / 测全部节点）：
    统一样式与宽度，右缘对齐成一条"动作列" */
 .action-btn {
@@ -1393,7 +1425,7 @@ table.data tr:last-child td {
 /* 节点瀑布流：JS 定列（列数随容器宽度自适应），展开只向下推、无侧留白 */
 .node-flow {
   display: flex;
-  gap: 9px;
+  gap: var(--nc-gap);
   align-items: flex-start;
   justify-content: center; /* 固定卡宽：列数由窗口宽决定，余量对称留白 */
 }
@@ -1403,7 +1435,7 @@ table.data tr:last-child td {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--nc-gap);
 }
 .ncard {
   height: var(--nc-h);
@@ -1714,7 +1746,7 @@ table.data tr:last-child td {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 12px;
   cursor: pointer;
   text-decoration: underline;
