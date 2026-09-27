@@ -1321,12 +1321,11 @@ table.data tr:last-child td {
   min-width: 160px;
 }
 
-/* 环境检查（上移到节点列表之前） */
+/* 环境检查：区块本身无底色/描边，底色只落在内部 CheckCard 上 */
 .env-section {
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--bg-elevated);
-  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  padding: 0;
   margin-bottom: 14px;
 }
 .env-head {
@@ -1781,7 +1780,6 @@ html.glass .home-page {
 }
 html.glass .app-header,
 html.glass .ncard,
-html.glass .env-section,
 html.glass .card,
 html.glass .fold-panel,
 html.glass .vpn-score-card,
@@ -1799,7 +1797,6 @@ html.glass .gate-banner {
   }
   html.glass .app-header,
   html.glass .ncard,
-  html.glass .env-section,
   html.glass .card,
   html.glass .fold-panel,
   html.glass .vpn-score-card,
