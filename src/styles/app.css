@@ -1289,11 +1289,9 @@ table.data tr:last-child td {
   --nc-w: 310px;
   /* 收起卡高度（摘要内容 ~52px + 上下 padding） */
   --nc-h: 68px;
-  /* 展开卡内摘要区高度：压到自然内容高，省出的空间全部让给详情 */
+  /* 展开卡摘要区高度；明细区随后按内容自然撑开 */
   --nc-sum-h: 56px;
-  /* 展开卡总高：与收起高解耦（详情 3 排需要的高度），收起变矮不改变展开高 */
-  --nc-exp-h: 180px;
-  /* 卡片纵向间距（展开总高必须把它算进去） */
+  /* 卡片纵向间距 */
   --nc-gap: 9px;
   /* 动作列：三个主按钮左缘统一的竖线 */
   --action-x: 376px;
@@ -1409,8 +1407,9 @@ table.data tr:last-child td {
   border-color: var(--accent);
 }
 .ncard.exp {
-  /* 总高固定（--nc-exp-h）：摘要压到自然高，余量全给详情 3 排 */
-  height: var(--nc-exp-h);
+  /* 明细格按内容自然撑开，避免固定高度在网格下方留下空白。 */
+  height: auto;
+  min-height: var(--nc-h);
   border-color: var(--accent);
 }
 .ncard.exp .nc-sum {
@@ -1500,7 +1499,8 @@ table.data tr:last-child td {
   cursor: default;
 }
 .nc-full {
-  height: calc(var(--nc-exp-h) - var(--nc-sum-h));
+  height: auto;
+  min-height: 0;
   padding: 8px 11px 9px;
   border-top: 1px dashed var(--border);
   overflow: hidden;
@@ -1522,7 +1522,7 @@ table.data tr:last-child td {
   width: 100%;
   min-width: 0;
   margin: 0;
-  padding: 2px 3px;
+  padding: 1px 3px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
@@ -1577,8 +1577,8 @@ table.data tr:last-child td {
 .nc-cv {
   font-size: 11px;
   font-weight: 600;
-  line-height: 1.25;
-  /* 带宽格的下行/上行值分两行；不要裁掉第二行。 */
+  line-height: 1.1;
+  /* 带宽格的下行/上行值分两行，但保持紧凑，不额外撑高卡片。 */
   white-space: pre-line;
   overflow: visible;
 }
