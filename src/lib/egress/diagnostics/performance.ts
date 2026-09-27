@@ -48,6 +48,7 @@ export async function sampleLatency(
         conclusion: "采样失败",
         process: [`目标: ${url}`, ...attemptLines].join("\n"),
         suggestion: "请确认VPN软件已连接，并开启系统代理或 TUN，然后重试。",
+        metrics: { latencyMs: null },
       },
     };
   }
@@ -68,6 +69,7 @@ export async function sampleLatency(
         "边界：同 URL 连续抽样，不是面板延迟。",
       ].join("\n"),
       suggestion: undefined,
+      metrics: { latencyMs: ms },
     },
   };
 }
@@ -258,6 +260,7 @@ export async function sampleBandwidth(
       conclusion: first.conclusion,
       process: first.process,
       suggestion: "请先连接并刷新代理节点（拿到 mixed-port）后再测速。",
+      metrics: { downMbps: null, upMbps: null },
     };
   }
 
@@ -270,6 +273,7 @@ export async function sampleBandwidth(
         conclusion: first.conclusion,
         process: first.process,
         suggestion: undefined,
+        metrics: { downMbps: first.downMbps, upMbps: first.upMbps },
       };
     }
     const second = await sampleBandwidthOnce(mixedPort, true);
@@ -283,6 +287,7 @@ export async function sampleBandwidth(
       ),
       suggestion:
         second.level === "fail" ? "请确认VPN软件已连上后再测。" : undefined,
+      metrics: { downMbps: second.downMbps, upMbps: second.upMbps },
     };
   }
 
@@ -295,6 +300,7 @@ export async function sampleBandwidth(
       conclusion: first.conclusion,
       process: first.process,
       suggestion: "请确认VPN软件已连上后再测。",
+      metrics: { downMbps: first.downMbps, upMbps: first.upMbps },
     };
   }
 
@@ -348,5 +354,6 @@ export async function sampleBandwidth(
     conclusion,
     process,
     suggestion: level === "fail" ? "请确认VPN软件已连上后再测。" : undefined,
+    metrics: { downMbps, upMbps },
   };
 }

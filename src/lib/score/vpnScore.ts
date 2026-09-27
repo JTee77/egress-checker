@@ -1,5 +1,5 @@
 import type { CheckCard, CheckLevel } from "../egress/types";
-import { parseDownMbps, SERVICE_IDS } from "./nodeScore";
+import { SERVICE_IDS } from "./nodeScore";
 import type { NodeScoreResult, ScoreBreakdownItem, VpnScoreResult, VpnTier } from "./types";
 
 function levelScore(level: CheckLevel): number {
@@ -57,7 +57,10 @@ export function qualifiesPerfect(
   if (!reach || reach.level !== "pass") return false;
 
   const bw = findCard(selected.cards, "bandwidth");
-  const down = parseDownMbps(bw);
+  const down =
+    typeof bw?.metrics?.downMbps === "number" && Number.isFinite(bw.metrics.downMbps)
+      ? bw.metrics.downMbps
+      : null;
   if (down == null || down < 15) return false;
 
   for (const id of SERVICE_IDS) {

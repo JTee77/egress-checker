@@ -1,5 +1,22 @@
 export type CheckLevel = "pass" | "warn" | "fail" | "unknown" | "running";
 
+/** Structured numbers/flags for scoring & UI — prefer over parsing conclusion text. */
+export type CheckCardMetrics = {
+  /** Bandwidth sample (Mbps). */
+  downMbps?: number | null;
+  upMbps?: number | null;
+  /** Latency sample (ms). */
+  latencyMs?: number | null;
+  /** Exit IP card. */
+  exitIp?: string | null;
+  countryCode?: string | null;
+  hosting?: boolean | null;
+  /** Unlock / service cards. */
+  unlockSupported?: boolean;
+  unlockLevel?: string | null;
+  unlockRegion?: string | null;
+};
+
 export interface CheckCard {
   id: string;
   title: string;
@@ -23,6 +40,8 @@ export interface CheckCard {
    * dimension from the weighted average rather than treating it as a failure.
    */
   unverified?: boolean;
+  /** Machine-readable probe outputs; scoring reads these instead of parsing copy. */
+  metrics?: CheckCardMetrics;
 }
 
 export interface ExitIpInfo {

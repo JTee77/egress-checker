@@ -20,19 +20,6 @@ function card(cards: CheckCard[], id: string): CheckCard | undefined {
   return cards.find((c) => c.id === id);
 }
 
-/** 从抽样带宽结论里粗提取下行 Mbps */
-export function parseDownMbps(c: CheckCard | undefined): number | null {
-  if (!c) return null;
-  const text = `${c.conclusion}\n${c.process ?? ""}`;
-  const m =
-    text.match(/↓\s*([\d.]+)\s*Mbps/i) ||
-    text.match(/下行[^0-9]*([\d.]+)\s*Mbps/i) ||
-    text.match(/([\d.]+)\s*Mbps/);
-  if (!m) return null;
-  const n = Number(m[1]);
-  return Number.isFinite(n) ? n : null;
-}
-
 function scoreAvailability(cards: CheckCard[]): {
   score: number;
   note: string;
@@ -70,7 +57,10 @@ function scoreThroughput(cards: CheckCard[]): {
   if (bw?.unverified) return { score: 0, note: "未验证：未经代理测速", measured: false };
   if (!bw) return { score: 35, note: "未做带宽抽样", measured: true };
   if (bw.level === "fail") return { score: 0, note: bw.conclusion, measured: true };
-  const mbps = parseDownMbps(bw);
+  const mbps =
+    typeof bw.metrics?.downMbps === "number" && Number.isFinite(bw.metrics.downMbps)
+      ? bw.metrics.downMbps
+      : null;
   if (mbps == null) {
     return { score: levelToScore(bw.level), note: bw.conclusion, measured: true };
   }
@@ -124,10 +114,15 @@ function scoreExit(cards: CheckCard[]): {
   if (exit?.unverified) return { score: 0, note: "未验证：未取得代理出口信息", measured: false };
   if (!exit) return { score: 40, note: "未拿到出口信息", measured: true };
   if (exit.level === "fail") return { score: 0, note: exit.conclusion, measured: true };
-  const text = `${exit.conclusion} ${exit.process ?? ""}`;
-  const hosting = /机房|DCH|hosting/i.test(text);
-  const residential = /住宅|ISP|家宽/i.test(text);
-  if (exit.level === "pass" && residential) {
+  const hostingMetric = exit.metrics?.hosting;
+  const copy = `${exit.conclusion} ${exit.process ?? ""}`;
+  const hosting =
+    hostingMetric === true ||
+    (hostingMetric == null && /机房|DCH|hosting/i.test(copy));
+  const residential =
+    hostingMetric === false ||
+    (hostingMetric == null && /住宅|ISP|家宽/i.test(copy));
+  if (exit.level === "pass" && residential && !hosting) {
     return { score: 95, note: "出口更像住宅线路", measured: true };
   }
   if (hosting) {
@@ -177,10 +172,19 @@ export function starRank(stars: NodeStars): number {
 
 function fakeLowLatencyTip(cards: CheckCard[], thrScore: number): string | undefined {
   const lat = card(cards, "latency");
-  const mbps = parseDownMbps(card(cards, "bandwidth"));
+  const bw = card(cards, "bandwidth");
+  const mbps =
+    typeof bw?.metrics?.downMbps === "number" && Number.isFinite(bw.metrics.downMbps)
+      ? bw.metrics.downMbps
+      : null;
   if (!lat || lat.level === "fail") return undefined;
-  const msMatch = lat.conclusion.match(/(\d+)\s*ms/);
-  const ms = msMatch ? Number(msMatch[1]) : null;
+  const ms =
+    typeof lat.metrics?.latencyMs === "number" && Number.isFinite(lat.metrics.latencyMs)
+      ? lat.metrics.latencyMs
+      : (() => {
+          const m = lat.conclusion.match(/(\d+)\s*ms/);
+          return m ? Number(m[1]) : null;
+        })();
   if (ms != null && ms < 120 && (thrScore < 40 || (mbps != null && mbps < 0.8))) {
     return "延迟看起来不高，但实际下载偏慢，有可能是「假低延迟」。选节点时别只看延迟数字。";
   }

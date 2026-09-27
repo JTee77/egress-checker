@@ -187,6 +187,11 @@ function unlockCard(
     conclusion: result.status,
     process: processParts.join("\n"),
     suggestion,
+    metrics: {
+      unlockSupported: result.supported,
+      unlockLevel: result.level ?? null,
+      unlockRegion: result.region,
+    },
   };
 }
 

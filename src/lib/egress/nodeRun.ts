@@ -58,6 +58,11 @@ function unlockCard(
     level,
     conclusion: result.status,
     process: processParts.join("\n"),
+    metrics: {
+      unlockSupported: result.supported,
+      unlockLevel: result.level ?? null,
+      unlockRegion: result.region,
+    },
   };
 }
 
