@@ -1291,13 +1291,13 @@ table.data tr:last-child td {
   --nc-h: 68px;
   /* 展开卡摘要区高度 */
   --nc-sum-h: 56px;
-  /* 两行 metrics 自然高（源码量）：上行带宽标签12.075+间距3+两行值24.2+pad2≈41
-     + gap2 + 下行单行（含间距3）≈29 → 72；带宽可略高出单行格 */
-  --nc-metrics-h: 72px;
-  /* nc-full 上下 padding：8 + 9（保留标题↔结果间距） */
+  /* 两行 metrics 区（源码量，含标题↔结果 3px）：上行≈38 + gap2 + 下行≈26 → 66 */
+  --nc-metrics-h: 66px;
+  /* nc-full 上下 padding：8 + 9（摘要↔明细舒适间距，勿再压） */
   --nc-full-pad-y: 17px;
-  /* 展开卡外轮廓锁高；超出内容由 .ncard/.nc-full 的 overflow:hidden 裁切 */
-  --nc-exp-h: 153px;
+  /* 展开外轮廓数值锁死：摘要56 + pad17 + metrics66 = 139。
+     与 0d5fedc 用户认可高度一致；超出由 overflow:hidden 裁切，禁止内容撑高。 */
+  --nc-exp-h: 139px;
   /* 卡片纵向间距 */
   --nc-gap: 9px;
   /* 动作列：三个主按钮左缘统一的竖线 */
@@ -1414,9 +1414,11 @@ table.data tr:last-child td {
   border-color: var(--accent);
 }
 .ncard.exp {
-  /* 外轮廓固定；内容超出时裁切，避免带 metrics 的卡被自然高抬高 */
+  /* 高度锁死：只能是 --nc-exp-h，禁止 auto/min-height 随内容变 */
   height: var(--nc-exp-h);
+  max-height: var(--nc-exp-h);
   min-height: 0;
+  overflow: hidden;
   border-color: var(--accent);
 }
 .ncard.exp .nc-sum {
@@ -1597,9 +1599,9 @@ table.data tr:last-child td {
   font-size: 11px;
   font-weight: 600;
   line-height: 1.1;
-  /* 带宽 ↓↑ 两行：可略侵入第二排 gap，不把摘要↔明细压扁 */
+  /* 带宽 ↓↑ 两行：可略侵入第二排 gap；卡高已锁死，超出裁切 */
   white-space: pre-line;
-  overflow: visible;
+  overflow: hidden;
 }
 .nc-cv.ok {
   color: var(--pass);
