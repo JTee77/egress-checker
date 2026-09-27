@@ -29,6 +29,7 @@ cd egress-checker && pnpm install && pnpm tauri dev
 | 命令 | 说明 |
 |------|------|
 | `pnpm tauri dev` | 开发模式（推荐） |
+| `pnpm tauri dev -- --cli help --no-json` | CLI 帮助（隐藏窗） |
 | `pnpm test` | 前端单测（vitest） |
 | `pnpm typecheck` | TypeScript 检查 |
 | `pnpm build` | 前端 typecheck + 生产构建 |
@@ -38,11 +39,13 @@ cd egress-checker && pnpm install && pnpm tauri dev
 
 ## 功能
 
-- **轻量门槛**：刷新连接后先确认客户端连上、隧道大致可用、是否明显未走代理直连；不过则口语提示，不进入节点测评
-- **测当前节点**：对当前出口深测，给 1–5 星或「不可用」及短评（可展开构成）
-- **测全部节点**：先用延迟淘汰不通节点，再临时切换逐个深测；测完或中止会**强制切回**原节点
-- **整份 VPN 总评**：点选一个节点后给「很好 / 能用 / 勉强 / 有问题」及一句话主因
-- **环境泄漏检查**：DNS / IPv6 / WebRTC / 分流 / 直连旁路，作为第二入口，不默认每次强跑
+- **单页流程**（无侧栏多模式）：选软件 → 获取节点 → 环境检查 / 测节点；节点卡测过后可 **详情 + 再测**
+- **主题**：浅色 / 深色 / 跟随系统
+- **轻量门槛**：确认客户端连上、海外大致可通、是否像未走代理直连；不过则口语提示
+- **测单个（完整）**：`runNodeDiagnostics` — 延迟、带宽、流媒体/商店/AI 等；节点卡「测 / 再测」走这条
+- **测全部（轻量 DeepLight）**：先延迟淘汰，再临时切换做简要深测；测完或中止会**强制切回**原节点
+- **环境泄漏检查**：DNS / IPv6 / WebRTC / 分流 / 直连旁路（第二入口，不默认每次强跑）
+- **CLI**：`--cli discover|gate|check|env`，stdout 为 CliEnvelope JSON（与 GUI 共用 runner），见 [docs/CLI.md](./docs/CLI.md)
 
 ## 打包（DMG）
 
