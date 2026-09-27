@@ -1520,8 +1520,8 @@ table.data tr:last-child td {
   /* 固定卡宽 ~310：上行 4（连通/出口/延迟/带宽）下行 3（流媒体/AI/商店），末项不单吊 */
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  /* 行距收紧为 0，第二行上提；上行行高锁单行，带宽可侵入下行第4空位 */
-  gap: 0 6px;
+  /* 行距略收（原 2px → 1px），第二行略上提；上行锁单行，带宽可侵入下行空位 */
+  gap: 1px 6px;
   grid-template-rows: var(--nc-grid-row1-h) auto;
   align-items: start; /* 四格顶对齐 */
   align-content: start;
