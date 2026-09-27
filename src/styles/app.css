@@ -1289,12 +1289,10 @@ table.data tr:last-child td {
   --nc-w: 310px;
   /* 收起卡高度（摘要内容 ~52px + 上下 padding） */
   --nc-h: 68px;
-  /* 展开卡摘要区高度；明细格按两行 metrics 对齐 */
+  /* 展开卡摘要区高度；明细区按内容自然撑开 */
   --nc-sum-h: 56px;
-  /* 展开态统一最小高度：摘要 + 两行 metrics + 卡内留白 */
-  --nc-exp-min-h: 166px;
-  /* 带宽值两行时的格子行高，避免单卡被内容额外撑高 */
-  --nc-grid-row-h: 44px;
+  /* 上行（含带宽 ↓↑ 两行）格子最小高度；顶对齐后空骨架与测过对齐 */
+  --nc-grid-row1-min-h: 34px;
   /* 卡片纵向间距 */
   --nc-gap: 9px;
   /* 动作列：三个主按钮左缘统一的竖线 */
@@ -1411,9 +1409,9 @@ table.data tr:last-child td {
   border-color: var(--accent);
 }
 .ncard.exp {
-  /* 内容仍可自然增长，但所有展开卡至少与两行 metrics 对齐。 */
+  /* 按 metrics 内容自然撑开，不再用偏大 min-height 在格底留下空白。 */
   height: auto;
-  min-height: var(--nc-exp-min-h);
+  min-height: 0;
   border-color: var(--accent);
 }
 .ncard.exp .nc-sum {
@@ -1504,9 +1502,8 @@ table.data tr:last-child td {
 }
 .nc-full {
   height: auto;
-  /* 与摘要合计到统一展开高度；外置详情不参与这里的高度。 */
-  min-height: calc(var(--nc-exp-min-h) - var(--nc-sum-h));
-  padding: 8px 11px 9px;
+  min-height: 0;
+  padding: 4px 11px 5px;
   border-top: 1px dashed var(--border);
   overflow: hidden;
 }
@@ -1514,8 +1511,10 @@ table.data tr:last-child td {
   /* 固定卡宽 ~310：上行 4（连通/出口/延迟/带宽）下行 3（流媒体/AI/商店），末项不单吊 */
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px 6px;
-  grid-auto-rows: var(--nc-grid-row-h);
+  gap: 2px 6px;
+  /* 上行固定较矮，带宽第二行可略侵入 gap/下行；下行按内容 */
+  grid-auto-rows: var(--nc-grid-row1-min-h) auto;
+  align-items: start;
   align-content: start;
 }
 /* 极简格子：点单项开外置面板（卡片 overflow:hidden，详情挂在 .nc-wrap 外） */
@@ -1525,7 +1524,7 @@ table.data tr:last-child td {
 }
 .nc-cell {
   display: block;
-  min-height: var(--nc-grid-row-h);
+  min-height: 0;
   width: 100%;
   min-width: 0;
   margin: 0;
@@ -1537,6 +1536,10 @@ table.data tr:last-child td {
   cursor: pointer;
   font: inherit;
   color: inherit;
+}
+/* 上行四格统一最小高度（够装带宽 ↓↑），顶对齐；带宽可略侵入行距 */
+.nc-cell:nth-child(-n + 4) {
+  min-height: var(--nc-grid-row1-min-h);
 }
 .nc-cell:hover {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
@@ -1552,6 +1555,7 @@ table.data tr:last-child td {
   min-width: 0;
   font-size: 10.5px;
   font-weight: 500;
+  line-height: 1.15;
   color: var(--text-muted);
 }
 .nc-t {
@@ -1582,10 +1586,10 @@ table.data tr:last-child td {
 }
 /* 内容行：metrics 极简值，放不下单行省略 */
 .nc-cv {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
-  line-height: 1.1;
-  /* 带宽格的下行/上行值分两行，但保持紧凑，不额外撑高卡片。 */
+  line-height: 1.05;
+  /* 带宽 ↓↑ 两行：更小行高，避免把整卡撑高；可略侵入下行 gap。 */
   white-space: pre-line;
   overflow: visible;
 }
