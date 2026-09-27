@@ -30,9 +30,9 @@ import {
 
 type TestMode = "current" | "all";
 
-/** 瀑布流列数：单卡固定 250px + 9px 列距，1–8 列封顶。40 为 .main 左右 padding。 */
+/** 瀑布流列数：单卡固定 250px + 9px 列距，1–8 列封顶。45 为布局余量阈值。 */
 function colCountFor(vw: number): number {
-  return Math.min(8, Math.max(1, Math.floor((vw - 31) / 259)));
+  return Math.min(8, Math.max(1, Math.floor((vw - 45) / 259)));
 }
 
 export function HomePage({
