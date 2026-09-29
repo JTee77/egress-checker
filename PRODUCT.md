@@ -1,4 +1,4 @@
-# Egress Checker — 产品说明（v0.1.12）
+# Egress Checker — 产品说明（v0.1.13）
 
 ## 定位
 **Egress Checker** 是 macOS（Apple Silicon）桌面应用，诊断代理**出口质量**——不只是「能不能打开国外网站」。
@@ -32,7 +32,20 @@
 - 对无开放 API 的客户端假装「全节点扫遍」
 - 宣称「翻墙 / 突破防火墙」
 
-## 当前产品形态（0.1.11 → 0.1.12）
+## 当前版本与本轮目标（0.1.13）
+
+**当前版本：0.1.13**（自 0.1.12 起）。
+
+本轮目标（稳定性 + 解锁探针，探针实现另开）：
+- **稳定性收尾**：清理 0.1.12 评审遗留（未引用的 `TestProgress`、相关死 CSS、忽略本地 `design/`）
+- **解锁探针**：TikTok / Spotify / Prime Video（Nate 调研 Clash Verge；Ellie 随后合入，本分支首批不实现探针本身）
+- **卫生**：`.gitignore` 纳入 `design/`；小步提交，不改节点卡高度/metrics 布局（无明确 bug 不重设）
+
+仍明确延后：CLI **localhost HTTP serve**（一次性 CLI 骨架已在 0.1.12；HTTP 不阻塞本版）。
+
+「明确不做」见上文，本版不变。
+
+## 当前产品形态（0.1.12 基线 → 0.1.13）
 
 ### 单页 GUI（无侧栏多模式）
 - **无**「首页 | 节点 | 设置 | 关于」侧栏多页；工作区是一条渐进流程：选软件 → 获取节点 → 环境检查 / 测节点
@@ -51,7 +64,7 @@
 ### 轻量门槛
 获取节点后先 `runLightGate`：客户端是否连上、海外是否大致通、是否像未走代理直连。不过则口语提示，不进入节点测评。
 
-### CLI（0.1.12 骨架）
+### CLI（0.1.12 骨架；0.1.13 仍延后 HTTP）
 与 GUI **共用** `lib/runner` + `egress` + `score` + `mihomo`。
 
 ```text
@@ -63,7 +76,7 @@ egress-checker --cli env --client verge
 
 stdout 为 **CliEnvelope** JSON（`ok/version/command/ranAt/data|error`）。详见 [docs/CLI.md](./docs/CLI.md)。
 
-> 本版是一次性 CLI（隐藏窗跑完退出）。localhost HTTP serve 可后续加，不阻塞本骨架。
+> 仍是一次性 CLI（隐藏窗跑完退出）。**localhost HTTP serve 继续延后**，不阻塞 0.1.13。
 
 ## 非目标回顾（仍成立）
 见上文「明确不做」。深度测速可能耗流量；DNS/WebRTC 在桌面 WebView 下为启发式结论。
