@@ -17,6 +17,9 @@ import {
   checkNetflixUnlock,
   checkDisneyUnlock,
   checkYoutubeUnlock,
+  checkTikTokUnlock,
+  checkSpotifyUnlock,
+  checkPrimeVideoUnlock,
   checkAppStoreUnlock,
   checkGooglePlayUnlock,
 } from "./streamingUnlock";
@@ -173,6 +176,24 @@ export async function runEgressDiagnostics(
       run: () => checkYoutubeUnlock(mixedPort),
     },
     {
+      id: "tiktok",
+      title: "TikTok",
+      deadlineMs: 16000,
+      run: () => checkTikTokUnlock(mixedPort),
+    },
+    {
+      id: "spotify",
+      title: "Spotify",
+      deadlineMs: 16000,
+      run: () => checkSpotifyUnlock(mixedPort),
+    },
+    {
+      id: "prime-video",
+      title: "Prime Video",
+      deadlineMs: 16000,
+      run: () => checkPrimeVideoUnlock(mixedPort),
+    },
+    {
       id: "app-store",
       title: "App Store",
       deadlineMs: 16000,
@@ -207,6 +228,9 @@ export async function runEgressDiagnostics(
     "netflix",
     "disney",
     "youtube",
+    "tiktok",
+    "spotify",
+    "prime-video",
     "app-store",
     "google-play",
   ];

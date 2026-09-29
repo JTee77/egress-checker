@@ -8,7 +8,10 @@ import {
   checkDisneyUnlock,
   checkGooglePlayUnlock,
   checkNetflixUnlock,
+  checkPrimeVideoUnlock,
   checkReachability,
+  checkSpotifyUnlock,
+  checkTikTokUnlock,
   checkYoutubeUnlock,
   exitIpCard,
   fetchExitIp,
@@ -32,6 +35,9 @@ export const NODE_CARD_IDS = [
   "netflix",
   "disney",
   "youtube",
+  "tiktok",
+  "spotify",
+  "prime-video",
   "app-store",
   "google-play",
 ] as const;
@@ -225,6 +231,24 @@ export async function runNodeDiagnostics(
       run: () => checkYoutubeUnlock(mixedPort),
     },
     {
+      id: "tiktok",
+      title: "TikTok",
+      deadlineMs: 16000,
+      run: () => checkTikTokUnlock(mixedPort),
+    },
+    {
+      id: "spotify",
+      title: "Spotify",
+      deadlineMs: 16000,
+      run: () => checkSpotifyUnlock(mixedPort),
+    },
+    {
+      id: "prime-video",
+      title: "Prime Video",
+      deadlineMs: 16000,
+      run: () => checkPrimeVideoUnlock(mixedPort),
+    },
+    {
       id: "app-store",
       title: "App Store",
       deadlineMs: 16000,
@@ -327,7 +351,7 @@ export async function runNodeDeepLight(
     run: () => Promise<CheckCard>;
   };
 
-  // 关键服务 4 项并行 + 轻量带宽；跳过 disney / app-store / google-play / 完整延迟采样
+  // 关键服务子集并行 + 轻量带宽；跳过 disney / tiktok / prime-video / app-store / google-play / 完整延迟采样
   const jobs: Job[] = [
     {
       id: "bandwidth",
@@ -346,6 +370,12 @@ export async function runNodeDeepLight(
       title: "YouTube Premium",
       deadlineMs: 10000,
       run: () => checkYoutubeUnlock(mixedPort),
+    },
+    {
+      id: "spotify",
+      title: "Spotify",
+      deadlineMs: 10000,
+      run: () => checkSpotifyUnlock(mixedPort),
     },
     {
       id: "chatgpt",
@@ -380,6 +410,7 @@ export async function runNodeDeepLight(
     byId.get("bandwidth") ?? timeoutCard("bandwidth", "抽样带宽"),
     byId.get("netflix") ?? timeoutCard("netflix", "Netflix"),
     byId.get("youtube") ?? timeoutCard("youtube", "YouTube Premium"),
+    byId.get("spotify") ?? timeoutCard("spotify", "Spotify"),
     byId.get("chatgpt") ?? timeoutCard("chatgpt", "ChatGPT"),
     byId.get("gemini") ?? timeoutCard("gemini", "Gemini"),
   ];

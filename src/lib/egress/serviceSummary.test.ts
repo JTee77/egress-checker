@@ -87,11 +87,29 @@ describe("summarizeServiceCards", () => {
     const out = summarizeServiceCards([
       card("netflix", "Netflix", "pass", "可用"),
       card("youtube", "YouTube Premium", "pass", "可用"),
+      card("spotify", "Spotify", "pass", "可用（US）"),
       card("chatgpt", "ChatGPT", "pass", "可用"),
       card("gemini", "Gemini", "pass", "可用"),
     ]);
     expect(out.map((c) => c.id)).toEqual(["svc-streaming", "svc-ai"]);
     expect(out.find((c) => c.id === "svc-store")).toBeUndefined();
+    expect(out.find((c) => c.id === "svc-streaming")!.conclusion).toContain(
+      "Spotify：通 · US",
+    );
+  });
+
+  it("流媒体汇总纳入 TikTok / Spotify / Prime Video", () => {
+    const out = summarizeServiceCards([
+      card("netflix", "Netflix", "pass", "可用"),
+      card("tiktok", "TikTok", "pass", "可用（JP）"),
+      card("spotify", "Spotify", "fail", "不可用（地区限制）"),
+      card("prime-video", "Prime Video", "pass", "可用（US）"),
+    ]);
+    const stream = out.find((c) => c.id === "svc-streaming")!;
+    expect(stream.level).toBe("warn");
+    expect(stream.conclusion).toContain("TikTok：通 · JP");
+    expect(stream.conclusion).toContain("Spotify：不通");
+    expect(stream.conclusion).toContain("Prime Video：通 · US");
   });
 
   it("幂等：已是汇总卡不再拆", () => {

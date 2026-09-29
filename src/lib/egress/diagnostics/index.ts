@@ -26,6 +26,9 @@ export {
   checkNetflixUnlock,
   checkDisneyUnlock,
   checkYoutubeUnlock,
+  checkTikTokUnlock,
+  checkSpotifyUnlock,
+  checkPrimeVideoUnlock,
   checkAppStoreUnlock,
   checkGooglePlayUnlock,
 } from "./streamingUnlock";
