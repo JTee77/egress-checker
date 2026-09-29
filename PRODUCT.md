@@ -38,7 +38,7 @@
 
 本轮目标（稳定性 + 解锁探针）：
 - **稳定性收尾**：清理 0.1.12 评审遗留（未引用的 `TestProgress`、相关死 CSS、忽略本地 `design/`）
-- **解锁探针**：TikTok / Spotify / Prime Video 已合入（对齐 Clash Verge Rev 测试页规则；DeepLight 轻量子集含 Spotify）
+- **解锁探针**：TikTok / Spotify / Prime Video 已合入（TikTok/Prime 为启发式断言，非硬解锁；Spotify 仍用 country-selector；DeepLight 轻量子集含 Spotify）
 - **卫生**：`.gitignore` 纳入 `design/`；小步提交，不改节点卡高度/metrics 布局（无明确 bug 不重设）
 
 仍明确延后：CLI **localhost HTTP serve**（一次性 CLI 骨架已在 0.1.12；HTTP 不阻塞本版）。

@@ -411,7 +411,8 @@ async function probeGooglePlayLine(
 async function probeTikTokLine(
   mixedPort?: number | null,
 ): Promise<ProbeLine> {
-  // Clash Verge Rev media_unlock_checker/tiktok.rs：cdn-cgi/trace 优先，失败再看首页。
+  // TikTok：连通/可见启发式，非硬「解锁」。cdn-cgi/trace 优先，失败再看首页。
+  // 参考 Verge 探测路径，但不照搬 Yes=已解锁；403/451/拦截文案仍明确 fail。
   const timeoutMs = 4000;
   const primary = "https://www.tiktok.com/cdn-cgi/trace";
   const fallback = "https://www.tiktok.com/";
@@ -428,7 +429,7 @@ async function probeTikTokLine(
     const body2 = r2.text ?? "";
     const region2 = extractTikTokRegion(body2);
     const kind2 = classifyTikTokStatus(r2.status, body2);
-    // Verge：若主探不是 No，可用回退状态覆盖 Failed；region 取或。
+    // 主探非明确封锁时，可用回退覆盖 Failed；region 取或。
     if (statusKind !== "no") {
       statusKind = kind2;
       r = r2;
@@ -449,27 +450,18 @@ async function probeTikTokLine(
     };
   }
 
-  if (statusKind === "no") {
+  const verdict = tikTokVerdict(statusKind, region);
+  if (verdict) {
     return {
       name: "TikTok",
-      level: "fail",
-      conclusion: region
-        ? `不可用（地区限制 · ${region}）`
-        : "不可用（地区限制）",
-      process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：403/451 或 access denied / not available / tiktok is not available。\n边界：本次检查不等于登录、创作、直播。`,
-    };
-  }
-
-  if (statusKind === "yes") {
-    return {
-      name: "TikTok",
-      level: region ? "pass" : "warn",
-      conclusion: region ? `可用（${region}）` : "可用",
+      level: verdict.level,
+      conclusion: verdict.conclusion,
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
-        region ? `地区线索：${region}` : "未解析到 region / loc（页仍可达）。",
-        "测了什么：tiktok.com/cdn-cgi/trace（必要时首页 GET）；对齐 Verge 状态规则。",
-        "没测：App 登录、For You 推荐、直播、创作发布。",
+        region ? `地区线索：${region}` : "未解析到 region / loc。",
+        "测了什么：cdn-cgi/trace（必要时首页 GET）——连通/可见启发式，非硬解锁。",
+        "没测：App 登录、For You、直播、创作发布、账号区完整权益。",
+        verdict.processNote,
       ].join("\n"),
     };
   }
@@ -482,7 +474,44 @@ async function probeTikTokLine(
   };
 }
 
-/** Verge：403/451→No；非 2xx→Failed；文案拦截→No；否则 Yes。 */
+/**
+ * TikTok 状态→结论映射（启发式）。
+ * - no → fail（地区封锁明确）
+ * - yes + region → 谨慎 pass（可见≠已解锁）
+ * - yes 无 region → warn
+ * - failed → null（由调用方标 unknown）
+ */
+export function tikTokVerdict(
+  kind: "yes" | "no" | "failed",
+  region: string | null,
+): { level: CheckLevel; conclusion: string; processNote: string } | null {
+  if (kind === "no") {
+    return {
+      level: "fail",
+      conclusion: region
+        ? `不可用（地区限制 · ${region}）`
+        : "不可用（地区限制）",
+      processNote: "信号：403/451 或 access denied / not available / tiktok is not available。",
+    };
+  }
+  if (kind === "yes") {
+    if (region) {
+      return {
+        level: "pass",
+        conclusion: `可见（${region}）`,
+        processNote: "结论边界：CDN/页面可见启发式；Yes≠「已解锁」会员/推荐/直播。",
+      };
+    }
+    return {
+      level: "warn",
+      conclusion: "可见，地区未确认（启发式）",
+      processNote: "页/trace 可达但无稳定地区码；诚实标 warn，非硬解锁。",
+    };
+  }
+  return null;
+}
+
+/** 403/451→no；非 2xx→failed；文案拦截→no；否则 yes（仅表示可见启发式）。 */
 export function classifyTikTokStatus(
   status: number,
   body: string,
@@ -501,7 +530,7 @@ export function classifyTikTokStatus(
   return "yes";
 }
 
-/** Verge `"region"\s*:\s*"…"`；trace 常见 loc=XX 作补充。 */
+/** `"region"\s*:\s*"…"`；trace 常见 loc=XX 作补充。 */
 export function extractTikTokRegion(body: string): string | null {
   const m = body.match(/"region"\s*:\s*"([a-zA-Z-]+)"/);
   if (m?.[1]) {
@@ -579,10 +608,10 @@ async function probeSpotifyLine(
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         region
-          ? `地区线索：${region}（countryCode；桌面 GET 无最终 URL 路径）`
+          ? `地区线索：${region}（country-selector countryCode）`
           : "未解析到 countryCode（接口仍 2xx；启发式偏弱时标 warn）。",
-        "测了什么：spotify country-selector JSON（对齐 Verge GET）。",
-        "没测：注册 POST 状态码链、Premium、播歌、播客版权。",
+        "测了什么：spotify country-selector JSON（地区选择器可达性）。",
+        "没测：注册 POST 链、Premium、播歌解码、播客版权。",
       ].join("\n"),
     };
   }
@@ -611,7 +640,8 @@ export function extractSpotifyRegion(body: string): string | null {
 async function probePrimeVideoLine(
   mixedPort?: number | null,
 ): Promise<ProbeLine> {
-  // Clash Verge Rev / MediaUnlockTest：primevideo.com 看 isServiceRestricted 与 currentTerritory。
+  // Prime Video：HTML 线索启发式。isServiceRestricted→fail；currentTerritory→pass+区；
+  // 页可达但无 territory→warn（无法确认区域），不照搬 Verge 的 PAGE ERROR=Failed。
   const url = "https://www.primevideo.com";
   const timeoutMs = 4000;
   const t0 = performance.now();
@@ -628,37 +658,24 @@ async function probePrimeVideoLine(
     };
   }
 
-  if (body.includes("isServiceRestricted")) {
-    return {
-      name: "Prime Video",
-      level: "fail",
-      conclusion: "不可用（地区限制）",
-      process: `${url} → HTTP ${r.status} · ${ms}ms\n信号：isServiceRestricted。\n边界：不等于会员片库/4K。`,
-    };
-  }
-
+  const restricted = body.includes("isServiceRestricted");
   const region = extractPrimeVideoRegion(body);
-  if (region) {
+  const pageReachable =
+    body.length > 400 &&
+    (isReachableStatus(r.status, r.ok) || (r.status >= 200 && r.status < 400));
+
+  const verdict = primeVideoVerdict({ restricted, region, pageReachable });
+  if (verdict) {
     return {
       name: "Prime Video",
-      level: "pass",
-      conclusion: `可用（${region}）`,
+      level: verdict.level,
+      conclusion: verdict.conclusion,
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
-        `地区线索：currentTerritory=${region}`,
-        "测了什么：primevideo.com 首页 HTML 线索（对齐 Verge / MediaUnlockTest）。",
-        "没测：登录、片库、Channels、下载。",
+        verdict.processNote,
+        "测了什么：primevideo.com 首页 HTML 线索（启发式，非硬解锁）。",
+        "没测：登录、片库、Channels、下载、4K。",
       ].join("\n"),
-    };
-  }
-
-  // Verge：无 territory → Failed (PAGE ERROR)。桌面 WebView/截断时可能弱信号。
-  if (body.length > 400 && (isReachableStatus(r.status, r.ok) || (r.status >= 200 && r.status < 400))) {
-    return {
-      name: "Prime Video",
-      level: "warn",
-      conclusion: "可用，地区信号偏弱",
-      process: `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B。未解析到 currentTerritory（页可达但启发式弱；诚实标 warn）。`,
     };
   }
 
@@ -666,8 +683,42 @@ async function probePrimeVideoLine(
     name: "Prime Video",
     level: "unknown",
     conclusion: "未能判定",
-    process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B。无 currentTerritory（Verge 视为 PAGE ERROR）。`,
+    process: `${url} → HTTP ${r.status || "超时"} · ${ms}ms · body≈${body.length}B。无 currentTerritory 且页信号不足。`,
   };
+}
+
+/**
+ * Prime Video 状态→结论。
+ * restricted→fail；有 territory→pass；页可达无 territory→warn（启发式/无法确认区域）。
+ */
+export function primeVideoVerdict(opts: {
+  restricted: boolean;
+  region: string | null;
+  pageReachable: boolean;
+}): { level: CheckLevel; conclusion: string; processNote: string } | null {
+  if (opts.restricted) {
+    return {
+      level: "fail",
+      conclusion: "不可用（地区限制）",
+      processNote: "信号：isServiceRestricted。",
+    };
+  }
+  if (opts.region) {
+    return {
+      level: "pass",
+      conclusion: `可用（${opts.region}）`,
+      processNote: `地区线索：currentTerritory=${opts.region}（HTML 启发式）。`,
+    };
+  }
+  if (opts.pageReachable) {
+    return {
+      level: "warn",
+      conclusion: "可达，无法确认区域（启发式）",
+      processNote:
+        "页可达但未解析到 currentTerritory；无法确认区域（启发式），诚实标 warn（非硬解锁 / 非 Verge PAGE ERROR=fail）。",
+    };
+  }
+  return null;
 }
 
 export function extractPrimeVideoRegion(body: string): string | null {
@@ -776,7 +827,7 @@ export async function checkGooglePlayUnlock(
   });
 }
 
-/** TikTok 单独卡：cdn-cgi/trace + 首页粗检（对齐 Verge）。 */
+/** TikTok 单独卡：cdn-cgi/trace + 首页——连通/可见启发式（非硬解锁）。 */
 export async function checkTikTokUnlock(
   mixedPort?: number | null,
 ): Promise<CheckCard> {
@@ -786,7 +837,7 @@ export async function checkTikTokUnlock(
   });
 }
 
-/** Spotify 单独卡：country-selector JSON（对齐 Verge GET）。 */
+/** Spotify 单独卡：country-selector JSON（地区选择器；保持既有判定）。 */
 export async function checkSpotifyUnlock(
   mixedPort?: number | null,
 ): Promise<CheckCard> {
@@ -796,7 +847,7 @@ export async function checkSpotifyUnlock(
   });
 }
 
-/** Prime Video 单独卡：首页 isServiceRestricted / currentTerritory。 */
+/** Prime Video 单独卡：isServiceRestricted / currentTerritory（启发式；无区→warn）。 */
 export async function checkPrimeVideoUnlock(
   mixedPort?: number | null,
 ): Promise<CheckCard> {
