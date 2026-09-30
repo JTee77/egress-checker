@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCardView } from "../components/CheckCardView";
+import { ThemeToggle } from "../components/ThemeToggle";
 import { NodeCard } from "../components/NodeCard";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { CheckCard, EgressReport } from "../lib/egress";
@@ -371,20 +372,23 @@ export function HomePage({
 
   return (
     <div className="home-page">
-      <div className="flow-hint" aria-label="使用步骤">
-        <span className={`fh-step ${gate?.ok ? "done" : "cur"}`}>
-          <i>{gate?.ok ? "✓" : "1"}</i>打开你的VPN软件并连上一个可用节点
-        </span>
-        <span className="fh-arrow">→</span>
-        <span className={`fh-step ${gate?.ok ? "done" : "todo"}`}>
-          <i>2</i>在下方选择你使用的VPN软件 · 获取节点
-        </span>
-        <span className="fh-arrow">→</span>
-        <span
-          className={`fh-step ${!gate?.ok ? "todo" : detectionDone ? "done" : "cur"}`}
-        >
-          <i>{!gate?.ok ? "3" : detectionDone ? "✓" : "3"}</i>进行检测
-        </span>
+      <div className="flow-row">
+        <div className="flow-hint" aria-label="使用步骤">
+          <span className={`fh-step ${gate?.ok ? "done" : "cur"}`}>
+            <i>{gate?.ok ? "✓" : "1"}</i>打开你的VPN软件并连上一个可用节点
+          </span>
+          <span className="fh-arrow">→</span>
+          <span className={`fh-step ${gate?.ok ? "done" : "todo"}`}>
+            <i>2</i>在下方选择你使用的VPN软件 · 获取节点
+          </span>
+          <span className="fh-arrow">→</span>
+          <span
+            className={`fh-step ${!gate?.ok ? "todo" : detectionDone ? "done" : "cur"}`}
+          >
+            <i>{!gate?.ok ? "3" : detectionDone ? "✓" : "3"}</i>进行检测
+          </span>
+        </div>
+        <ThemeToggle />
       </div>
 
       <div className="app-header">
@@ -445,7 +449,10 @@ export function HomePage({
         <>
           <div className="env-section home-tray">
             <div className="env-head">
-              <span className="t home-block-title">环境泄漏检查</span>
+              <div className="t">
+                <span className="home-block-title">环境泄漏检查</span>
+                <span className="s">对当前出口体检 · 不需先测节点</span>
+              </div>
               <button
                 type="button"
                 className="btn btn-primary btn-sm action-btn"
@@ -454,7 +461,6 @@ export function HomePage({
               >
                 {envRunning ? "检查中…" : envOpen ? "重新检查环境" : "开始环境检查"}
               </button>
-              <span className="s">对当前出口体检 · 不需先测节点</span>
             </div>
             {envOpen ? (
               <>

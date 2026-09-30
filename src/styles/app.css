@@ -104,20 +104,11 @@ select {
   overflow: hidden;
 }
 
-/* Row 0 — theme chrome only：顶行独占，右齐；无托盘；~32–36px */
-.theme-chrome {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-shrink: 0;
-  height: 34px;
-  padding: 0 20px;
-  box-sizing: border-box;
-  /* gap 8–12 到 stepper：由 .main padding-top 承担 */
-}
+/* 主题切换：落在 .flow-row 右侧（与步进同排）；无托盘 */
 .theme-toggle {
   position: static;
   display: inline-flex;
+  flex: none;
   gap: 2px;
   padding: 3px;
   border: 1px solid var(--border);
@@ -199,7 +190,7 @@ select {
   min-height: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
-  /* top 10 ≈ theme→stepper gap 8–12（theme-chrome 在 shell 内） */
+  /* top 10：flow-row（步进+主题）顶距 */
   padding: 10px 20px 16px;
   width: 100%;
   max-width: none;
@@ -257,7 +248,9 @@ select {
   gap: 14px;
   /* 禁止收缩：否则盒子缩窄后按钮溢出，后面的状态标会按盒子边缘排布而贴进按钮 */
   flex: 0 0 auto;
-  min-width: 0;
+  flex-shrink: 0;
+  min-width: max-content;
+  overflow: visible;
   flex-wrap: nowrap;
 }
 .home-ops-controls > * {
@@ -304,14 +297,14 @@ select {
   background-repeat: no-repeat;
   padding-right: 28px;
 }
-/* 获取成功：贴在按钮旁的小提示，无底框 */
+/* 获取成功：按钮右侧清晰间隙，不侵入蓝钮 */
 .fetch-ok {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   flex: none;
   white-space: nowrap;
-  margin-left: 0;
+  margin-left: 4px; /* 叠加 .app-header gap → 总约 12–16 */
   font-size: 12px;
   font-weight: 600;
   color: var(--pass);
@@ -336,7 +329,7 @@ select {
   gap: 5px;
   flex: none;
   white-space: nowrap;
-  margin-left: 0;
+  margin-left: 4px;
   font-size: 12px;
   font-weight: 600;
   color: var(--fail);
@@ -1300,14 +1293,14 @@ table.data tr:last-child td {
   background: var(--card-on-tray);
 }
 
-/* Row 2 — software：左簇 title→dropdown→获取节点→成功；短底部分割线；
-   与下方 tray 同侧 inset；主按钮落 --action-x，不推到行最右；非 row0/1 容器。 */
+/* Row 1 — software：左簇 title→dropdown→获取节点→成功；短底部分割线；
+   与下方 tray 同侧 inset；主按钮落 --action-x，不推到行最右。 */
 .app-header {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  /* 获取节点 → 8 → 成功 */
-  gap: 8px;
+  /* 获取节点 → 12 → 成功（再加 fetch-ok margin-left 4，不侵入蓝钮） */
+  gap: 12px;
   margin: 0 0 var(--tray-gap);
   padding: 8px var(--content-inset-x) 10px;
   border: none;
@@ -1321,13 +1314,14 @@ table.data tr:last-child td {
   flex: 0 1 240px;
 }
 
-/* 环境托盘头：title → 12–16 → 重新检查环境（近标题簇）；副标题只落标题下 */
+/* 环境托盘头：主按钮左缘锁 --action-x；副标题 INLINE 贴标题右侧 */
 .env-head {
   display: grid;
-  grid-template-columns: auto auto;
-  grid-template-rows: auto auto;
-  column-gap: 14px;
-  row-gap: 2px;
+  /* tray pad-x → 首列宽 action-x - pad，第 2 列起点 = --action-x */
+  grid-template-columns: calc(var(--action-x) - var(--tray-pad-x)) auto;
+  grid-template-rows: auto;
+  column-gap: 0;
+  row-gap: 0;
   align-items: center;
   justify-items: start;
 }
@@ -1337,7 +1331,9 @@ table.data tr:last-child td {
   min-width: 0;
   display: flex;
   align-items: center;
+  gap: 10px;
   min-height: 30px; /* 与 .action-btn 同高，基线对齐 */
+  flex-wrap: wrap;
 }
 .env-head .action-btn {
   grid-column: 2;
@@ -1345,11 +1341,11 @@ table.data tr:last-child td {
   align-self: center;
 }
 .env-head .s {
-  grid-column: 1;
-  grid-row: 2;
   font-size: 11px;
+  font-weight: 400;
   color: var(--text-muted);
   line-height: 1.35;
+  white-space: nowrap;
 }
 .env-tray-note {
   margin-top: 10px;
@@ -1358,29 +1354,29 @@ table.data tr:last-child td {
   margin-top: 10px;
 }
 
-/* 节点托盘头：title → 12–16 → 测全部 → 12–16 → 展开全部详情（弱链贴主按钮，非行最右） */
+/* 节点托盘头：与 .env-head / 获取节点 共用 --action-x；
+   测全部锁动作列；展开弱链紧跟测全部右侧 12–16（非行最右） */
 .ws-ops {
-  display: flex;
+  display: grid;
+  grid-template-columns: calc(var(--action-x) - var(--tray-pad-x)) 1fr;
   align-items: center;
-  gap: 14px;
+  justify-items: start;
   margin: 0 0 12px;
   padding: 0;
-  flex-wrap: wrap;
 }
 .ws-ops .t {
   min-width: 0;
   display: flex;
   align-items: center;
   min-height: 30px;
-  flex: none;
 }
 .ws-ops-right {
   display: flex;
   align-items: center;
   /* 测全部 → 12–16 → 展开；其后进度/停止 */
   gap: 14px;
+  width: 100%;
   min-width: 0;
-  flex: 1 1 auto;
   flex-wrap: wrap;
 }
 /* 「展开/收起全部详情」：弱化三级链，紧跟测全部右侧 12–16 */
@@ -1445,8 +1441,8 @@ table.data tr:last-child td {
   transition: width 0.18s ease-out;
 }
 
-/* 三大主按钮：同高同圆角同蓝；近标题非行最右
-   （软件行落 --action-x；环境/节点 title 后 12–16） */
+/* 三大主按钮：同高同圆角同蓝；左缘同锁 --action-x（近标题非行最右）
+   （获取节点 / 重新检查环境 / 测全部节点） */
 .action-btn {
   display: inline-flex;
   align-items: center;
@@ -1891,19 +1887,31 @@ html.glass .nc-detail {
   background: var(--bg-elevated);
 }
 
-/* Row 1 — stepper only：三步；无主题/蓝钮/托盘；次级灰、小于块标题；gap 16–20→软件行 */
+/* Row 0 — stepper 左 + 主题 右（浅色/深色/跟随系统）同排；无托盘；gap→软件行 */
+.flow-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 4px var(--content-inset-x);
+  box-sizing: border-box;
+  min-width: 0;
+}
 .flow-hint {
   display: flex;
   align-items: center;
   gap: 9px;
-  margin: 0 0 18px;
-  padding: 4px var(--content-inset-x);
+  margin: 0;
+  padding: 0;
   border: none;
   border-radius: 0;
   background: transparent;
   font-size: 12px; /* 块标题 .home-block-title 为 13/700；步进更小更淡 */
   font-weight: 400;
   color: var(--text-muted);
+  flex: 1 1 auto;
+  min-width: 0;
   flex-wrap: wrap;
 }
 .fh-step {
