@@ -1516,7 +1516,7 @@ table.data tr:last-child td {
   height: var(--nc-h);
   box-sizing: border-box;
 }
-/* 摘要两行：上行名（左伸展）+ 星级/未测（右上锚定），下行 tags+操作 */
+/* 摘要两行：上行名+使用中（左贴紧，名可省略）+ 星级/未测（右上），下行 tags+操作 */
 .nc-row {
   display: flex;
   align-items: center;
@@ -1534,14 +1534,15 @@ table.data tr:last-child td {
   display: flex;
   align-items: center;
   gap: 6px;
+  /* 占满星级左侧余宽，内部名+徽章左贴紧 */
   flex: 1 1 auto;
   min-width: 0;
 }
 .nc-nm {
   font-size: 13px;
   font-weight: 600;
-  /* 吃满星级左侧剩余宽；仍过长则省略 */
-  flex: 1 1 auto;
+  /* 按内容宽；过长才收缩省略，徽章紧跟名称而非贴右 */
+  flex: 0 1 auto;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;

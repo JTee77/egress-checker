@@ -127,7 +127,7 @@ export function NodeCard({
         onClick={onToggle}
       >
         <div className="nc-sum">
-          {/* 上行：名占左侧可伸展区，星级/未测锚定卡片右上 */}
+          {/* 上行：名+使用中左贴紧（名可省略），星级/未测锚定右上 */}
           <div className="nc-row nc-row-top">
             <div className="nc-name">
               <span className="nc-nm">{node.name}</span>
