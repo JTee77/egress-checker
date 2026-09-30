@@ -1463,13 +1463,15 @@ table.data tr:last-child td {
   border-radius: 8px;
 }
 
-/* 节点瀑布流：JS 定列（列数随容器宽度自适应），展开只向下推、无侧留白 */
+/* 节点瀑布流：JS 定列（列数随容器宽度自适应），展开只向下推。
+   列断点之间的余宽左右均分，卡片组水平居中；--nc-w 固定不拉伸。
+   外缘仍由 .home-tray padding 管，不另改外边距。 */
 .node-flow {
   display: flex;
   gap: var(--nc-gap);
   align-items: flex-start;
-  justify-content: flex-start; /* 卡左缘与托盘标题对齐；--nc-w 固定不拉伸 */
-  margin: 0; /* 外缘由 .home-tray padding 管 */
+  justify-content: center;
+  margin: 0;
 }
 .flow-col {
   flex: none;
