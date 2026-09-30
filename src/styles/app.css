@@ -1236,7 +1236,8 @@ table.data tr:last-child td {
   --action-x: 376px;
 }
 
-/* 头部工具条（选软件 · 刷新 · 连接状态）。
+/* 头部工具条（选软件 · 获取节点 · 连接状态）。
+   与 .ws-ops 同级轻量：无实底/描边（仅内容卡实底）。
    内边距 16 + picker-group 352 + controls gap 8 = --action-x(376)，
    「获取节点」左缘与环境检查 / 测全部动作列对齐。 */
 .app-header {
@@ -1244,18 +1245,19 @@ table.data tr:last-child td {
   align-items: center;
   gap: 12px;
   margin: 0 0 12px;
-  padding: 12px 16px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--bg-elevated);
+  padding: 4px 16px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   flex-wrap: wrap;
 }
 .app-header .client-picker-select {
   min-width: 160px;
 }
 
-/* 环境检查：区块无底色/描边；左右 16px 与 .app-header 内文对齐
-   （「环境泄漏检查」左齐「你在用哪款软件」）。动作钮仍落在 --action-x。 */
+/* 环境检查：区块无底色/描边（标题行透明；底色只在 CheckCard）。
+   左右 16px 与轻量 .app-header 内文对齐（「环境泄漏检查」左齐「你在用哪款软件」）。
+   动作钮仍落在 --action-x。 */
 .env-section {
   background: transparent;
   border: none;
@@ -1745,7 +1747,6 @@ html.glass .main,
 html.glass .home-page {
   background: transparent;
 }
-html.glass .app-header,
 html.glass .ncard,
 html.glass .card,
 html.glass .fold-panel,
@@ -1762,7 +1763,6 @@ html.glass .gate-banner {
   html.glass .home-page {
     background: var(--bg);
   }
-  html.glass .app-header,
   html.glass .ncard,
   html.glass .card,
   html.glass .fold-panel,
