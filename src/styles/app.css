@@ -1269,16 +1269,6 @@ table.data tr:last-child td {
   }
 }
 
-/* 可选暗色顶区微提亮（仅软件行；stepper 无托盘）~5% */
-[data-theme="dark"] .app-header {
-  background: color-mix(in srgb, #fff 5%, var(--bg));
-}
-@media (prefers-color-scheme: dark) {
-  [data-theme="system"] .app-header {
-    background: color-mix(in srgb, #fff 5%, var(--bg));
-  }
-}
-
 /* 环境 / 节点共用浅托盘 */
 .home-tray {
   background: var(--tray-bg);
