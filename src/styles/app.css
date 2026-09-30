@@ -304,7 +304,7 @@ select {
   gap: 5px;
   flex: none;
   white-space: nowrap;
-  margin-left: 12px; /* 叠加 .app-header gap → 总约 28–30 */
+  margin-left: 20px; /* 叠加 .app-header gap → 总约 28–30 */
   font-size: 12px;
   font-weight: 600;
   color: var(--pass);
@@ -329,7 +329,7 @@ select {
   gap: 5px;
   flex: none;
   white-space: nowrap;
-  margin-left: 12px; /* 与 .fetch-ok 对称，远离蓝钮 */
+  margin-left: 20px; /* 与 .fetch-ok 对称，远离蓝钮 */
   font-size: 12px;
   font-weight: 600;
   color: var(--fail);
