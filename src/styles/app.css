@@ -1414,7 +1414,8 @@ table.data tr:last-child td {
   gap: 8px;
   min-width: 0;
   flex: 0 1 auto;
-  max-width: 280px;
+  /* 给「检测 N/M（节点名）」更大可见宽度；停止仍紧跟；展开仍靠右 */
+  max-width: 440px;
 }
 .ws-abort-btn {
   flex: none;
@@ -1423,7 +1424,9 @@ table.data tr:last-child td {
 .ws-progress-text {
   font-size: 12px;
   font-weight: 600;
-  min-width: 0;
+  flex: 1 1 auto;
+  /* 典型节点名优先完整显示；极长名仍 ellipsis */
+  min-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
