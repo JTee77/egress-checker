@@ -388,32 +388,32 @@ export function HomePage({
       </div>
 
       <div className="app-header">
-        <div className="home-ops-left">
-          <label className="client-picker-label home-block-title" htmlFor="home-client-select">
-            你在用哪款软件？
-          </label>
-          <select
-            id="home-client-select"
-            className="client-picker-select"
-            value={clientId ?? ""}
-            onChange={(e) => onSelectClient(e.target.value)}
-            title={
-              clientUnset
-                ? "先选软件，再点「获取节点」"
-                : CLIENT_OPTIONS.find((o) => o.id === clientId)?.hint
-            }
-          >
-            <option value="" disabled>
-              请选择…
-            </option>
-            {CLIENT_OPTIONS.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label}
+        <div className="home-ops-controls">
+          <div className="picker-group">
+            <label className="client-picker-label home-block-title" htmlFor="home-client-select">
+              你在用哪款软件？
+            </label>
+            <select
+              id="home-client-select"
+              className="client-picker-select"
+              value={clientId ?? ""}
+              onChange={(e) => onSelectClient(e.target.value)}
+              title={
+                clientUnset
+                  ? "先选软件，再点「获取节点」"
+                  : CLIENT_OPTIONS.find((o) => o.id === clientId)?.hint
+              }
+            >
+              <option value="" disabled>
+                请选择…
               </option>
-            ))}
-          </select>
-        </div>
-        <div className="home-ops-right">
+              {CLIENT_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <button
             className="btn btn-primary btn-sm home-ops-refresh action-btn"
             type="button"
@@ -423,22 +423,22 @@ export function HomePage({
           >
             {busy || refreshing ? "获取中…" : "获取节点"}
           </button>
-          {!refreshing &&
-          (connection.status === "connected" && gate?.ok ? (
-            <span className="fetch-ok" title={connection.message}>
-              <span className="status-ok-mark">✓</span>成功
-            </span>
-          ) : gate && !gate.ok ? (
-            <>
-              <span className="fetch-fail">
-                <span className="status-fail-mark">✗</span>失败
-              </span>
-              <span className="fetch-fail-msg" role="status">
-                {gate.message}
-              </span>
-            </>
-          ) : null)}
         </div>
+        {!refreshing &&
+        (connection.status === "connected" && gate?.ok ? (
+          <span className="fetch-ok" title={connection.message}>
+            <span className="status-ok-mark">✓</span>成功
+          </span>
+        ) : gate && !gate.ok ? (
+          <>
+            <span className="fetch-fail">
+              <span className="status-fail-mark">✗</span>失败
+            </span>
+            <span className="fetch-fail-msg" role="status">
+              {gate.message}
+            </span>
+          </>
+        ) : null)}
       </div>
 
       {gate?.ok && orderedNodes.length > 0 ? (
@@ -488,14 +488,6 @@ export function HomePage({
                 >
                   {running && mode === "all" ? "测全部中…" : "测全部节点"}
                 </button>
-                <button
-                  type="button"
-                  className="ws-expand-link"
-                  onClick={toggleExpandAll}
-                  title={allExpanded ? "收起全部节点详情" : "展开全部节点详情"}
-                >
-                  {allExpanded ? "收起全部详情" : "展开全部详情"}
-                </button>
                 {running && mode === "all" ? (
                   <>
                     <div className="ws-progress" role="status" aria-live="polite">
@@ -525,6 +517,14 @@ export function HomePage({
                     {switchHint}
                   </span>
                 ) : null}
+                <button
+                  type="button"
+                  className="ws-expand-link"
+                  onClick={toggleExpandAll}
+                  title={allExpanded ? "收起全部节点详情" : "展开全部节点详情"}
+                >
+                  {allExpanded ? "收起全部详情" : "展开全部详情"}
+                </button>
               </div>
             </div>
 
