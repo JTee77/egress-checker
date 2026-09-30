@@ -1400,12 +1400,12 @@ table.data tr:last-child td {
   min-width: 0;
 }
 
-/* 进度 + 停止：同组可吃测全部与展开之间余宽；停止紧跟条；展开仍靠右 */
+/* 进度 + 停止：同组紧贴测全部后，不吃余宽；条+停止跟节点名；展开仍靠右 */
 .ws-progress-group {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
 }
 .ws-progress {
@@ -1413,8 +1413,8 @@ table.data tr:last-child td {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  /* 吃组内余宽，优先拉长节点名；停止仍紧跟本组 */
-  flex: 1 1 auto;
+  /* 随内容宽，不 flex-grow 横跨到展开 */
+  flex: 0 1 auto;
 }
 .ws-abort-btn {
   flex: none;
@@ -1423,7 +1423,8 @@ table.data tr:last-child td {
 .ws-progress-text {
   font-size: 12px;
   font-weight: 600;
-  flex: 1 1 auto;
+  /* 按内容伸展；无 max-width；过窄才缩省略 */
+  flex: 0 1 auto;
   /* 典型长名（如「中国台湾-TW-2…」）优先完整显示；极长仍 ellipsis */
   min-width: 280px;
   overflow: hidden;
@@ -1431,9 +1432,8 @@ table.data tr:last-child td {
   white-space: nowrap;
 }
 .ws-progress-bar {
-  /* 窄时先让条收缩，把宽度留给节点名 */
-  flex: 0 1 72px;
-  min-width: 32px;
+  /* 固定 ~72，紧跟节点名后；停止再紧跟条 */
+  flex: 0 0 72px;
   height: 6px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--border) 70%, var(--bg));
