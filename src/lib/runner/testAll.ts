@@ -1,8 +1,8 @@
 /**
- * 测全部节点：轻量深测（runNodeDeepLight）。
+ * 测全部节点：完整深测（runNodeDiagnostics），与测单个相同探针全集。
  * 含连通性预检、临时切换、切回；无 React。
  */
-import { mapPool, runNodeDeepLight } from "../egress";
+import { mapPool, runNodeDiagnostics } from "../egress";
 import {
   findSelectorGroup,
   probeDelay,
@@ -190,7 +190,7 @@ export async function testAll(
         await new Promise((r) => setTimeout(r, 250));
         if (shouldAbort()) break;
         hooks.onNodeCards(asRunning(NODE_PLACEHOLDERS));
-        const r = await runNodeDeepLight(hooks.onUpsertNodeCard, {
+        const r = await runNodeDiagnostics(hooks.onUpsertNodeCard, {
           mixedPort,
           mihomoConfig: config,
         });
@@ -207,7 +207,7 @@ export async function testAll(
         testingNode: connection.currentProxy ?? undefined,
       });
       hooks.onNodeCards(asRunning(NODE_PLACEHOLDERS));
-      const r = await runNodeDeepLight(hooks.onUpsertNodeCard, {
+      const r = await runNodeDiagnostics(hooks.onUpsertNodeCard, {
         mixedPort,
         mihomoConfig: config,
       });
@@ -235,7 +235,7 @@ export async function testAll(
           testingNode: n.name,
         });
         hooks.onNodeCards(asRunning(NODE_PLACEHOLDERS));
-        const r = await runNodeDeepLight(hooks.onUpsertNodeCard, {
+        const r = await runNodeDiagnostics(hooks.onUpsertNodeCard, {
           mixedPort,
           mihomoConfig: config,
         });

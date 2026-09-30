@@ -28,7 +28,7 @@ pnpm tauri dev -- --cli env --client verge
 | `gate` | 轻量门槛（`runLightGate`） |
 | `check current` | 当前出口 **完整**深测 |
 | `check node <名>` | 指定节点完整深测（可临时切换后切回） |
-| `check all` | 全部节点 **轻量** DeepLight |
+| `check all` | 全部节点 **完整**深测（与 `check node` 相同探针集） |
 | `env` | 环境泄漏检查 |
 
 ### 选项

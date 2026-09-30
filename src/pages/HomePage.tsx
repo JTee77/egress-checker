@@ -566,7 +566,7 @@ export function HomePage({
             aria-label="确认测全部"
           >
             <p className="confirm-body">
-              点击「确定」后，将逐个检测所有节点（约几分钟），期间会切换出口节点并消耗流量，建议暂时不要进行支付、登录等重要操作。测完会自动切回原节点。
+              点击「确定」后，将逐个对所有节点做完整深测（与「再测」相同项目，耗时与流量会更多），期间会切换出口节点，建议暂时不要进行支付、登录等重要操作。测完会自动切回原节点。
             </p>
             <div className="toolbar" style={{ marginBottom: 0 }}>
               <button
