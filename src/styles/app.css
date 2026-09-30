@@ -907,32 +907,13 @@ table.data tr:last-child td {
   line-height: 1.5;
 }
 
-/* 首页三块小标题：你在用哪款软件 / 环境泄漏检查 / 展开全部详情 */
+/* 首页三块小标题：你在用哪款软件 / 环境泄漏检查 / 节点检测 */
 .home-block-title {
   font-size: 13px;
   font-weight: 700;
   color: var(--text);
   letter-spacing: 0;
   line-height: 1.3;
-}
-button.home-block-title {
-  appearance: none;
-  -webkit-appearance: none;
-  background: transparent;
-  border: none;
-  padding: 0;
-  margin: 0;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text);
-  line-height: 1.3;
-  cursor: pointer;
-  text-align: left;
-}
-button.home-block-title:hover {
-  color: var(--text);
-  opacity: 0.85;
 }
 
 .section-title {
@@ -1309,7 +1290,7 @@ button.home-block-title:hover {
 }
 
 /* 工作区操作条：与 .env-head / 获取节点 共用 --action-x 动作列；
-   左右 16px 使「展开全部详情」左齐另两块标题。 */
+   左「节点检测」标题齐另两块；右动作列起点 = --action-x；展开链靠行右。 */
 .ws-ops {
   display: grid;
   grid-template-columns: calc(var(--action-x) - 16px) 1fr;
@@ -1323,6 +1304,29 @@ button.home-block-title:hover {
   align-items: center;
   gap: 10px;
   width: 100%;
+}
+/* 「展开/收起全部详情」：弱化可点链，贴行最右 */
+.ws-expand-link {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0 0 0 auto;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+  line-height: 1.3;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  flex: none;
+  white-space: nowrap;
+}
+.ws-expand-link:hover {
+  color: var(--text);
+  opacity: 0.9;
 }
 /* 动作条上的错误通报：只在出错时出现（成功/过程状态不落字条，进度消失即反馈） */
 .ws-error {

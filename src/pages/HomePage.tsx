@@ -474,14 +474,7 @@ export function HomePage({
           </div>
 
           <div className="ws-ops">
-            <button
-              type="button"
-              className="home-block-title"
-              onClick={toggleExpandAll}
-              title={allExpanded ? "收起全部节点详情" : "展开全部节点详情"}
-            >
-              {allExpanded ? "收起全部详情" : "展开全部详情"}
-            </button>
+            <span className="t home-block-title">节点检测</span>
             <div className="ws-ops-right">
               <button
                 type="button"
@@ -524,6 +517,14 @@ export function HomePage({
                   {switchHint}
                 </span>
               ) : null}
+              <button
+                type="button"
+                className="ws-expand-link"
+                onClick={toggleExpandAll}
+                title={allExpanded ? "收起全部节点详情" : "展开全部节点详情"}
+              >
+                {allExpanded ? "收起全部详情" : "展开全部详情"}
+              </button>
             </div>
           </div>
 
