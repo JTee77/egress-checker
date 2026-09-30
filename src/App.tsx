@@ -29,7 +29,9 @@ function App() {
 
   return (
     <div className="app-shell">
-      <ThemeToggle />
+      <div className="theme-chrome">
+        <ThemeToggle />
+      </div>
       <main className="main">
         <HomePage
           connection={state}

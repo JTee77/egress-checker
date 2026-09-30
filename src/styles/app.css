@@ -104,12 +104,19 @@ select {
   overflow: hidden;
 }
 
-/* 右上角主题切换：浅色 / 深色 / 跟随系统 */
+/* Row 0 — theme chrome only：顶行独占，右齐；无托盘；~32–36px */
+.theme-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 20px;
+  box-sizing: border-box;
+  /* gap 8–12 到 stepper：由 .main padding-top 承担 */
+}
 .theme-toggle {
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  z-index: 40;
+  position: static;
   display: inline-flex;
   gap: 2px;
   padding: 3px;
@@ -192,6 +199,7 @@ select {
   min-height: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  /* top 10 ≈ theme→stepper gap 8–12（theme-chrome 在 shell 内） */
   padding: 10px 20px 16px;
   width: 100%;
   max-width: none;
@@ -245,7 +253,8 @@ select {
 .home-ops-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  /* dropdown → 12–16 → 获取节点 */
+  gap: 14px;
   /* 禁止收缩：否则盒子缩窄后按钮溢出，后面的状态标会按盒子边缘排布而贴进按钮 */
   flex: 0 0 auto;
   min-width: 0;
@@ -265,11 +274,12 @@ select {
 }
 .picker-group {
   /* 固定宽度，让「获取节点」左缘精确落在动作列 --action-x 上
-     content-inset 14 + 354 + controls gap 8 = --action-x(376) */
-  flex: 0 0 354px;
+     content-inset 14 + 348 + controls gap 14 = --action-x(376)
+     title → 8–12 → dropdown 在本 group；dropdown → 14 → 获取节点 在 controls */
+  flex: 0 0 348px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 .client-picker-select {
@@ -1240,7 +1250,7 @@ table.data tr:last-child td {
   --nc-full-pad-y: 17px;
   /* 展开锁死 = 两张收起卡 + 中间间距：68+9+68=145；超出裁切 */
   --nc-exp-h: calc(var(--nc-h) * 2 + var(--nc-gap));
-  /* 动作列：三个主按钮左缘统一竖线（近标题，非行最右） */
+  /* 软件行「获取节点」左缘（content-inset + picker + gap）；近标题，非行最右 */
   --action-x: 376px;
 
   /* MJ hierarchy：page → tray（环境/节点同 token）→ card；软件行是顶栏非厚托盘 */
@@ -1266,13 +1276,11 @@ table.data tr:last-child td {
   }
 }
 
-/* 可选暗色顶区微提亮（步进条 + 软件行）~5% */
-[data-theme="dark"] .flow-hint,
+/* 可选暗色顶区微提亮（仅软件行；stepper 无托盘）~5% */
 [data-theme="dark"] .app-header {
   background: color-mix(in srgb, #fff 5%, var(--bg));
 }
 @media (prefers-color-scheme: dark) {
-  [data-theme="system"] .flow-hint,
   [data-theme="system"] .app-header {
     background: color-mix(in srgb, #fff 5%, var(--bg));
   }
@@ -1292,13 +1300,14 @@ table.data tr:last-child td {
   background: var(--card-on-tray);
 }
 
-/* 软件行（prefer A）：无厚托盘；与下方 tray 同侧 inset；底部分割线。
-   主按钮「获取节点」落在 --action-x（近标题），不推到行最右。 */
+/* Row 2 — software：左簇 title→dropdown→获取节点→成功；短底部分割线；
+   与下方 tray 同侧 inset；主按钮落 --action-x，不推到行最右；非 row0/1 容器。 */
 .app-header {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 12px;
+  /* 获取节点 → 8 → 成功 */
+  gap: 8px;
   margin: 0 0 var(--tray-gap);
   padding: 8px var(--content-inset-x) 10px;
   border: none;
@@ -1312,13 +1321,12 @@ table.data tr:last-child td {
   flex: 0 1 240px;
 }
 
-/* 环境托盘头：主按钮落 --action-x（近标题）；副标题只落在标题下 */
+/* 环境托盘头：title → 12–16 → 重新检查环境（近标题簇）；副标题只落标题下 */
 .env-head {
   display: grid;
-  /* tray pad-x → 首列宽 action-x - pad，第 2 列起点 = --action-x */
-  grid-template-columns: calc(var(--action-x) - var(--tray-pad-x)) auto;
+  grid-template-columns: auto auto;
   grid-template-rows: auto auto;
-  column-gap: 0;
+  column-gap: 14px;
   row-gap: 2px;
   align-items: center;
   justify-items: start;
@@ -1350,38 +1358,39 @@ table.data tr:last-child td {
   margin-top: 10px;
 }
 
-/* 节点托盘头：与 .env-head / 获取节点 共用 --action-x；
-   主按钮近标题；「展开全部详情」弱链仍贴行最右。 */
+/* 节点托盘头：title → 12–16 → 测全部 → 12–16 → 展开全部详情（弱链贴主按钮，非行最右） */
 .ws-ops {
-  display: grid;
-  grid-template-columns: calc(var(--action-x) - var(--tray-pad-x)) 1fr;
+  display: flex;
   align-items: center;
-  justify-items: start;
+  gap: 14px;
   margin: 0 0 12px;
   padding: 0;
+  flex-wrap: wrap;
 }
 .ws-ops .t {
   min-width: 0;
   display: flex;
   align-items: center;
   min-height: 30px;
+  flex: none;
 }
 .ws-ops-right {
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
+  /* 测全部 → 12–16 → 展开；其后进度/停止 */
+  gap: 14px;
   min-width: 0;
+  flex: 1 1 auto;
   flex-wrap: wrap;
 }
-/* 「展开/收起全部详情」：弱化三级链，贴行最右 */
+/* 「展开/收起全部详情」：弱化三级链，紧跟测全部右侧 12–16 */
 .ws-expand-link {
   appearance: none;
   -webkit-appearance: none;
   background: transparent;
   border: none;
   padding: 0;
-  margin: 0 0 0 auto;
+  margin: 0;
   font-family: inherit;
   font-size: 12px;
   font-weight: 400;
@@ -1436,8 +1445,8 @@ table.data tr:last-child td {
   transition: width 0.18s ease-out;
 }
 
-/* 三大主按钮（获取节点 / 重新检查环境 / 测全部节点）：
-   同高同圆角同蓝；左缘齐 --action-x（近标题，非行最右） */
+/* 三大主按钮：同高同圆角同蓝；近标题非行最右
+   （软件行落 --action-x；环境/节点 title 后 12–16） */
 .action-btn {
   display: inline-flex;
   align-items: center;
@@ -1882,16 +1891,18 @@ html.glass .nc-detail {
   background: var(--bg-elevated);
 }
 
-/* 顶部步骤条：状态驱动（哪步完成哪步打勾），替代静态使用说明文字 */
+/* Row 1 — stepper only：三步；无主题/蓝钮/托盘；次级灰、小于块标题；gap 16–20→软件行 */
 .flow-hint {
   display: flex;
   align-items: center;
   gap: 9px;
-  margin: 8px 0 0;
-  padding: 8px var(--content-inset-x);
-  border: 1px dashed var(--border);
-  border-radius: 12px;
-  font-size: 12px;
+  margin: 0 0 18px;
+  padding: 4px var(--content-inset-x);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px; /* 块标题 .home-block-title 为 13/700；步进更小更淡 */
+  font-weight: 400;
   color: var(--text-muted);
   flex-wrap: wrap;
 }
@@ -1899,7 +1910,7 @@ html.glass .nc-detail {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .fh-step i {
   font-style: normal;

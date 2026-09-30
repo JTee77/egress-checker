@@ -488,6 +488,14 @@ export function HomePage({
                 >
                   {running && mode === "all" ? "测全部中…" : "测全部节点"}
                 </button>
+                <button
+                  type="button"
+                  className="ws-expand-link"
+                  onClick={toggleExpandAll}
+                  title={allExpanded ? "收起全部节点详情" : "展开全部节点详情"}
+                >
+                  {allExpanded ? "收起全部详情" : "展开全部详情"}
+                </button>
                 {running && mode === "all" ? (
                   <>
                     <div className="ws-progress" role="status" aria-live="polite">
@@ -517,14 +525,6 @@ export function HomePage({
                     {switchHint}
                   </span>
                 ) : null}
-                <button
-                  type="button"
-                  className="ws-expand-link"
-                  onClick={toggleExpandAll}
-                  title={allExpanded ? "收起全部节点详情" : "展开全部节点详情"}
-                >
-                  {allExpanded ? "收起全部详情" : "展开全部详情"}
-                </button>
               </div>
             </div>
 
