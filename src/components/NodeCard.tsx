@@ -122,7 +122,10 @@ export function NodeCard({
 
   return (
     <div className="nc-wrap">
-      <div className={`ncard ${expanded ? "exp" : ""}`} onClick={onToggle}>
+      <div
+        className={`ncard${expanded ? " exp" : ""}${isCurrent ? " cur" : ""}`}
+        onClick={onToggle}
+      >
         <div className="nc-sum">
           {/* 上行：名占左侧可伸展区，星级/未测锚定卡片右上 */}
           <div className="nc-row nc-row-top">

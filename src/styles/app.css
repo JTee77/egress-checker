@@ -1499,6 +1499,9 @@ table.data tr:last-child td {
   max-height: var(--nc-exp-h);
   min-height: 0;
   overflow: hidden;
+  /* 展开不再套深色框；深色框仅使用中 / 悬停 */
+}
+.ncard.cur {
   border-color: var(--accent);
 }
 .ncard.exp .nc-sum {
