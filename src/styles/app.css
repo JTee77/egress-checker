@@ -297,14 +297,14 @@ select {
   background-repeat: no-repeat;
   padding-right: 28px;
 }
-/* 获取成功：按钮右侧清晰间隙，不侵入蓝钮 */
+/* 获取成功：整块（✓+成功）远离蓝钮，不侵入 */
 .fetch-ok {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   flex: none;
   white-space: nowrap;
-  margin-left: 4px; /* 叠加 .app-header gap → 总约 12–16 */
+  margin-left: 12px; /* 叠加 .app-header gap → 总约 28–30 */
   font-size: 12px;
   font-weight: 600;
   color: var(--pass);
@@ -329,7 +329,7 @@ select {
   gap: 5px;
   flex: none;
   white-space: nowrap;
-  margin-left: 4px;
+  margin-left: 12px; /* 与 .fetch-ok 对称，远离蓝钮 */
   font-size: 12px;
   font-weight: 600;
   color: var(--fail);
@@ -1299,8 +1299,8 @@ table.data tr:last-child td {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  /* 获取节点 → 12 → 成功（再加 fetch-ok margin-left 4，不侵入蓝钮） */
-  gap: 12px;
+  /* 获取节点 → 16 → 成功（再加 fetch-ok margin-left 12，整块远离蓝钮） */
+  gap: 16px;
   margin: 0 0 var(--tray-gap);
   padding: 8px var(--content-inset-x) 10px;
   border: none;
