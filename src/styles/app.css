@@ -264,12 +264,11 @@ select {
   align-items: center;
 }
 .picker-group {
-  /* 固定宽度，让「获取节点」左缘精确落在动作列 --action-x 上 */
-  flex: 0 0 352px;
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  flex: 0 1 auto;
 }
 .client-picker-select {
   flex: 0 1 240px;
@@ -300,7 +299,7 @@ select {
   gap: 5px;
   flex: none;
   white-space: nowrap;
-  margin-left: 40px;
+  margin-left: 0;
   font-size: 12px;
   font-weight: 600;
   color: var(--pass);
@@ -325,7 +324,7 @@ select {
   gap: 5px;
   flex: none;
   white-space: nowrap;
-  margin-left: 40px;
+  margin-left: 0;
   font-size: 12px;
   font-weight: 600;
   color: var(--fail);
@@ -1239,80 +1238,158 @@ table.data tr:last-child td {
   --nc-full-pad-y: 17px;
   /* 展开锁死 = 两张收起卡 + 中间间距：68+9+68=145；超出裁切 */
   --nc-exp-h: calc(var(--nc-h) * 2 + var(--nc-gap));
-  /* 动作列：三个主按钮左缘统一的竖线 */
-  --action-x: 376px;
+
+  /* MJ hierarchy：page → tray（环境/节点同 token）→ card；软件行是顶栏非厚托盘 */
+  --tray-bg: #eceef2;
+  --tray-radius: 14px;
+  --tray-pad-y: 14px;
+  --tray-pad-x: 14px;
+  --tray-gap: 22px; /* block gap 20–24 > tray pad 12–16 */
+  --content-inset-x: 14px; /* 软件行与 tray 内文同一侧 inset */
+  --card-on-tray: var(--bg-elevated); /* 略亮于 tray；或同底 + hairline */
+  --soft-row-divider: #e4e6eb; /* light：极浅灰 */
 }
 
-/* 头部工具条（选软件 · 获取节点 · 连接状态）。
-   与 .env-section / .ws-ops 同级：无实底/描边，浮在窗口底上。
-   内边距 16 + picker-group 352 + controls gap 8 = --action-x(376)，
-   「获取节点」左缘与环境检查 / 测全部动作列对齐。 */
+[data-theme="dark"] {
+  --tray-bg: #151820;
+  --soft-row-divider: color-mix(in srgb, #fff 7%, var(--bg));
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] {
+    --tray-bg: #151820;
+    --soft-row-divider: color-mix(in srgb, #fff 7%, var(--bg));
+  }
+}
+
+/* 可选暗色顶区微提亮（步进条 + 软件行）~5% */
+[data-theme="dark"] .flow-hint,
+[data-theme="dark"] .app-header {
+  background: color-mix(in srgb, #fff 5%, var(--bg));
+}
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] .flow-hint,
+  [data-theme="system"] .app-header {
+    background: color-mix(in srgb, #fff 5%, var(--bg));
+  }
+}
+
+/* 环境 / 节点共用浅托盘 */
+.home-tray {
+  background: var(--tray-bg);
+  border-radius: var(--tray-radius);
+  padding: var(--tray-pad-y) var(--tray-pad-x);
+  margin: 0 0 var(--tray-gap);
+  border: none;
+  box-sizing: border-box;
+}
+.home-tray .card,
+.home-tray .ncard {
+  background: var(--card-on-tray);
+}
+
+/* 软件行（prefer A）：无厚托盘；与下方 tray 同侧 inset；底部分割线 */
 .app-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  margin: 0 0 12px;
-  padding: 4px 16px;
+  margin: 0 0 var(--tray-gap);
+  padding: 8px var(--content-inset-x) 10px;
   border: none;
+  border-bottom: 1px solid var(--soft-row-divider);
   border-radius: 0;
   background: transparent;
   flex-wrap: wrap;
 }
 .app-header .client-picker-select {
   min-width: 160px;
+  flex: 0 1 240px;
 }
-
-/* 环境检查：区块无底色/描边（标题行透明；底色只在 CheckCard）。
-   左右 16px 与轻量 .app-header 内文对齐（「环境泄漏检查」左齐「你在用哪款软件」）。
-   动作钮仍落在 --action-x。 */
-.env-section {
-  background: transparent;
-  border: none;
-  padding: 0 16px;
-  margin-bottom: 14px;
-}
-.env-head {
-  display: grid;
-  /* 左内边距 16 → 首列宽 action-x-16，第 2 列起点仍 = --action-x */
-  grid-template-columns: calc(var(--action-x) - 16px) auto;
+.home-ops-left {
+  display: flex;
   align-items: center;
-  justify-items: start;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
-.env-head-labels {
+.home-ops-right {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 0;
-}
-.env-head .s {
-  font-size: 11px;
-  color: var(--text-muted);
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
-/* 工作区操作条：与 .env-head / 获取节点 共用 --action-x 动作列；
-   左「节点检测」标题齐另两块；右动作列起点 = --action-x；展开链靠行右。 */
-.ws-ops {
+/* 环境托盘头：左标题与右主按钮同一基线；副标题只落在标题下，不把按钮垂直居中 */
+.env-head {
   display: grid;
-  grid-template-columns: calc(var(--action-x) - 16px) 1fr;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  row-gap: 2px;
   align-items: center;
-  justify-items: start;
-  margin-bottom: 12px;
-  padding: 0 16px;
+}
+.env-head .t {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  min-height: 30px; /* 与 .action-btn 同高，基线对齐 */
+}
+.env-head .action-btn {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+}
+.env-head .s {
+  grid-column: 1;
+  grid-row: 2;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+.env-tray-note {
+  margin-top: 10px;
+}
+.env-tray-grid {
+  margin-top: 10px;
+}
+
+/* 节点托盘头：左标题、右主按钮；展开链紧贴主按钮右侧 12–16px */
+.ws-ops {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.ws-ops .t {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  min-height: 30px;
 }
 .ws-ops-right {
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
+  justify-content: flex-end;
+  gap: 14px; /* 主按钮 ↔ 展开链 12–16px */
+  flex: 0 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
 }
-/* 「展开/收起全部详情」：弱化可点链，贴行最右 */
+/* 「展开/收起全部详情」：弱化三级链，紧跟主按钮 */
 .ws-expand-link {
   appearance: none;
   -webkit-appearance: none;
   background: transparent;
   border: none;
   padding: 0;
-  margin: 0 0 0 auto;
+  margin: 0;
   font-family: inherit;
   font-size: 12px;
   font-weight: 400;
@@ -1342,7 +1419,7 @@ table.data tr:last-child td {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  flex: 1;
+  flex: 1 1 140px;
 }
 .ws-progress-text {
   font-size: 12px;
@@ -1367,8 +1444,8 @@ table.data tr:last-child td {
   transition: width 0.18s ease-out;
 }
 
-/* 三大动作按钮（获取节点 / 开始环境检查 / 测全部节点）：
-   统一样式与宽度，右缘对齐成一条"动作列" */
+/* 三大主按钮（获取节点 / 重新检查环境 / 测全部节点）：
+   同高同圆角同蓝；各行右对齐 */
 .action-btn {
   display: inline-flex;
   align-items: center;
@@ -1381,6 +1458,7 @@ table.data tr:last-child td {
   box-sizing: border-box;
   flex: none;
   white-space: nowrap;
+  border-radius: 8px;
 }
 
 /* 节点瀑布流：JS 定列（列数随容器宽度自适应），展开只向下推、无侧留白 */
@@ -1388,7 +1466,8 @@ table.data tr:last-child td {
   display: flex;
   gap: var(--nc-gap);
   align-items: flex-start;
-  justify-content: center; /* 固定卡宽：列数由窗口宽决定，余量对称留白 */
+  justify-content: flex-start; /* 卡左缘与托盘标题对齐；--nc-w 固定不拉伸 */
+  margin: 0; /* 外缘由 .home-tray padding 管 */
 }
 .flow-col {
   flex: none;
@@ -1775,6 +1854,9 @@ html.glass .main,
 html.glass .home-page {
   background: transparent;
 }
+html.glass .home-tray {
+  background: color-mix(in srgb, var(--tray-bg) 74%, transparent);
+}
 html.glass .ncard,
 html.glass .card,
 html.glass .fold-panel,
@@ -1790,6 +1872,9 @@ html.glass .gate-banner {
   html.glass .main,
   html.glass .home-page {
     background: var(--bg);
+  }
+  html.glass .home-tray {
+    background: var(--tray-bg);
   }
   html.glass .ncard,
   html.glass .card,
@@ -1810,8 +1895,8 @@ html.glass .nc-detail {
   display: flex;
   align-items: center;
   gap: 9px;
-  margin: 12px 0 0;
-  padding: 8px 12px;
+  margin: 8px 0 0;
+  padding: 8px var(--content-inset-x);
   border: 1px dashed var(--border);
   border-radius: 12px;
   font-size: 12px;

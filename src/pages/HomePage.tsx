@@ -30,9 +30,10 @@ import {
 
 type TestMode = "current" | "all";
 
-/** 瀑布流列数：单卡固定 310px + 9px 列距，1–8 列封顶。45 为布局余量阈值。 */
+/** 瀑布流列数：单卡固定 310px + 9px 列距，1–8 列封顶。
+ * 余量 ≈ main 左右 padding + tray 左右 pad。 */
 function colCountFor(vw: number): number {
-  return Math.min(8, Math.max(1, Math.floor((vw - 45) / 319)));
+  return Math.min(8, Math.max(1, Math.floor((vw - 72) / 319)));
 }
 
 export function HomePage({
@@ -387,32 +388,32 @@ export function HomePage({
       </div>
 
       <div className="app-header">
-        <div className="home-ops-controls">
-          <div className="picker-group">
-            <label className="client-picker-label home-block-title" htmlFor="home-client-select">
-              你在用哪款软件？
-            </label>
-            <select
-              id="home-client-select"
-              className="client-picker-select"
-              value={clientId ?? ""}
-              onChange={(e) => onSelectClient(e.target.value)}
-              title={
-                clientUnset
-                  ? "先选软件，再点「获取节点」"
-                  : CLIENT_OPTIONS.find((o) => o.id === clientId)?.hint
-              }
-            >
-              <option value="" disabled>
-                请选择…
+        <div className="home-ops-left">
+          <label className="client-picker-label home-block-title" htmlFor="home-client-select">
+            你在用哪款软件？
+          </label>
+          <select
+            id="home-client-select"
+            className="client-picker-select"
+            value={clientId ?? ""}
+            onChange={(e) => onSelectClient(e.target.value)}
+            title={
+              clientUnset
+                ? "先选软件，再点「获取节点」"
+                : CLIENT_OPTIONS.find((o) => o.id === clientId)?.hint
+            }
+          >
+            <option value="" disabled>
+              请选择…
+            </option>
+            {CLIENT_OPTIONS.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
               </option>
-              {CLIENT_OPTIONS.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
+            ))}
+          </select>
+        </div>
+        <div className="home-ops-right">
           <button
             className="btn btn-primary btn-sm home-ops-refresh action-btn"
             type="button"
@@ -422,32 +423,29 @@ export function HomePage({
           >
             {busy || refreshing ? "获取中…" : "获取节点"}
           </button>
+          {!refreshing &&
+          (connection.status === "connected" && gate?.ok ? (
+            <span className="fetch-ok" title={connection.message}>
+              <span className="status-ok-mark">✓</span>成功
+            </span>
+          ) : gate && !gate.ok ? (
+            <>
+              <span className="fetch-fail">
+                <span className="status-fail-mark">✗</span>失败
+              </span>
+              <span className="fetch-fail-msg" role="status">
+                {gate.message}
+              </span>
+            </>
+          ) : null)}
         </div>
-        {!refreshing &&
-        (connection.status === "connected" && gate?.ok ? (
-          <span className="fetch-ok" title={connection.message}>
-            <span className="status-ok-mark">✓</span>成功
-          </span>
-        ) : gate && !gate.ok ? (
-          <>
-            <span className="fetch-fail">
-              <span className="status-fail-mark">✗</span>失败
-            </span>
-            <span className="fetch-fail-msg" role="status">
-              {gate.message}
-            </span>
-          </>
-        ) : null)}
       </div>
 
       {gate?.ok && orderedNodes.length > 0 ? (
         <>
-          <div className="env-section">
+          <div className="env-section home-tray">
             <div className="env-head">
-              <div className="env-head-labels">
-                <span className="t home-block-title">环境泄漏检查</span>
-                <span className="s">对当前出口体检 · 不需先测节点</span>
-              </div>
+              <span className="t home-block-title">环境泄漏检查</span>
               <button
                 type="button"
                 className="btn btn-primary btn-sm action-btn"
@@ -456,15 +454,16 @@ export function HomePage({
               >
                 {envRunning ? "检查中…" : envOpen ? "重新检查环境" : "开始环境检查"}
               </button>
+              <span className="s">对当前出口体检 · 不需先测节点</span>
             </div>
             {envOpen ? (
               <>
                 {mixedPortNum == null || mixedPortNum <= 0 ? (
-                  <div className="note note-compact" style={{ marginTop: 10 }}>
+                  <div className="note note-compact env-tray-note">
                     当前未检测到代理，境外探测点不可达，结论不代表 VPN 表现。
                   </div>
                 ) : null}
-                <div className="card-grid card-grid-home" style={{ marginTop: 10 }}>
+                <div className="card-grid card-grid-home env-tray-grid">
                   {envCards.map((c) => (
                     <CheckCardView key={c.id} card={c} />
                   ))}
@@ -473,79 +472,81 @@ export function HomePage({
             ) : null}
           </div>
 
-          <div className="ws-ops">
-            <span className="t home-block-title">节点检测</span>
-            <div className="ws-ops-right">
-              <button
-                type="button"
-                className="btn btn-primary btn-sm action-btn"
-                disabled={running || clientUnset}
-                onClick={() => {
-                  setMode("all");
-                  setRestoreError(null);
-                  setAllConfirmOpen(true);
-                }}
-              >
-                {running && mode === "all" ? "测全部中…" : "测全部节点"}
-              </button>
-              {running && mode === "all" ? (
-                <>
-                  <div className="ws-progress" role="status" aria-live="polite">
-                    <span className="ws-progress-text">{progress?.text}</span>
-                    {progressPct != null ? (
-                      <span
-                        className="ws-progress-bar"
-                        role="progressbar"
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={progressPct}
-                      >
+          <div className="node-section home-tray">
+            <div className="ws-ops">
+              <span className="t home-block-title">节点检测</span>
+              <div className="ws-ops-right">
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm action-btn"
+                  disabled={running || clientUnset}
+                  onClick={() => {
+                    setMode("all");
+                    setRestoreError(null);
+                    setAllConfirmOpen(true);
+                  }}
+                >
+                  {running && mode === "all" ? "测全部中…" : "测全部节点"}
+                </button>
+                <button
+                  type="button"
+                  className="ws-expand-link"
+                  onClick={toggleExpandAll}
+                  title={allExpanded ? "收起全部节点详情" : "展开全部节点详情"}
+                >
+                  {allExpanded ? "收起全部详情" : "展开全部详情"}
+                </button>
+                {running && mode === "all" ? (
+                  <>
+                    <div className="ws-progress" role="status" aria-live="polite">
+                      <span className="ws-progress-text">{progress?.text}</span>
+                      {progressPct != null ? (
                         <span
-                          className="ws-progress-fill"
-                          style={{ width: `${progressPct}%` }}
-                        />
-                      </span>
-                    ) : null}
-                  </div>
-                  <button type="button" className="btn btn-sm" onClick={onAbortAll}>
-                    停止并切回
-                  </button>
-                </>
-              ) : null}
-              {switchHint && !restoreError ? (
-                <span className="ws-error" role="alert">
-                  {switchHint}
-                </span>
-              ) : null}
-              <button
-                type="button"
-                className="ws-expand-link"
-                onClick={toggleExpandAll}
-                title={allExpanded ? "收起全部节点详情" : "展开全部节点详情"}
-              >
-                {allExpanded ? "收起全部详情" : "展开全部详情"}
-              </button>
-            </div>
-          </div>
-
-          <div className="node-flow">
-            {nodeColumns.map((col, ci) => (
-              <div className="flow-col" key={ci}>
-                {col.map((n) => (
-                  <NodeCard
-                    key={n.name}
-                    node={n}
-                    score={scoreByName.get(n.name)}
-                    liveCards={testingNode === n.name ? nodeCards : undefined}
-                    isCurrent={n.name === connection.currentProxy}
-                    expanded={expanded.has(n.name)}
-                    testing={testingNode === n.name}
-                    onToggle={() => toggleExpand(n.name)}
-                    onTest={() => void testOneNode(n)}
-                  />
-                ))}
+                          className="ws-progress-bar"
+                          role="progressbar"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={progressPct}
+                        >
+                          <span
+                            className="ws-progress-fill"
+                            style={{ width: `${progressPct}%` }}
+                          />
+                        </span>
+                      ) : null}
+                    </div>
+                    <button type="button" className="btn btn-sm" onClick={onAbortAll}>
+                      停止并切回
+                    </button>
+                  </>
+                ) : null}
+                {switchHint && !restoreError ? (
+                  <span className="ws-error" role="alert">
+                    {switchHint}
+                  </span>
+                ) : null}
               </div>
-            ))}
+            </div>
+
+            <div className="node-flow">
+              {nodeColumns.map((col, ci) => (
+                <div className="flow-col" key={ci}>
+                  {col.map((n) => (
+                    <NodeCard
+                      key={n.name}
+                      node={n}
+                      score={scoreByName.get(n.name)}
+                      liveCards={testingNode === n.name ? nodeCards : undefined}
+                      isCurrent={n.name === connection.currentProxy}
+                      expanded={expanded.has(n.name)}
+                      testing={testingNode === n.name}
+                      onToggle={() => toggleExpand(n.name)}
+                      onTest={() => void testOneNode(n)}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
         </>
       ) : null}
