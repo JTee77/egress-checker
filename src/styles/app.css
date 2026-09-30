@@ -1513,25 +1513,32 @@ table.data tr:last-child td {
   height: var(--nc-h);
   box-sizing: border-box;
 }
-/* 摘要两行：上行名+星级（名吃剩余宽），下行 tags+操作 */
+/* 摘要两行：上行名（左伸展）+ 星级/未测（右上锚定），下行 tags+操作 */
 .nc-row {
   display: flex;
   align-items: center;
   min-width: 0;
 }
 .nc-row-top {
-  /* 节点名与星级贴紧，不再被右侧操作列撑开 */
-  gap: 4px;
+  gap: 6px;
+  justify-content: space-between;
 }
 .nc-row-bot {
   gap: 6px;
   justify-content: space-between;
 }
+.nc-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .nc-nm {
   font-size: 13px;
   font-weight: 600;
-  /* 短名不拉宽（星级紧跟）；长名可收缩到星级左侧剩余空间 */
-  flex: 0 1 auto;
+  /* 吃满星级左侧剩余宽；仍过长则省略 */
+  flex: 1 1 auto;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -1549,6 +1556,7 @@ table.data tr:last-child td {
 .nc-row-top .star-rating,
 .nc-row-top .nc-untested {
   flex: none;
+  margin-left: auto;
 }
 .nc-tags {
   font-size: 11px;

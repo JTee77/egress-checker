@@ -124,10 +124,12 @@ export function NodeCard({
     <div className="nc-wrap">
       <div className={`ncard ${expanded ? "exp" : ""}`} onClick={onToggle}>
         <div className="nc-sum">
-          {/* 上行：节点名紧贴星级，名区可吃满星级左侧剩余宽度（卡宽不变） */}
+          {/* 上行：名占左侧可伸展区，星级/未测锚定卡片右上 */}
           <div className="nc-row nc-row-top">
-            <span className="nc-nm">{node.name}</span>
-            {isCurrent ? <span className="nc-badge">使用中</span> : null}
+            <div className="nc-name">
+              <span className="nc-nm">{node.name}</span>
+              {isCurrent ? <span className="nc-badge">使用中</span> : null}
+            </div>
             {hasResult ? (
               <StarRating stars={score!.stars} size={13} />
             ) : (
