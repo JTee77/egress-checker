@@ -1345,7 +1345,7 @@ table.data tr:last-child td {
 }
 
 /* 节点托盘头：与 .env-head / 获取节点 共用 --action-x；
-   测全部锁动作列；展开弱链紧跟测全部右侧 12–16（非行最右） */
+   测全部锁动作列；进度条后紧跟停止；展开弱链 margin-left:auto 行最右 */
 .ws-ops {
   display: grid;
   grid-template-columns: calc(var(--action-x) - var(--tray-pad-x)) 1fr;
@@ -1363,20 +1363,20 @@ table.data tr:last-child td {
 .ws-ops-right {
   display: flex;
   align-items: center;
-  /* 测全部 → 12–16 → 展开；其后进度/停止 */
+  /* 测全部 →（进度+停止）→ … → 展开(行最右) */
   gap: 14px;
   width: 100%;
   min-width: 0;
   flex-wrap: wrap;
 }
-/* 「展开/收起全部详情」：弱化三级链，紧跟测全部右侧 12–16 */
+/* 「展开/收起全部详情」：弱化三级链，推到节点检测行最右 */
 .ws-expand-link {
   appearance: none;
   -webkit-appearance: none;
   background: transparent;
   border: none;
   padding: 0;
-  margin: 0;
+  margin: 0 0 0 auto;
   font-family: inherit;
   font-size: 12px;
   font-weight: 400;
@@ -1400,13 +1400,25 @@ table.data tr:last-child td {
   min-width: 0;
 }
 
-/* 动作条行内进度（测全部）：紧凑条 */
+/* 进度 + 停止：同组紧贴，不吃剩余宽度（剩余留给最右展开） */
+.ws-progress-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
 .ws-progress {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  flex: 1 1 140px;
+  flex: 0 1 auto;
+  max-width: 280px;
+}
+.ws-abort-btn {
+  flex: none;
+  white-space: nowrap;
 }
 .ws-progress-text {
   font-size: 12px;
