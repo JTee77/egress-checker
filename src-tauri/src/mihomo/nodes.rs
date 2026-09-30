@@ -212,8 +212,70 @@ pub fn slim_nodes_from_proxies_json(body: &str) -> Result<ListNodesResult, Strin
     })
 }
 
-/// Fetch /proxies: try TCP briefly, then Unix socket fallback.
-/// Prefer unix when TCP is dead (Clash Verge Rev often exposes only the sock).
+
+async fn try_list_nodes_unix(
+    secret: &str,
+    sock_path: Option<&str>,
+    unix_timeout: u64,
+) -> Result<Option<ListNodesResult>, String> {
+    let Some(sock) = sock_path.map(|s| s.to_string()).filter(|s| !s.is_empty()) else {
+        return Ok(None);
+    };
+    let secret_owned = secret.to_string();
+    let unix_attempt = tauri::async_runtime::spawn_blocking(move || {
+        http_via_unix(
+            "GET",
+            "/proxies",
+            None,
+            &secret_owned,
+            Some(sock.as_str()),
+            unix_timeout,
+        )
+    })
+    .await
+    .map_err(|e| format!("unix task join: {e}"))?;
+
+    match unix_attempt {
+        Ok(res) if res.status == 401 || res.status == 403 => Ok(Some(ListNodesResult {
+            nodes: vec![],
+            current_proxy: None,
+            status: res.status,
+            error: Some("API 返回未授权（401/403），请到设置检查 Secret".into()),
+            unauthorized: true,
+            transport: Some("unix".into()),
+        })),
+        Ok(res) if (200..300).contains(&res.status) => {
+            match slim_nodes_from_proxies_json(&res.body) {
+                Ok(mut slim) => {
+                    slim.status = res.status;
+                    slim.transport = Some("unix".into());
+                    if slim.nodes.is_empty() {
+                        slim.error = Some(
+                            "已连接但未解析到可用节点，请到设置检查 Secret / 刷新，或确认订阅已加载"
+                                .into(),
+                        );
+                    }
+                    Ok(Some(slim))
+                }
+                Err(e) => Ok(Some(ListNodesResult {
+                    nodes: vec![],
+                    current_proxy: None,
+                    status: res.status,
+                    error: Some(format!(
+                        "解析 /proxies JSON 失败（Unix）: {e}；body {} 字节",
+                        res.body.len()
+                    )),
+                    unauthorized: false,
+                    transport: Some("unix".into()),
+                })),
+            }
+        }
+        Ok(_) | Err(_) => Ok(None),
+    }
+}
+
+/// Fetch /proxies. When `sock_path` is set (Verge 2.5.6+ / Party), try Unix
+/// first — TCP EC is often blank or stale. Otherwise TCP briefly, then Unix.
 pub async fn list_nodes_async(
     host: &str,
     port: u16,
@@ -222,6 +284,16 @@ pub async fn list_nodes_async(
     sock_path: Option<&str>,
 ) -> Result<ListNodesResult, String> {
     let tcp_timeout = timeout_ms.min(2000).max(400);
+    let unix_timeout = timeout_ms.max(tcp_timeout);
+    let prefer_unix = sock_path.map(|s| !s.is_empty()).unwrap_or(false);
+
+    if prefer_unix {
+        if let Some(result) = try_list_nodes_unix(secret, sock_path, unix_timeout).await? {
+            return Ok(result);
+        }
+        // Fall through to TCP for older Verge with live EC.
+    }
+
     let tcp_attempt =
         http_via_tcp_async(host, port, "GET", "/proxies", None, secret, tcp_timeout).await;
 
@@ -269,77 +341,21 @@ pub async fn list_nodes_async(
         }
     }
 
-    let Some(sock) = sock_path.map(|s| s.to_string()).filter(|s| !s.is_empty()) else {
-        return Err(format!(
-            "TCP {host}:{port} 不可用，且未配置 Unix 套接字（不会回退到 Verge 默认 sock）"
-        ));
-    };
-    let secret_owned = secret.to_string();
-    let sock_for_err = sock.clone();
-    let unix_timeout = timeout_ms.max(tcp_timeout);
-
-    let unix_attempt = tauri::async_runtime::spawn_blocking(move || {
-        http_via_unix(
-            "GET",
-            "/proxies",
-            None,
-            &secret_owned,
-            Some(sock.as_str()),
-            unix_timeout,
-        )
-    })
-    .await
-    .map_err(|e| format!("unix task join: {e}"))?;
-
-    match unix_attempt {
-        Ok(res) if res.status == 401 || res.status == 403 => Ok(ListNodesResult {
-            nodes: vec![],
-            current_proxy: None,
-            status: res.status,
-            error: Some("API 返回未授权（401/403），请到设置检查 Secret".into()),
-            unauthorized: true,
-            transport: Some("unix".into()),
-        }),
-        Ok(res) if (200..300).contains(&res.status) => {
-            match slim_nodes_from_proxies_json(&res.body) {
-                Ok(mut slim) => {
-                    slim.status = res.status;
-                    slim.transport = Some("unix".into());
-                    if slim.nodes.is_empty() {
-                        slim.error = Some(
-                            "已连接但未解析到可用节点，请到设置检查 Secret / 刷新，或确认订阅已加载"
-                                .into(),
-                        );
-                    }
-                    Ok(slim)
-                }
-                Err(e) => Ok(ListNodesResult {
-                    nodes: vec![],
-                    current_proxy: None,
-                    status: res.status,
-                    error: Some(format!(
-                        "解析 /proxies JSON 失败（Unix）: {e}；body {} 字节",
-                        res.body.len()
-                    )),
-                    unauthorized: false,
-                    transport: Some("unix".into()),
-                }),
+    // TCP failed (or was skipped): unix fallback when sock configured.
+    match try_list_nodes_unix(secret, sock_path, unix_timeout).await? {
+        Some(result) => Ok(result),
+        None => {
+            let sock_hint = sock_path.filter(|s| !s.is_empty()).unwrap_or("(none)");
+            if sock_path.map(|s| !s.is_empty()).unwrap_or(false) {
+                Err(format!(
+                    "TCP {host}:{port} 不可用，Unix {sock_hint} 也失败"
+                ))
+            } else {
+                Err(format!(
+                    "TCP {host}:{port} 不可用，且未配置 Unix 套接字（不会回退到 Verge 默认 sock）"
+                ))
             }
         }
-        Ok(res) => Ok(ListNodesResult {
-            nodes: vec![],
-            current_proxy: None,
-            status: res.status,
-            error: Some(format!(
-                "TCP 与 Unix（{sock_for_err}）均失败：Unix HTTP {}",
-                res.status
-            )),
-            unauthorized: false,
-            transport: Some("unix".into()),
-        }),
-        Err(e) => Err(format!(
-            "TCP {host}:{port} 不可用，Unix {sock_for_err} 也失败：{e}"
-        )),
     }
 }
 

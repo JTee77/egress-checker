@@ -64,7 +64,8 @@ export function clientPreset(id: ClientId): Partial<ControllerConfig> {
         secret: "",
         mixedPort: 7897,
         source: "preset-verge",
-        sockPath: "/tmp/verge/verge-mihomo.sock",
+        // sock filled by Rust discovery (service sock / legacy / TMPDIR)
+        sockPath: null,
       };
     case "clashx_meta":
       return {
@@ -132,5 +133,24 @@ export function clientUnreachableHint(id: ClientId): string {
   return `请先打开并连上【${name}】，再点「获取节点」`;
 }
 
-export const VERGE_SOCK = "/tmp/verge/verge-mihomo.sock";
+/** Legacy Verge unix sock (pre-2.5.6). Prefer Rust discovery for live path. */
+export const VERGE_SOCK_LEGACY = "/tmp/verge/verge-mihomo.sock";
+/** @deprecated Use VERGE_SOCK_LEGACY; live path comes from discover_mihomo. */
+export const VERGE_SOCK = VERGE_SOCK_LEGACY;
+/** Clash Verge 2.5.6+ service sock dir: .../users/<uid>/verge-mihomo.sock */
+export const VERGE_SERVICE_USERS_DIR = "/var/run/clash-verge-service/users";
 export const MIHOMO_PARTY_SOCK = "/tmp/mihomo-party.sock";
+
+/** Ordered Verge sock candidates (align with Rust `platform::verge_sock_candidates`). */
+export function vergeSockCandidates(uid?: number | null): string[] {
+  const out: string[] = [];
+  const push = (s: string) => {
+    if (s && !out.includes(s)) out.push(s);
+  };
+  if (typeof uid === "number" && Number.isFinite(uid)) {
+    push(`${VERGE_SERVICE_USERS_DIR}/${uid}/verge-mihomo.sock`);
+  }
+  push(VERGE_SOCK_LEGACY);
+  // TMPDIR is not available in the webview the same way; Rust discovery expands it.
+  return out;
+}

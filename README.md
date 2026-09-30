@@ -8,12 +8,12 @@ macOS **Apple Silicon (arm64)** 桌面应用：诊断代理**出口质量**—�
 
 ## 准备：启用 Clash Verge Rev / Mihomo API
 
-1. 在客户端设置里开启 **external-controller**，监听本机（如 `127.0.0.1:9097`）
-2. 设置 **secret**（建议非空）
+1. 保持 **Clash Verge / Verge Rev** 运行（2.5.6+ 常用 Unix 服务套接字，可不开放 TCP external-controller）
+2. 若使用旧版或其它客户端：可开启 **external-controller**（如 `127.0.0.1:9097`）并设置 **secret**
 3. 确认 **mixed-port**（如 `7897`）已开启，供经代理的出口探针使用
-4. 保持客户端运行，按需开启**系统代理**或 **TUN**
+4. 按需开启**系统代理**或 **TUN**
 
-应用会自动读取 `~/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/config.yaml`。拉取节点时先试 TCP，失败则回退到 Clash Verge 常暴露的 Unix 套接字 `/tmp/verge/verge-mihomo.sock`——所以即使 TCP 端口 refused，只要套接字在、secret 对，仍能列出节点。也可在底部「高级」手动填 host / port / secret / mixed-port，或开 **Mock** 演示模式（无需真实 Clash）。
+应用会读取 Verge 的 `config.yaml` / `clash-verge.yaml`，并自动探测控制器套接字（优先 `/var/run/clash-verge-service/users/<uid>/verge-mihomo.sock`，其次旧版 `/tmp/verge/verge-mihomo.sock`、`$TMPDIR/verge-mihomo.sock`）。即使 TCP external-controller 关闭或配置文件里的端口已过期，只要套接字可用仍能列出节点。也可在底部「高级」手动填 host / port / secret / mixed-port，或开 **Mock** 演示模式（无需真实 Clash）。
 
 ## 开发
 
