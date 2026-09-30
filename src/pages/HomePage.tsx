@@ -389,7 +389,7 @@ export function HomePage({
       <div className="app-header">
         <div className="home-ops-controls">
           <div className="picker-group">
-            <label className="client-picker-label" htmlFor="home-client-select">
+            <label className="client-picker-label home-block-title" htmlFor="home-client-select">
               你在用哪款软件？
             </label>
             <select
@@ -445,7 +445,7 @@ export function HomePage({
           <div className="env-section">
             <div className="env-head">
               <div className="env-head-labels">
-                <span className="t">环境泄漏检查</span>
+                <span className="t home-block-title">环境泄漏检查</span>
                 <span className="s">对当前出口体检 · 不需先测节点</span>
               </div>
               <button
@@ -474,7 +474,12 @@ export function HomePage({
           </div>
 
           <div className="ws-ops">
-            <button type="button" className="btn btn-sm" onClick={toggleExpandAll}>
+            <button
+              type="button"
+              className="home-block-title"
+              onClick={toggleExpandAll}
+              title={allExpanded ? "收起全部节点详情" : "展开全部节点详情"}
+            >
               {allExpanded ? "收起全部详情" : "展开全部详情"}
             </button>
             <div className="ws-ops-right">
