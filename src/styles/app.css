@@ -1504,22 +1504,33 @@ table.data tr:last-child td {
 }
 .nc-sum {
   display: flex;
-  gap: 9px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
   padding: 8px 11px;
   height: var(--nc-h);
+  box-sizing: border-box;
 }
-.nc-info {
-  flex: 1;
-  min-width: 0;
-}
-.nc-name {
+/* 摘要两行：上行名+星级（名吃剩余宽），下行 tags+操作 */
+.nc-row {
   display: flex;
   align-items: center;
+  min-width: 0;
+}
+.nc-row-top {
+  /* 节点名与星级贴紧，不再被右侧操作列撑开 */
+  gap: 4px;
+}
+.nc-row-bot {
   gap: 6px;
+  justify-content: space-between;
 }
 .nc-nm {
   font-size: 13px;
   font-weight: 600;
+  /* 短名不拉宽（星级紧跟）；长名可收缩到星级左侧剩余空间 */
+  flex: 0 1 auto;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1533,14 +1544,20 @@ table.data tr:last-child td {
   padding: 1px 4px;
   flex: none;
 }
+.nc-row-top .star-rating,
+.nc-row-top .nc-untested {
+  flex: none;
+}
 .nc-tags {
   font-size: 11px;
   color: var(--text-muted);
-  margin-top: 4px;
+  margin-top: 0;
   display: flex;
   gap: 4px;
   align-items: center;
   flex-wrap: wrap;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 .nc-chip {
   font-weight: 600;
@@ -1553,8 +1570,8 @@ table.data tr:last-child td {
 .nc-side {
   flex: none;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-direction: row;
+  align-items: center;
   gap: 6px;
 }
 .nc-acts {
