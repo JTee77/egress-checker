@@ -142,7 +142,7 @@ export const CLI_HELP_TEXT = `Egress Checker CLI（与 GUI 共用 runner / egres
   gate                         轻量门槛（连通 / 是否像未走代理）
   check current                测当前出口（完整深测）
   check node <名称>            测指定节点（完整深测，可临时切换）
-  check all                    测全部节点（轻量 DeepLight）
+  check all                    测全部节点（完整深测，与测单个相同探针集）
   env                          环境泄漏检查
 
 选项：

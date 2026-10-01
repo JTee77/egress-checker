@@ -169,8 +169,9 @@ async function browserFetch(
 }
 
 /**
- * Prefer first successful 2xx across TCP → unix socket → browser.
- * Do not return a failed TCP response as final if unix/browser might work.
+ * Prefer first successful 2xx.
+ * When sockPath is set (Verge 2.5.6+ / Party), try unix before TCP — EC is often blank.
+ * Otherwise TCP → unix → browser. Do not return a failed TCP as final if unix might work.
  */
 async function httpApi(
   config: ControllerConfig,
@@ -180,12 +181,22 @@ async function httpApi(
   timeoutMs = 3000,
 ): Promise<HttpResult | null> {
   const bodyStr = body !== undefined ? JSON.stringify(body) : undefined;
+  const preferSock = !!config.sockPath;
 
-  const viaRust = await rustHttp(config, method, path, bodyStr, timeoutMs);
-  if (viaRust && is2xx(viaRust.status)) return viaRust;
+  let viaRust: HttpResult | null = null;
+  let viaSock: HttpResult | null = null;
 
-  const viaSock = await unixHttp(config, method, path, bodyStr, timeoutMs);
-  if (viaSock && is2xx(viaSock.status)) return viaSock;
+  if (preferSock) {
+    viaSock = await unixHttp(config, method, path, bodyStr, timeoutMs);
+    if (viaSock && is2xx(viaSock.status)) return viaSock;
+    viaRust = await rustHttp(config, method, path, bodyStr, timeoutMs);
+    if (viaRust && is2xx(viaRust.status)) return viaRust;
+  } else {
+    viaRust = await rustHttp(config, method, path, bodyStr, timeoutMs);
+    if (viaRust && is2xx(viaRust.status)) return viaRust;
+    viaSock = await unixHttp(config, method, path, bodyStr, timeoutMs);
+    if (viaSock && is2xx(viaSock.status)) return viaSock;
+  }
 
   const viaBrowser = await browserFetch(config, method, path, body, timeoutMs);
   if (viaBrowser && is2xx(viaBrowser.status)) return viaBrowser;
@@ -341,6 +352,23 @@ export async function discoverAndProbe(
       ...sockFirst,
       message: clientUnreachableHint(clientId),
       proxiesError: "请确认 Mihomo Party 已打开并已连接节点",
+    };
+  }
+
+  // Verge: prefer unix sock first (2.5.6+ service sock; TCP EC often blank/stale).
+  if (clientId === "verge" && config.sockPath) {
+    const sockFirst = await probeWithConfig(config, clientId, { preferSock: true });
+    if (sockFirst.status === "connected" || sockFirst.status === "unauthorized") {
+      return sockFirst;
+    }
+    const tcp = await probeWithConfig({ ...config }, clientId, { preferSock: false });
+    if (tcp.status === "connected" || tcp.status === "unauthorized") {
+      return tcp;
+    }
+    return {
+      ...sockFirst,
+      message: clientUnreachableHint(clientId),
+      proxiesError: `请确认【${label}】已打开并已连接节点`,
     };
   }
 

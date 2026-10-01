@@ -122,13 +122,24 @@ export function NodeCard({
 
   return (
     <div className="nc-wrap">
-      <div className={`ncard ${expanded ? "exp" : ""}`} onClick={onToggle}>
+      <div
+        className={`ncard${expanded ? " exp" : ""}${isCurrent ? " cur" : ""}`}
+        onClick={onToggle}
+      >
         <div className="nc-sum">
-          <div className="nc-info">
+          {/* 上行：名+使用中左贴紧（名可省略），星级/未测锚定右上 */}
+          <div className="nc-row nc-row-top">
             <div className="nc-name">
               <span className="nc-nm">{node.name}</span>
               {isCurrent ? <span className="nc-badge">使用中</span> : null}
             </div>
+            {hasResult ? (
+              <StarRating stars={score!.stars} size={13} />
+            ) : (
+              <span className="nc-untested">{testing ? "检测中" : "未测"}</span>
+            )}
+          </div>
+          <div className="nc-row nc-row-bot">
             <div className="nc-tags">
               {node.type}
               {chips.map((c) => (
@@ -137,14 +148,7 @@ export function NodeCard({
                 </span>
               ))}
             </div>
-          </div>
-          <div className="nc-side">
-            {hasResult ? (
-              <StarRating stars={score!.stars} size={13} />
-            ) : (
-              <span className="nc-untested">{testing ? "检测中" : "未测"}</span>
-            )}
-            {action}
+            <div className="nc-side">{action}</div>
           </div>
         </div>
 

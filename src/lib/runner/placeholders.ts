@@ -10,6 +10,9 @@ export const NODE_PLACEHOLDERS: CheckCard[] = [
   { id: "netflix", title: "Netflix", level: "unknown", conclusion: "尚未检测" },
   { id: "disney", title: "Disney+", level: "unknown", conclusion: "尚未检测" },
   { id: "youtube", title: "YouTube Premium", level: "unknown", conclusion: "尚未检测" },
+  { id: "tiktok", title: "TikTok", level: "unknown", conclusion: "尚未检测" },
+  { id: "spotify", title: "Spotify", level: "unknown", conclusion: "尚未检测" },
+  { id: "prime-video", title: "Prime Video", level: "unknown", conclusion: "尚未检测" },
   { id: "app-store", title: "App Store", level: "unknown", conclusion: "尚未检测" },
   { id: "google-play", title: "Google Play", level: "unknown", conclusion: "尚未检测" },
 ];

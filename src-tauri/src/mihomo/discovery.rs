@@ -1,14 +1,16 @@
 //! Clash Verge Rev / Mihomo controller + per-client discovery.
 //!
 //! Resolves the external-controller host/port/secret/mixed-port and the local
-//! Unix-socket path for a given proxy client. Verge keeps its historical path;
-//! other clients read the per-OS table in `crate::platform` and never receive
-//! Verge's socket. macOS behavior is unchanged from the pre-split monolith.
+//! Unix-socket path for a given proxy client. Verge tries multiple sock
+//! candidates (service sock on 2.5.6+, legacy `/tmp/verge/...`, `$TMPDIR`, yaml
+//! `external-controller-unix`, optional `-ext-ctl-unix` cmdline). Other clients
+//! read the per-OS table in `crate::platform` and never receive Verge's socket.
 
 use crate::platform;
 use regex::Regex;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use super::transport::http_via_unix;
 use super::types::{DiscoverResult, DEFAULT_MIXED, DEFAULT_PORT};
 
 pub fn read_verge_config() -> Result<String, String> {
@@ -16,47 +18,20 @@ pub fn read_verge_config() -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| format!("read {}: {}", path.display(), e))
 }
 
-pub fn discover_controller() -> DiscoverResult {
-    let path = platform::verge_config_path();
-    let default_sock = platform::default_controller_sock();
-    let sock_exists = default_sock
-        .map(|s| std::path::Path::new(s).exists())
-        .unwrap_or(false);
-    let sock_path: Option<String> = if sock_exists {
-        default_sock.map(|s| s.to_string())
+/// Expand `~` / `$TMPDIR` / `${TMPDIR}` in a path string.
+pub fn expand_path_str(path: &str) -> PathBuf {
+    let mut s = path.trim().to_string();
+    if s.is_empty() {
+        return PathBuf::new();
+    }
+    if let Ok(tmpdir) = std::env::var("TMPDIR") {
+        let tmp = tmpdir.trim_end_matches('/');
+        s = s.replace("${TMPDIR}", tmp).replace("$TMPDIR", tmp);
     } else {
-        None
-    };
-
-    if path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&path) {
-            let (port, secret, mixed) =
-                parse_controller_yaml(&content, DEFAULT_PORT, DEFAULT_MIXED);
-            return DiscoverResult {
-                host: "127.0.0.1".into(),
-                port,
-                secret,
-                mixed_port: mixed,
-                source: format!("verge-config:{}", path.display()),
-                sock_path,
-            };
-        }
+        s = s.replace("${TMPDIR}", "/tmp").replace("$TMPDIR", "/tmp");
     }
-
-    DiscoverResult {
-        host: "127.0.0.1".into(),
-        port: DEFAULT_PORT,
-        secret: String::new(),
-        mixed_port: DEFAULT_MIXED,
-        source: if sock_exists {
-            "defaults+unix-socket".into()
-        } else {
-            "defaults".into()
-        },
-        sock_path,
-    }
+    expand_home(&s)
 }
-
 
 fn expand_home(path: &str) -> PathBuf {
     if let Some(rest) = path.strip_prefix("~/") {
@@ -70,32 +45,273 @@ fn expand_home(path: &str) -> PathBuf {
     PathBuf::from(path)
 }
 
-/// Parse external-controller / secret / mixed-port from yaml text with given defaults.
-pub fn parse_controller_yaml(content: &str, default_port: u16, default_mixed: u16) -> (u16, String, u16) {
-    let mut port = default_port;
-    let mut secret = String::new();
-    let mut mixed = default_mixed;
+/// Parsed controller fields from Clash/Mihomo yaml.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ParsedControllerYaml {
+    /// TCP EC port when `external-controller: host:port` is present and non-blank.
+    pub port: Option<u16>,
+    pub secret: String,
+    pub mixed_port: Option<u16>,
+    /// Raw `external-controller-unix` value (may contain `$TMPDIR` / `~`).
+    pub unix_path: Option<String>,
+    /// True when `external-controller:` exists but is blank (`''` / `""` / empty).
+    pub tcp_ec_blank: bool,
+}
 
-    if let Ok(re) = Regex::new(r#"external-controller:\s*['"]?([^:'"\s]+):(\d+)['"]?"#) {
+/// Parse external-controller / unix / secret / mixed-port from yaml text.
+/// Blank `external-controller: ''` does **not** yield a port (callers must not
+/// pretend DEFAULT_PORT came from config).
+pub fn parse_controller_yaml_rich(content: &str) -> ParsedControllerYaml {
+    let mut out = ParsedControllerYaml::default();
+
+    // TCP EC host:port — require colon+digits; do not match *-unix / *-cors keys.
+    if let Ok(re) = Regex::new(
+        r#"(?m)^external-controller:\s*['"]?([^:'"\s#]+):(\d+)['"]?\s*(?:#.*)?$"#,
+    ) {
         if let Some(c) = re.captures(content) {
             if let Ok(p) = c[2].parse() {
-                port = p;
+                out.port = Some(p);
             }
         }
     }
+
+    // Blank EC: external-controller: '' | "" | <empty>
+    if out.port.is_none() {
+        if let Ok(re) =
+            Regex::new(r#"(?m)^external-controller:\s*(?:''|""|)\s*(?:#.*)?$"#)
+        {
+            if re.is_match(content) {
+                out.tcp_ec_blank = true;
+            }
+        }
+    }
+
+    if let Ok(re) =
+        Regex::new(r#"(?m)^external-controller-unix:\s*['"]?([^\s'"]+)['"]?"#)
+    {
+        if let Some(c) = re.captures(content) {
+            let raw = c[1].trim();
+            if !raw.is_empty() {
+                out.unix_path = Some(raw.to_string());
+            }
+        }
+    }
+
     if let Ok(re) = Regex::new(r#"(?m)^secret:\s*['"]?([^\s'"]+)['"]?"#) {
         if let Some(c) = re.captures(content) {
-            secret = c[1].to_string();
+            out.secret = c[1].to_string();
         }
     }
-    if let Ok(re) = Regex::new(r"mixed-port:\s*(\d+)") {
+
+    if let Ok(re) = Regex::new(r"(?m)^mixed-port:\s*(\d+)") {
         if let Some(c) = re.captures(content) {
             if let Ok(p) = c[1].parse() {
-                mixed = p;
+                out.mixed_port = Some(p);
             }
         }
     }
-    (port, secret, mixed)
+
+    out
+}
+
+/// Backward-compatible triple parse (port falls back to `default_port` when absent).
+pub fn parse_controller_yaml(
+    content: &str,
+    default_port: u16,
+    default_mixed: u16,
+) -> (u16, String, u16) {
+    let rich = parse_controller_yaml_rich(content);
+    (
+        rich.port.unwrap_or(default_port),
+        rich.secret,
+        rich.mixed_port.unwrap_or(default_mixed),
+    )
+}
+
+fn merge_parsed(into: &mut ParsedControllerYaml, other: ParsedControllerYaml) {
+    // Prefer earlier file's EC decision. clash-verge.yaml (read first) may set
+    // tcp_ec_blank; do not let stale config.yaml host:port override that.
+    if into.tcp_ec_blank {
+        // keep port None
+    } else if into.port.is_none() {
+        into.port = other.port;
+        if into.port.is_none() && other.tcp_ec_blank {
+            into.tcp_ec_blank = true;
+        }
+    }
+    if into.port.is_some() {
+        into.tcp_ec_blank = false;
+    }
+    if into.secret.is_empty() && !other.secret.is_empty() {
+        into.secret = other.secret;
+    }
+    if into.mixed_port.is_none() {
+        into.mixed_port = other.mixed_port;
+    }
+    if into.unix_path.is_none() {
+        into.unix_path = other.unix_path;
+    }
+}
+
+/// Best-effort: parse `-ext-ctl-unix <path>` from a running verge-mihomo cmdline.
+#[cfg(unix)]
+fn sock_from_verge_cmdline() -> Option<String> {
+    let output = std::process::Command::new("ps")
+        .args(["-axo", "args="])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let re = Regex::new(r"-ext-ctl-unix\s+(\S+)").ok()?;
+    for line in text.lines() {
+        if !(line.contains("verge-mihomo") || line.contains("clash-verge")) {
+            continue;
+        }
+        if let Some(c) = re.captures(line) {
+            let p = c[1].trim().trim_matches('"').trim_matches('\'');
+            if !p.is_empty() {
+                return Some(p.to_string());
+            }
+        }
+    }
+    None
+}
+
+#[cfg(not(unix))]
+fn sock_from_verge_cmdline() -> Option<String> {
+    None
+}
+
+/// Probe sock with GET /version (short timeout). Returns true on HTTP 2xx.
+fn sock_answers_version(sock: &str, secret: &str) -> bool {
+    if !Path::new(sock).exists() {
+        return false;
+    }
+    match http_via_unix("GET", "/version", None, secret, Some(sock), 800) {
+        Ok(res) if (200..300).contains(&res.status) => true,
+        Ok(res) if res.status == 401 || res.status == 403 => {
+            // Auth required but sock is alive — still usable with the right secret.
+            true
+        }
+        _ => {
+            // Retry once with empty secret (Verge service sock often has no auth).
+            if !secret.is_empty() {
+                match http_via_unix("GET", "/version", None, "", Some(sock), 800) {
+                    Ok(res)
+                        if (200..300).contains(&res.status)
+                            || res.status == 401
+                            || res.status == 403 =>
+                    {
+                        true
+                    }
+                    _ => false,
+                }
+            } else {
+                false
+            }
+        }
+    }
+}
+
+/// Pick first candidate that exists and answers /version; else first existing; else None.
+pub fn select_working_sock(candidates: &[String], secret: &str) -> Option<String> {
+    let mut first_existing: Option<String> = None;
+    for cand in candidates {
+        let p = expand_path_str(cand);
+        if p.as_os_str().is_empty() {
+            continue;
+        }
+        let s = p.to_string_lossy().into_owned();
+        if !Path::new(&s).exists() {
+            continue;
+        }
+        if first_existing.is_none() {
+            first_existing = Some(s.clone());
+        }
+        if sock_answers_version(&s, secret) {
+            return Some(s);
+        }
+    }
+    first_existing
+}
+
+fn read_and_parse(path: &Path) -> Option<ParsedControllerYaml> {
+    let content = std::fs::read_to_string(path).ok()?;
+    Some(parse_controller_yaml_rich(&content))
+}
+
+/// Discover Verge controller: merge stale `config.yaml` + fresher `clash-verge.yaml`,
+/// then resolve a working unix sock across service / legacy / TMPDIR / yaml / cmdline.
+pub fn discover_controller() -> DiscoverResult {
+    let config_path = platform::verge_config_path();
+    let clash_verge_path = platform::verge_clash_verge_yaml_path();
+
+    let mut parsed = ParsedControllerYaml::default();
+    let mut source_files: Vec<String> = Vec::new();
+
+    // Prefer clash-verge.yaml first (live EC fields), then config.yaml (often stale).
+    for path in [&clash_verge_path, &config_path] {
+        if let Some(p) = read_and_parse(path) {
+            source_files.push(path.display().to_string());
+            merge_parsed(&mut parsed, p);
+        }
+    }
+
+    let yaml_unix: Vec<String> = parsed
+        .unix_path
+        .as_ref()
+        .map(|u| {
+            let expanded = expand_path_str(u);
+            let s = expanded.to_string_lossy().into_owned();
+            if s.is_empty() {
+                vec![]
+            } else {
+                vec![s]
+            }
+        })
+        .unwrap_or_default();
+
+    let cmdline_sock = sock_from_verge_cmdline();
+    let extras: Vec<String> = cmdline_sock.into_iter().collect();
+    let candidates = platform::verge_sock_candidates(&yaml_unix, &extras);
+    let sock_path = select_working_sock(&candidates, &parsed.secret);
+
+    let mixed = parsed.mixed_port.unwrap_or(DEFAULT_MIXED);
+    let secret = parsed.secret;
+
+    // TCP port: only trust yaml when host:port was explicitly present.
+    // Blank EC + working sock → keep DEFAULT_PORT as soft UI fallback but mark source.
+    let (port, tcp_from_yaml) = match parsed.port {
+        Some(p) => (p, true),
+        None => (DEFAULT_PORT, false),
+    };
+
+    let source = match (&sock_path, tcp_from_yaml, source_files.is_empty(), parsed.tcp_ec_blank) {
+        (Some(sock), true, false, _) => {
+            format!("verge-config+unix:{}|{}", source_files.join(","), sock)
+        }
+        (Some(sock), false, false, _) => {
+            format!("verge-unix:{}|yaml:{}", sock, source_files.join(","))
+        }
+        (Some(sock), _, true, _) => format!("verge-unix:{sock}"),
+        (None, true, false, _) => format!("verge-config:{}", source_files.join(",")),
+        (None, false, false, true) => {
+            format!("verge-ec-blank:{}", source_files.join(","))
+        }
+        (None, false, false, false) => format!("verge-config:{}", source_files.join(",")),
+        (None, _, true, _) => "defaults".into(),
+    };
+
+    DiscoverResult {
+        host: "127.0.0.1".into(),
+        port,
+        secret,
+        mixed_port: mixed,
+        source,
+        sock_path,
+    }
 }
 
 /// Read first readable yaml among `paths`; set sock_path only from sock_candidates that exist.
@@ -109,7 +325,10 @@ pub fn read_controller_yaml(
 ) -> DiscoverResult {
     let mut sock_path: Option<String> = None;
     for cand in sock_candidates {
-        let p = expand_home(cand);
+        let p = expand_path_str(cand);
+        if p.as_os_str().is_empty() {
+            continue;
+        }
         if p.exists() {
             sock_path = Some(p.to_string_lossy().into_owned());
             break;
@@ -117,12 +336,13 @@ pub fn read_controller_yaml(
     }
 
     for raw in paths {
-        let path = expand_home(raw);
+        let path = expand_path_str(raw);
         if !path.exists() {
             continue;
         }
         if let Ok(content) = std::fs::read_to_string(&path) {
-            let (port, secret, mixed) = parse_controller_yaml(&content, default_port, default_mixed);
+            let (port, secret, mixed) =
+                parse_controller_yaml(&content, default_port, default_mixed);
             return DiscoverResult {
                 host: "127.0.0.1".into(),
                 port,
@@ -136,7 +356,7 @@ pub fn read_controller_yaml(
 
     // Also try scanning directories for any *.yaml / *.yml (FlClash / Nyanpasu)
     for raw in paths {
-        let path = expand_home(raw);
+        let path = expand_path_str(raw);
         if path.is_dir() {
             if let Ok(entries) = std::fs::read_dir(&path) {
                 let mut yamls: Vec<PathBuf> = entries
@@ -221,6 +441,94 @@ secret: "test-secret"
     }
 
     #[test]
+    fn parse_rich_reads_unix_and_blank_ec() {
+        let sample = r#"
+mixed-port: 7897
+external-controller: ''
+secret: set-your-secret
+external-controller-unix: $TMPDIR/verge-mihomo.sock
+"#;
+        let rich = parse_controller_yaml_rich(sample);
+        assert_eq!(rich.port, None);
+        assert!(rich.tcp_ec_blank);
+        assert_eq!(
+            rich.unix_path.as_deref(),
+            Some("$TMPDIR/verge-mihomo.sock")
+        );
+        assert_eq!(rich.secret, "set-your-secret");
+        assert_eq!(rich.mixed_port, Some(7897));
+    }
+
+    #[test]
+    fn parse_rich_does_not_confuse_cors_or_unix_keys() {
+        let sample = r#"
+external-controller-unix: /tmp/verge/verge-mihomo.sock
+external-controller-cors:
+  allow-private-network: true
+external-controller: 127.0.0.1:9097
+"#;
+        let rich = parse_controller_yaml_rich(sample);
+        assert_eq!(rich.port, Some(9097));
+        assert_eq!(
+            rich.unix_path.as_deref(),
+            Some("/tmp/verge/verge-mihomo.sock")
+        );
+        assert!(!rich.tcp_ec_blank);
+    }
+
+    #[test]
+    fn parse_rich_stale_config_with_tcp_still_parses() {
+        let sample = r#"
+external-controller: 127.0.0.1:9097
+external-controller-unix: /tmp/verge/verge-mihomo.sock
+secret: set-your-secret
+mixed-port: 7897
+"#;
+        let rich = parse_controller_yaml_rich(sample);
+        assert_eq!(rich.port, Some(9097));
+        assert_eq!(
+            rich.unix_path.as_deref(),
+            Some("/tmp/verge/verge-mihomo.sock")
+        );
+    }
+
+    #[test]
+    fn expand_path_str_tmpdir_and_home() {
+        std::env::set_var("TMPDIR", "/var/folders/test-tmpdir");
+        let p = expand_path_str("$TMPDIR/verge-mihomo.sock");
+        assert_eq!(
+            p.to_string_lossy(),
+            "/var/folders/test-tmpdir/verge-mihomo.sock"
+        );
+        let home = dirs::home_dir().expect("home");
+        let p2 = expand_path_str("~/Library/foo.sock");
+        assert_eq!(p2, home.join("Library/foo.sock"));
+    }
+
+    #[test]
+    fn select_working_sock_prefers_existing() {
+        let missing = format!("/tmp/egress-checker-no-sock-{}.sock", std::process::id());
+        let _ = std::fs::remove_file(&missing);
+        // No live Verge required: all missing → None
+        let r = select_working_sock(&[missing.clone()], "");
+        assert!(r.is_none());
+    }
+
+    #[test]
+    fn verge_candidates_include_service_and_legacy() {
+        let c = platform::verge_sock_candidates(&[], &[]);
+        #[cfg(unix)]
+        {
+            assert!(
+                c.iter()
+                    .any(|p| p.contains("clash-verge-service") && p.ends_with("verge-mihomo.sock")),
+                "service sock missing: {c:?}"
+            );
+            assert!(c.iter().any(|p| p == platform::VERGE_SOCK_PATH));
+        }
+    }
+
+    #[test]
     fn non_verge_discover_never_returns_verge_sock_when_absent() {
         // Ensure Verge DEFAULT_SOCK is not present or we still must not inject it for other clients.
         let clashx = discover_for_client("clashx_meta");
@@ -231,14 +539,26 @@ secret: "test-secret"
         );
 
         let fl = discover_for_client("flclash");
-        assert!(fl.sock_path.is_none(), "flclash sock must be None, got {:?}", fl.sock_path);
+        assert!(
+            fl.sock_path.is_none(),
+            "flclash sock must be None, got {:?}",
+            fl.sock_path
+        );
 
         let ny = discover_for_client("nyanpasu");
-        assert!(ny.sock_path.is_none(), "nyanpasu sock must be None, got {:?}", ny.sock_path);
+        assert!(
+            ny.sock_path.is_none(),
+            "nyanpasu sock must be None, got {:?}",
+            ny.sock_path
+        );
 
         let party = discover_for_client("mihomo_party");
         if let Some(ref s) = party.sock_path {
-            assert_ne!(s, platform::VERGE_SOCK_PATH, "party must never use Verge sock");
+            assert_ne!(
+                s,
+                platform::VERGE_SOCK_PATH,
+                "party must never use Verge sock"
+            );
             assert!(s.contains("mihomo-party"), "party sock unexpected: {s}");
         }
     }
@@ -247,14 +567,73 @@ secret: "test-secret"
     fn read_controller_yaml_only_sets_existing_sock_candidates() {
         let missing = format!("/tmp/egress-checker-no-sock-{}.sock", std::process::id());
         let _ = std::fs::remove_file(&missing);
-        let r = read_controller_yaml(
-            &[],
-            9090,
-            7890,
-            &[missing],
-            "test",
-        );
+        let r = read_controller_yaml(&[], 9090, 7890, &[missing], "test");
         assert!(r.sock_path.is_none());
         assert_ne!(r.sock_path.as_deref(), Some(platform::VERGE_SOCK_PATH));
+    }
+
+    #[test]
+    fn merge_blank_ec_wins_over_stale_tcp_port() {
+        let mut parsed = ParsedControllerYaml::default();
+        merge_parsed(
+            &mut parsed,
+            parse_controller_yaml_rich(
+                "external-controller: ''\nexternal-controller-unix: $TMPDIR/a.sock\nmixed-port: 7897\n",
+            ),
+        );
+        merge_parsed(
+            &mut parsed,
+            parse_controller_yaml_rich(
+                "external-controller: 127.0.0.1:9097\nexternal-controller-unix: /tmp/verge/verge-mihomo.sock\nmixed-port: 7897\n",
+            ),
+        );
+        assert!(parsed.tcp_ec_blank);
+        assert_eq!(parsed.port, None, "stale config.yaml must not revive TCP EC");
+        assert_eq!(parsed.mixed_port, Some(7897));
+        assert_eq!(
+            parsed.unix_path.as_deref(),
+            Some("$TMPDIR/a.sock"),
+            "first unix path wins"
+        );
+    }
+
+    #[test]
+    fn blank_ec_parse_does_not_yield_default_port_via_rich() {
+        let rich = parse_controller_yaml_rich("external-controller: ''\nmixed-port: 7897\n");
+        assert_eq!(rich.port, None);
+        assert!(rich.tcp_ec_blank);
+        // Compat wrapper still fills default for non-Verge callers.
+        let (port, _, mixed) = parse_controller_yaml(
+            "external-controller: ''\nmixed-port: 7897\n",
+            9097,
+            1,
+        );
+        assert_eq!(port, 9097);
+        assert_eq!(mixed, 7897);
+    }
+
+    #[test]
+    fn live_verge_discover_resolves_service_sock_when_present() {
+        let expected = platform::verge_service_sock_for_uid(platform::current_uid());
+        if !std::path::Path::new(&expected).exists() {
+            eprintln!("skip live: service sock absent ({expected})");
+            return;
+        }
+        let d = discover_controller();
+        eprintln!(
+            "live discover: source={} sock={:?} port={}",
+            d.source, d.sock_path, d.port
+        );
+        assert_eq!(
+            d.sock_path.as_deref(),
+            Some(expected.as_str()),
+            "expected service sock, got {:?}",
+            d.sock_path
+        );
+        assert!(
+            d.source.contains("unix") || d.source.contains("verge-unix"),
+            "source should reflect unix: {}",
+            d.source
+        );
     }
 }

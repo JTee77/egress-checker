@@ -11,7 +11,6 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SOCK="${MIHOMO_SOCK:-/tmp/verge/verge-mihomo.sock}"
 VERGE_CFG="${MIHOMO_VERGE_CFG:-$HOME/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/config.yaml}"
 OUT="${MIHOMO_PROXIES_OUT:-/tmp/egress-checker-proxies-smoke.json}"
 
@@ -19,11 +18,43 @@ pass() { echo "PASS: $*"; }
 skip() { echo "SKIP: $*"; exit 0; }
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
-echo "== egress-checker smoke-mihomo-api =="
-echo "sock=$SOCK"
+# Resolve Verge sock: env override, else service (2.5.6+) → legacy → $TMPDIR.
+resolve_sock() {
+  if [[ -n "${MIHOMO_SOCK:-}" ]]; then
+    echo "$MIHOMO_SOCK"
+    return
+  fi
+  local uid
+  uid="$(id -u 2>/dev/null || echo "")"
+  local candidates=()
+  if [[ -n "$uid" ]]; then
+    candidates+=("/var/run/clash-verge-service/users/${uid}/verge-mihomo.sock")
+  fi
+  if [[ -d /var/run/clash-verge-service/users ]]; then
+    local d
+    for d in /var/run/clash-verge-service/users/*/verge-mihomo.sock; do
+      [[ -e "$d" ]] && candidates+=("$d")
+    done
+  fi
+  candidates+=("/tmp/verge/verge-mihomo.sock")
+  candidates+=("${TMPDIR:-/tmp}/verge-mihomo.sock")
+  local c
+  for c in "${candidates[@]}"; do
+    if [[ -e "$c" ]]; then
+      echo "$c"
+      return
+    fi
+  done
+  echo ""
+}
 
-if [[ ! -e "$SOCK" ]]; then
-  skip "unix socket missing ($SOCK) — Clash Verge Rev not running or sock disabled"
+SOCK="$(resolve_sock)"
+
+echo "== egress-checker smoke-mihomo-api =="
+echo "sock=${SOCK:-"(none)"}"
+
+if [[ -z "$SOCK" || ! -e "$SOCK" ]]; then
+  skip "unix socket missing (tried service/legacy/TMPDIR) — Clash Verge Rev not running or sock disabled"
 fi
 
 SECRET="${MIHOMO_SECRET:-}"

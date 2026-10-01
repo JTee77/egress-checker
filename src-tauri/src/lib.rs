@@ -372,6 +372,14 @@ pub fn run() {
                 "startup frontend_url={frontend_url} (no data-url navigate)"
             ));
 
+            // 原生标题栏：软件名 + 版本（与 Cargo.toml / package.json 对齐）。
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.set_title(&format!(
+                    "Egress Checker {}",
+                    env!("CARGO_PKG_VERSION")
+                ));
+            }
+
             // --cli：隐藏主窗，由前端跑完后 cli_exit。
             if is_cli_mode() {
                 append_app_log("cli_mode=1 hide main window");

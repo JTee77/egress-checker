@@ -1,8 +1,8 @@
 /**
- * 测全部节点：轻量深测（runNodeDeepLight）。
+ * 测全部节点：完整深测（runNodeDiagnostics），与测单个相同探针全集。
  * 含连通性预检、临时切换、切回；无 React。
  */
-import { mapPool, runNodeDeepLight } from "../egress";
+import { mapPool, runNodeDiagnostics } from "../egress";
 import {
   findSelectorGroup,
   probeDelay,
@@ -36,7 +36,7 @@ function sortScores(list: NodeScoreResult[]): NodeScoreResult[] {
 export async function testAll(
   ctx: TestAllContext,
   hooks: RunnerHooks,
-): Promise<void> {
+): Promise<boolean> {
   const { connection, nodes, forceMock, mixedPort, ensureGate, shouldAbort } =
     ctx;
 
@@ -51,7 +51,7 @@ export async function testAll(
   try {
     const g = await ensureGate();
     hooks.onGate?.(g);
-    if (!g.ok) return;
+    if (!g.ok) return false;
 
     const list: ProxyNode[] = nodes.length
       ? nodes
@@ -73,7 +73,7 @@ export async function testAll(
           "还没有读到节点列表。请先点「获取节点」，确认VPN软件里已经加载了订阅。",
       };
       hooks.onGate?.(fail);
-      return;
+      return false;
     }
 
     const results: NodeScoreResult[] = [];
@@ -112,8 +112,9 @@ export async function testAll(
     }
     const toCheck = list.filter((n) => !clientDead.includes(n));
 
+    // 不发 0/N：避免进度区尚未撑开时「连通性预检」被缩成「连…」
     hooks.onProgress({
-      text: `连通性预检 0/${toCheck.length}`,
+      text: "正在预检连通性…",
       current: 0,
       total: toCheck.length,
       testingNode: undefined,
@@ -127,7 +128,7 @@ export async function testAll(
           text: `连通性预检 ${i + 1}/${toCheck.length}`,
           current: i + 1,
           total: toCheck.length,
-          testingNode: n.name,
+          testingNode: undefined,
         });
         if (i === toCheck.length - 1 && toCheck.length > 1) {
           upsertScore(
@@ -149,7 +150,8 @@ export async function testAll(
           text: `连通性预检 ${cullDone}/${toCheck.length}`,
           current: cullDone,
           total: toCheck.length,
-          testingNode: n.name,
+          // 预检并发，不挂节点名（避免进度文案狂跳；阶段语完整显示）
+          testingNode: undefined,
         });
         if (delay == null) {
           upsertScore(scoreDeadNode(n.name, "延迟探测失败，按不可用处理。"));
@@ -168,7 +170,8 @@ export async function testAll(
         if (shouldAbort()) break;
         const n = alive[i]!;
         hooks.onProgress({
-          text: `检测 ${i + 1}/${alive.length}（${n.name}）`,
+          // 节点名交给 UI（testingNode）单独 ellipsis，阶段「检测 N/M」完整显示
+          text: `检测 ${i + 1}/${alive.length}`,
           current: i + 1,
           total: alive.length,
           testingNode: n.name,
@@ -190,7 +193,7 @@ export async function testAll(
         await new Promise((r) => setTimeout(r, 250));
         if (shouldAbort()) break;
         hooks.onNodeCards(asRunning(NODE_PLACEHOLDERS));
-        const r = await runNodeDeepLight(hooks.onUpsertNodeCard, {
+        const r = await runNodeDiagnostics(hooks.onUpsertNodeCard, {
           mixedPort,
           mihomoConfig: config,
         });
@@ -207,7 +210,7 @@ export async function testAll(
         testingNode: connection.currentProxy ?? undefined,
       });
       hooks.onNodeCards(asRunning(NODE_PLACEHOLDERS));
-      const r = await runNodeDeepLight(hooks.onUpsertNodeCard, {
+      const r = await runNodeDiagnostics(hooks.onUpsertNodeCard, {
         mixedPort,
         mihomoConfig: config,
       });
@@ -232,10 +235,10 @@ export async function testAll(
           text: `检测 ${i + 1}/${alive.length}（演示）`,
           current: i + 1,
           total: alive.length,
-          testingNode: n.name,
+          testingNode: undefined,
         });
         hooks.onNodeCards(asRunning(NODE_PLACEHOLDERS));
-        const r = await runNodeDeepLight(hooks.onUpsertNodeCard, {
+        const r = await runNodeDiagnostics(hooks.onUpsertNodeCard, {
           mixedPort,
           mihomoConfig: config,
         });
@@ -247,10 +250,12 @@ export async function testAll(
 
     hooks.onScores?.(sortScores(results));
     hooks.onProgress(null);
+    return !shouldAbort();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     hooks.onProgress(null);
     hooks.onGate?.({ ok: false, message: `测全部节点时出错：${msg}` });
+    return false;
   } finally {
     if (didSwitch && config && originalSnap?.now && originalSnap.group) {
       hooks.onProgress({

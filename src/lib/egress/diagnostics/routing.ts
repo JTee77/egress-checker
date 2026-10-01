@@ -179,7 +179,7 @@ export async function checkSplitRouting(
     conclusion = "经代理的国内与境外样本均失败";
   } else if (cnOk === cnViaMixed.length && foreignOk === foreignViaMixed.length) {
     level = "pass";
-    conclusion = `抽样大致正常：国内 ${cnOk}/${cnViaMixed.length} · 境外 ${foreignOk}/${foreignViaMixed.length} 经代理可达`;
+    conclusion = `抽样正常：国内 ${cnOk}/${cnViaMixed.length} · 境外 ${foreignOk}/${foreignViaMixed.length} 经代理可达`;
   } else if (cnOk > 0 && foreignOk === 0) {
     level = "warn";
     conclusion = `国内可达但境外经代理失败（${foreignOk}/${foreignViaMixed.length}）— 代理路径或规则可能异常`;

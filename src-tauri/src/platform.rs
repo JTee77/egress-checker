@@ -1,23 +1,28 @@
 //! Platform seam — every OS-specific path, socket, and per-client location
 //! table lives here so the rest of the backend stays platform-neutral.
 //!
-//! macOS behavior is byte-identical to the pre-seam code:
-//! - Verge config: `~/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/config.yaml`
-//!   (`dirs::config_dir()` on macOS resolves to exactly that directory, and it
-//!   also unifies Windows `%APPDATA%` for free).
-//! - Sockets: `/tmp/verge/verge-mihomo.sock`, `/tmp/mihomo-party.sock` (unix only).
+//! Clash Verge Rev sock locations (unix):
+//! - 2.5.6+ service: `/var/run/clash-verge-service/users/<uid>/verge-mihomo.sock`
+//! - Legacy: `/tmp/verge/verge-mihomo.sock`
+//! - TMPDIR fallback: `$TMPDIR/verge-mihomo.sock` (also written into clash-verge.yaml)
 //!
-//! Non-macOS entries are deliberately conservative placeholders: Verge's config
-//! resolves through `dirs::config_dir()`; other clients fall back to TCP
-//! defaults until a real Windows/Linux port tunes their paths.
+//! Verge config still resolves through `dirs::config_dir()` (macOS Application
+//! Support / Windows `%APPDATA%`). Non-macOS client table entries stay conservative.
 
 use std::path::PathBuf;
 
 /// Clash Verge Rev config, relative to the OS config dir.
 pub const VERGE_REL_CONFIG: &str = "io.github.clash-verge-rev.clash-verge-rev/config.yaml";
 
-/// Verge's mihomo controller Unix socket (unix targets only).
+/// Sibling runtime yaml (often fresher EC fields than stale `config.yaml`).
+pub const VERGE_REL_CLASH_VERGE_YAML: &str =
+    "io.github.clash-verge-rev.clash-verge-rev/clash-verge.yaml";
+
+/// Legacy Verge mihomo controller Unix socket (pre-2.5.6; unix targets only).
 pub const VERGE_SOCK_PATH: &str = "/tmp/verge/verge-mihomo.sock";
+
+/// Clash Verge service base dir for per-uid controller socks (2.5.6+).
+pub const VERGE_SERVICE_USERS_DIR: &str = "/var/run/clash-verge-service/users";
 
 /// Mihomo Party controller sock (unix only) — consumed via the client table.
 pub const PARTY_SOCK_PATH: &str = "/tmp/mihomo-party.sock";
@@ -28,8 +33,92 @@ pub fn verge_config_path() -> PathBuf {
         .join(VERGE_REL_CONFIG)
 }
 
-/// Verge controller sock — only where Unix sockets exist. (A Windows port
-/// would use a named pipe; not implemented yet, so None there.)
+pub fn verge_clash_verge_yaml_path() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")))
+        .join(VERGE_REL_CLASH_VERGE_YAML)
+}
+
+/// Current process UID (unix). Used to prefer the matching Verge service sock.
+#[cfg(unix)]
+pub fn current_uid() -> u32 {
+    extern "C" {
+        fn geteuid() -> u32;
+    }
+    // SAFETY: geteuid is a trivial POSIX getter with no preconditions.
+    unsafe { geteuid() }
+}
+
+#[cfg(not(unix))]
+pub fn current_uid() -> u32 {
+    0
+}
+
+/// `$TMPDIR/verge-mihomo.sock` (or `/tmp/...` when TMPDIR unset).
+pub fn verge_tmpdir_sock() -> String {
+    let tmp = std::env::var("TMPDIR").unwrap_or_else(|_| "/tmp".into());
+    let tmp = tmp.trim_end_matches('/');
+    format!("{tmp}/verge-mihomo.sock")
+}
+
+/// Service sock for the current user: `/var/run/clash-verge-service/users/<uid>/verge-mihomo.sock`.
+pub fn verge_service_sock_for_uid(uid: u32) -> String {
+    format!("{VERGE_SERVICE_USERS_DIR}/{uid}/verge-mihomo.sock")
+}
+
+/// Ordered Verge sock candidates (deduped). `yaml_unix_paths` are already expanded.
+///
+/// Order: service (current uid → other uids under the service dir) → legacy
+/// `/tmp/verge/...` → `$TMPDIR/...` → yaml unix paths → optional extras.
+pub fn verge_sock_candidates(yaml_unix_paths: &[String], extras: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut push = |s: String| {
+        if s.is_empty() {
+            return;
+        }
+        if !out.iter().any(|e| e == &s) {
+            out.push(s);
+        }
+    };
+
+    if cfg!(unix) {
+        let uid = current_uid();
+        push(verge_service_sock_for_uid(uid));
+
+        // Sibling uids under the service dir (best-effort; ignore permission errors).
+        if let Ok(entries) = std::fs::read_dir(VERGE_SERVICE_USERS_DIR) {
+            let mut others: Vec<String> = entries
+                .filter_map(|e| e.ok())
+                .filter_map(|e| {
+                    let name = e.file_name().into_string().ok()?;
+                    let other_uid: u32 = name.parse().ok()?;
+                    if other_uid == uid {
+                        return None;
+                    }
+                    Some(verge_service_sock_for_uid(other_uid))
+                })
+                .collect();
+            others.sort();
+            for p in others {
+                push(p);
+            }
+        }
+
+        push(VERGE_SOCK_PATH.to_string());
+        push(verge_tmpdir_sock());
+    }
+
+    for p in yaml_unix_paths {
+        push(p.clone());
+    }
+    for p in extras {
+        push(p.clone());
+    }
+    out
+}
+
+/// Legacy helper: historical single Verge sock path (unix only).
+/// Prefer `verge_sock_candidates` for discovery.
 pub fn default_controller_sock() -> Option<&'static str> {
     if cfg!(unix) {
         Some(VERGE_SOCK_PATH)
@@ -160,6 +249,25 @@ mod tests {
         assert_eq!(default_controller_sock().is_some(), cfg!(unix));
         if cfg!(unix) {
             assert_eq!(default_controller_sock(), Some(VERGE_SOCK_PATH));
+        }
+    }
+
+    #[test]
+    fn verge_sock_candidates_order_and_dedupe() {
+        let yaml = vec![
+            VERGE_SOCK_PATH.to_string(),
+            "/custom/from-yaml.sock".to_string(),
+        ];
+        let c = verge_sock_candidates(&yaml, &[]);
+        if cfg!(unix) {
+            assert_eq!(c[0], verge_service_sock_for_uid(current_uid()));
+            assert!(c.iter().any(|p| p == VERGE_SOCK_PATH));
+            assert!(c.iter().any(|p| p == &verge_tmpdir_sock()));
+            assert!(c.iter().any(|p| p == "/custom/from-yaml.sock"));
+            // legacy path appears only once even though also in yaml
+            assert_eq!(c.iter().filter(|p| p.as_str() == VERGE_SOCK_PATH).count(), 1);
+        } else {
+            assert_eq!(c, vec!["/custom/from-yaml.sock".to_string()]);
         }
     }
 

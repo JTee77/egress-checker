@@ -1,6 +1,6 @@
 import type { CheckCard, CheckLevel } from "./types";
 
-/** 可配置服务分组：名单便于后续加 TikTok / Spotify / Prime 等探针。 */
+/** 可配置服务分组：流媒体含 Netflix/Disney+/YouTube/TikTok/Spotify/Prime Video。 */
 export type ServiceGroupDef = {
   /** 汇总卡 id，如 svc-streaming */
   id: string;
