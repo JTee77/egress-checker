@@ -43,7 +43,7 @@ cd egress-checker && pnpm install && pnpm tauri dev
 - **主题**：浅色 / 深色 / 跟随系统
 - **轻量门槛**：确认客户端连上、海外大致可通、是否像未走代理直连；不过则口语提示
 - **测单个（完整）**：`runNodeDiagnostics` — 延迟、带宽、流媒体/商店/AI 等；节点卡「测 / 再测」走这条
-- **测全部（轻量 DeepLight）**：先延迟淘汰，再临时切换做简要深测；测完或中止会**强制切回**原节点
+- **测全部（完整深测）**：与测单个相同探针集（延迟淘汰后临时切换深测）；测完或中止会**强制切回**原节点
 - **环境泄漏检查**：DNS / IPv6 / WebRTC / 分流 / 直连旁路（第二入口，不默认每次强跑）
 - **CLI**：`--cli discover|gate|check|env`，stdout 为 CliEnvelope JSON（与 GUI 共用 runner），见 [docs/CLI.md](./docs/CLI.md)
 

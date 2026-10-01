@@ -83,7 +83,7 @@ describe("summarizeServiceCards", () => {
     expect(untested.metrics?.unlockLevel).toBe("未测");
   });
 
-  it("DeepLight 仅部分成员时仍合成对应组", () => {
+  it("仅部分成员时仍合成对应组", () => {
     const out = summarizeServiceCards([
       card("netflix", "Netflix", "pass", "可用"),
       card("youtube", "YouTube Premium", "pass", "可用"),
