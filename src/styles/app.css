@@ -1415,12 +1415,13 @@ table.data tr:last-child td {
   min-width: 0;
 }
 
-/* 进度 + 停止：紧跟测全部；不吃余宽（勿顶到展开）；条固定宽、停止紧跟条后 */
+/* 进度 + 停止：组吃测全部↔展开余宽，子项靠左；
+   文案→条(72)→停止(gap10)，条/停止不顶到展开；窄时只缩节点名 */
 .ws-progress-group {
   display: flex;
   align-items: center;
   gap: 10px; /* 条与「停止并切回」间距 ~8–10px */
-  flex: 0 1 auto;
+  flex: 1 1 0%;
   min-width: 0;
 }
 .ws-progress {
@@ -1428,7 +1429,7 @@ table.data tr:last-child td {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  /* 随内容宽，不 flex-grow，避免条+停止被推到行最右 */
+  /* 随文案宽；可缩；不 grow（否则条被推到组右缘≈窗口右） */
   flex: 0 1 auto;
 }
 .ws-abort-btn {
@@ -1438,8 +1439,20 @@ table.data tr:last-child td {
 .ws-progress-text {
   font-size: 12px;
   font-weight: 600;
-  /* 空间紧时优先收缩并 ellipsis；绝不压到条/停止上 */
-  flex: 1 1 auto;
+  display: flex;
+  align-items: baseline;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+/* 阶段文案（连通性预检 N/M、检测 N/M）不省略，避免闪成「连…」 */
+.ws-progress-phase {
+  flex: 0 0 auto;
+}
+/* 仅节点名可缩省略；条/停止永不被挤叠 */
+.ws-progress-node {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

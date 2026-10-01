@@ -112,8 +112,9 @@ export async function testAll(
     }
     const toCheck = list.filter((n) => !clientDead.includes(n));
 
+    // 不发 0/N：避免进度区尚未撑开时「连通性预检」被缩成「连…」
     hooks.onProgress({
-      text: `连通性预检 0/${toCheck.length}`,
+      text: "正在预检连通性…",
       current: 0,
       total: toCheck.length,
       testingNode: undefined,
@@ -127,7 +128,7 @@ export async function testAll(
           text: `连通性预检 ${i + 1}/${toCheck.length}`,
           current: i + 1,
           total: toCheck.length,
-          testingNode: n.name,
+          testingNode: undefined,
         });
         if (i === toCheck.length - 1 && toCheck.length > 1) {
           upsertScore(
@@ -149,7 +150,8 @@ export async function testAll(
           text: `连通性预检 ${cullDone}/${toCheck.length}`,
           current: cullDone,
           total: toCheck.length,
-          testingNode: n.name,
+          // 预检并发，不挂节点名（避免进度文案狂跳；阶段语完整显示）
+          testingNode: undefined,
         });
         if (delay == null) {
           upsertScore(scoreDeadNode(n.name, "延迟探测失败，按不可用处理。"));
@@ -168,7 +170,8 @@ export async function testAll(
         if (shouldAbort()) break;
         const n = alive[i]!;
         hooks.onProgress({
-          text: `检测 ${i + 1}/${alive.length}（${n.name}）`,
+          // 节点名交给 UI（testingNode）单独 ellipsis，阶段「检测 N/M」完整显示
+          text: `检测 ${i + 1}/${alive.length}`,
           current: i + 1,
           total: alive.length,
           testingNode: n.name,
@@ -232,7 +235,7 @@ export async function testAll(
           text: `检测 ${i + 1}/${alive.length}（演示）`,
           current: i + 1,
           total: alive.length,
-          testingNode: n.name,
+          testingNode: undefined,
         });
         hooks.onNodeCards(asRunning(NODE_PLACEHOLDERS));
         const r = await runNodeDiagnostics(hooks.onUpsertNodeCard, {

@@ -37,6 +37,22 @@ function colCountFor(vw: number): number {
   return Math.min(8, Math.max(1, Math.floor((vw - 72) / 319)));
 }
 
+/** 进度文案拆成「阶段」+「节点名」：阶段不省略；名可 ellipsis。 */
+function splitProgressDisplay(p: RunnerProgress | null): {
+  phase: string;
+  node?: string;
+} | null {
+  if (!p?.text) return null;
+  const embedded = /^(.*?)（(.+?)）$/.exec(p.text);
+  if (embedded) {
+    return { phase: embedded[1]!.trimEnd(), node: embedded[2] };
+  }
+  if (p.testingNode && !p.text.includes(p.testingNode)) {
+    return { phase: p.text, node: p.testingNode };
+  }
+  return { phase: p.text };
+}
+
 export function HomePage({
   connection,
   busy,
@@ -210,7 +226,7 @@ export function HomePage({
     setProgress({ text: "测试条件检查中…" });
     const g = await runLightGate(connection);
     setGate(g);
-    setProgress(null);
+    // 不置 null：避免测全部接上预检前闪空白/「连…」；由 runner 覆盖或结束时清空
     return g;
   };
 
@@ -344,6 +360,7 @@ export function HomePage({
           Math.min(100, Math.round((progress.current / progress.total) * 100)),
         )
       : null;
+  const progressDisplay = splitProgressDisplay(progress);
 
   const allExpanded =
     orderedNodes.length > 0 && orderedNodes.every((n) => expanded.has(n.name));
@@ -523,7 +540,20 @@ export function HomePage({
                 {running && mode === "all" ? (
                   <div className="ws-progress-group">
                     <div className="ws-progress" role="status" aria-live="polite">
-                      <span className="ws-progress-text">{progress?.text}</span>
+                      <span className="ws-progress-text">
+                        {progressDisplay ? (
+                          <>
+                            <span className="ws-progress-phase">
+                              {progressDisplay.phase}
+                            </span>
+                            {progressDisplay.node ? (
+                              <span className="ws-progress-node">
+                                （{progressDisplay.node}）
+                              </span>
+                            ) : null}
+                          </>
+                        ) : null}
+                      </span>
                       {progressPct != null ? (
                         <span
                           className="ws-progress-bar"
@@ -546,7 +576,22 @@ export function HomePage({
                 ) : running && testingNode ? (
                   <div className="ws-progress" role="status" aria-live="polite">
                     <span className="ws-progress-text">
-                      {progress?.text ?? `正在检测 ${testingNode}…`}
+                      {progressDisplay ? (
+                        <>
+                          <span className="ws-progress-phase">
+                            {progressDisplay.phase}
+                          </span>
+                          {progressDisplay.node ? (
+                            <span className="ws-progress-node">
+                              （{progressDisplay.node}）
+                            </span>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span className="ws-progress-phase">
+                          正在检测 {testingNode}…
+                        </span>
+                      )}
                     </span>
                   </div>
                 ) : null}
