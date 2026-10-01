@@ -1325,10 +1325,18 @@ table.data tr:last-child td {
   min-height: 30px; /* 与 .action-btn 同高，基线对齐 */
   flex-wrap: wrap;
 }
-.env-head .action-btn {
+.env-head-actions {
   grid-column: 2;
   grid-row: 1;
+  display: inline-flex;
+  align-items: center;
   align-self: center;
+  flex: none;
+  /* 间距由 .fetch-ok margin-left 承担，与「获取节点」成功标一致 */
+}
+.env-head .action-btn {
+  /* 左缘仍落在 --action-x（父 .env-head-actions 占第 2 列） */
+  flex: none;
 }
 .env-head .s {
   font-size: 11px;
@@ -1368,6 +1376,13 @@ table.data tr:last-child td {
   width: 100%;
   min-width: 0;
   flex-wrap: wrap;
+}
+/* 测全部按钮 + ✓成功：间距仅用 .fetch-ok margin-left，避免再叠 gap */
+.action-with-ok {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-width: 0;
 }
 /* 「展开/收起全部详情」：弱化三级链，推到节点检测行最右 */
 .ws-expand-link {

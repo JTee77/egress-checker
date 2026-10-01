@@ -8,7 +8,7 @@ import type { RunEnvContext, RunnerHooks } from "./types";
 export async function runEnv(
   ctx: RunEnvContext,
   hooks: RunnerHooks,
-): Promise<void> {
+): Promise<boolean> {
   hooks.onEnvCards?.(asRunning(ENV_PLACEHOLDERS));
   try {
     const cards = await runEnvDiagnostics(hooks.onUpsertEnvCard, {
@@ -22,6 +22,7 @@ export async function runEnv(
         (card): card is (typeof cards)[number] => card !== undefined,
       ),
     );
+    return true;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     hooks.onEnvCards?.(
@@ -32,5 +33,6 @@ export async function runEnv(
         process: msg,
       })),
     );
+    return false;
   }
 }

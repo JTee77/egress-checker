@@ -17,7 +17,7 @@ import type { RunnerHooks, TestOneContext } from "./types";
 export async function testOne(
   ctx: TestOneContext,
   hooks: RunnerHooks,
-): Promise<void> {
+): Promise<boolean> {
   const { node, connection, forceMock, mixedPort, ensureGate } = ctx;
   const config = connection.config;
   let snap: SelectorSnapshot | null = null;
@@ -28,7 +28,7 @@ export async function testOne(
   try {
     const g = await ensureGate();
     hooks.onGate?.(g);
-    if (!g.ok) return;
+    if (!g.ok) return false;
 
     const isCurrent = node.name === connection.currentProxy;
     if (!isCurrent && config && !connection.usingMock && !forceMock) {
@@ -37,12 +37,12 @@ export async function testOne(
         (await findSelectorGroup(config, node.name)) ?? snap?.group;
       if (!group) {
         hooks.onHint?.("找不到可切换的策略组，没法单独测这个节点。");
-        return;
+        return false;
       }
       const ok = await switchProxy(config, group, node.name);
       if (!ok) {
         hooks.onHint?.("切换失败，没法测这个节点。");
-        return;
+        return false;
       }
       didSwitch = true;
       await new Promise((r) => setTimeout(r, 250));
@@ -59,8 +59,10 @@ export async function testOne(
     hooks.onNodeCards(r.cards);
     const scored = scoreNodeFromCards(node.name, r.cards, r.ranAt);
     hooks.onUpsertScore?.(scored);
+    return true;
   } catch (err) {
     hooks.onHint?.(err instanceof Error ? err.message : String(err));
+    return false;
   } finally {
     if (didSwitch && config && snap?.now && snap.group) {
       const restored = await restoreProxy(config, snap);

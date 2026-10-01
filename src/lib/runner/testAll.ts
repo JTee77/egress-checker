@@ -36,7 +36,7 @@ function sortScores(list: NodeScoreResult[]): NodeScoreResult[] {
 export async function testAll(
   ctx: TestAllContext,
   hooks: RunnerHooks,
-): Promise<void> {
+): Promise<boolean> {
   const { connection, nodes, forceMock, mixedPort, ensureGate, shouldAbort } =
     ctx;
 
@@ -51,7 +51,7 @@ export async function testAll(
   try {
     const g = await ensureGate();
     hooks.onGate?.(g);
-    if (!g.ok) return;
+    if (!g.ok) return false;
 
     const list: ProxyNode[] = nodes.length
       ? nodes
@@ -73,7 +73,7 @@ export async function testAll(
           "还没有读到节点列表。请先点「获取节点」，确认VPN软件里已经加载了订阅。",
       };
       hooks.onGate?.(fail);
-      return;
+      return false;
     }
 
     const results: NodeScoreResult[] = [];
@@ -247,10 +247,12 @@ export async function testAll(
 
     hooks.onScores?.(sortScores(results));
     hooks.onProgress(null);
+    return !shouldAbort();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     hooks.onProgress(null);
     hooks.onGate?.({ ok: false, message: `测全部节点时出错：${msg}` });
+    return false;
   } finally {
     if (didSwitch && config && originalSnap?.now && originalSnap.group) {
       hooks.onProgress({

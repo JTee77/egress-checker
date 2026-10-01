@@ -75,6 +75,10 @@ export function HomePage({
   const [nodeScores, setNodeScores] = useState<NodeScoreResult[]>([]);
   const [envOpen, setEnvOpen] = useState(false);
   const [envRunning, setEnvRunning] = useState(false);
+  /** 环境检查完成后在按钮旁显示 ✓成功；下次检查开始时清除 */
+  const [envCheckOk, setEnvCheckOk] = useState(false);
+  /** 测全部 / 单节点完成后在「测全部节点」旁显示 ✓成功；下次开测时清除 */
+  const [nodeTestOk, setNodeTestOk] = useState(false);
   const [allConfirmOpen, setAllConfirmOpen] = useState(false);
   const [switchHint, setSwitchHint] = useState<string | null>(null);
   const [restoreError, setRestoreError] = useState<string | null>(null);
@@ -236,9 +240,10 @@ export function HomePage({
 
   const testAll = async () => {
     abortAllRef.current = false;
+    setNodeTestOk(false);
     setRunning(true);
     try {
-      await runTestAll(
+      const ok = await runTestAll(
         {
           connection,
           nodes,
@@ -249,6 +254,7 @@ export function HomePage({
         },
         buildHooks(),
       );
+      if (ok) setNodeTestOk(true);
     } finally {
       setRunning(false);
       abortAllRef.current = false;
@@ -256,10 +262,11 @@ export function HomePage({
   };
 
   const runEnvCheck = async () => {
+    setEnvCheckOk(false);
     setEnvRunning(true);
     setEnvOpen(true);
     try {
-      await runEnv(
+      const ok = await runEnv(
         {
           connection,
           mixedPort: mixedPortNum,
@@ -267,6 +274,7 @@ export function HomePage({
         },
         buildHooks(),
       );
+      if (ok) setEnvCheckOk(true);
     } finally {
       setEnvRunning(false);
     }
@@ -349,10 +357,11 @@ export function HomePage({
   // NodeCard「再测」由 Ellie 接 onTest；此处保持接口稳定。
   const testOneNode = async (node: ProxyNode) => {
     if (running) return;
+    setNodeTestOk(false);
     setRunning(true);
     setTestingNode(node.name);
     try {
-      await testOne(
+      const ok = await testOne(
         {
           node,
           connection,
@@ -362,7 +371,10 @@ export function HomePage({
         },
         buildHooks(),
       );
-      setExpanded((prev) => new Set(prev).add(node.name));
+      if (ok) {
+        setExpanded((prev) => new Set(prev).add(node.name));
+        setNodeTestOk(true);
+      }
     } finally {
       setRunning(false);
       setTestingNode(null);
@@ -453,14 +465,21 @@ export function HomePage({
                 <span className="home-block-title">环境泄漏检查</span>
                 <span className="s">对当前出口体检 · 不需先测节点</span>
               </div>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm action-btn"
-                disabled={envRunning || running}
-                onClick={() => void runEnvCheck()}
-              >
-                {envRunning ? "检查中…" : envOpen ? "重新检查环境" : "开始环境检查"}
-              </button>
+              <div className="env-head-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm action-btn"
+                  disabled={envRunning || running}
+                  onClick={() => void runEnvCheck()}
+                >
+                  {envRunning ? "检查中…" : envOpen ? "重新检查环境" : "开始环境检查"}
+                </button>
+                {!envRunning && envCheckOk ? (
+                  <span className="fetch-ok" role="status">
+                    <span className="status-ok-mark">✓</span>成功
+                  </span>
+                ) : null}
+              </div>
             </div>
             {envOpen ? (
               <>
@@ -482,18 +501,25 @@ export function HomePage({
             <div className="ws-ops">
               <span className="t home-block-title">节点检测</span>
               <div className="ws-ops-right">
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm action-btn"
-                  disabled={running || clientUnset}
-                  onClick={() => {
-                    setMode("all");
-                    setRestoreError(null);
-                    setAllConfirmOpen(true);
-                  }}
-                >
-                  {running && mode === "all" ? "测全部中…" : "测全部节点"}
-                </button>
+                <div className="action-with-ok">
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm action-btn"
+                    disabled={running || clientUnset}
+                    onClick={() => {
+                      setMode("all");
+                      setRestoreError(null);
+                      setAllConfirmOpen(true);
+                    }}
+                  >
+                    {running && mode === "all" ? "测全部中…" : "测全部节点"}
+                  </button>
+                  {!running && nodeTestOk ? (
+                    <span className="fetch-ok" role="status">
+                      <span className="status-ok-mark">✓</span>成功
+                    </span>
+                  ) : null}
+                </div>
                 {running && mode === "all" ? (
                   <div className="ws-progress-group">
                     <div className="ws-progress" role="status" aria-live="polite">
@@ -516,6 +542,12 @@ export function HomePage({
                     <button type="button" className="btn btn-sm ws-abort-btn" onClick={onAbortAll}>
                       停止并切回
                     </button>
+                  </div>
+                ) : running && testingNode ? (
+                  <div className="ws-progress" role="status" aria-live="polite">
+                    <span className="ws-progress-text">
+                      {progress?.text ?? `正在检测 ${testingNode}…`}
+                    </span>
                   </div>
                 ) : null}
                 {switchHint && !restoreError ? (
