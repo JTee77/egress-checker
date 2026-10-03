@@ -886,12 +886,12 @@ select {
   min-width: 0;
 }
 
-/* 进度 + 停止：文案紧贴进度条，再跟停止。文字不拉伸，空档留给右侧「展开全部详情」。
-   提示一律完整显示；一行排不下就换行，不截断。 */
+/* 进度 + 停止：同一行，文案 → 进度条 → 停止。条不掉到文字下面，也不被推到停止旁边。
+   文字不拉伸，空档留给右侧「展开全部详情」。提示完整显示，长名字在文字内部换行。 */
 .ws-progress-group {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 10px; /* 条与「停止并切回」间距 ~8–10px */
   flex: 0 1 auto;
   min-width: 0;
@@ -900,10 +900,9 @@ select {
 .ws-progress {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   min-width: 0;
-  max-width: 100%;
   /* 不 grow：否则文字区被拉满，进度条被推到停止按钮旁边 */
   flex: 0 1 auto;
 }
@@ -918,7 +917,6 @@ select {
   align-items: baseline;
   flex-wrap: wrap;
   flex: 0 1 auto;
-  max-width: 100%;
   min-width: 0;
   overflow: visible;
 }
