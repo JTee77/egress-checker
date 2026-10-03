@@ -886,41 +886,43 @@ select {
   min-width: 0;
 }
 
-/* 进度簇按内容宽：文字 → 进度条 → 停止，三者同一行、紧挨着。
-   空档留给右侧「展开全部详情」。整行放不下时，只在文字内部换行，条仍在文字右侧，不压字。 */
+/* 文字按自身宽度一行排开。进度条紧贴文字右侧 8px，「停止并切回」紧贴进度条 10px。
+   这段不收缩、不提前折行。多出来的空白只在「停止并切回」和「展开全部详情」之间。 */
 .ws-progress-group {
   display: inline-flex;
   align-items: center;
   flex-wrap: nowrap;
+  flex: none;
   gap: 10px;
-  flex: 0 1 auto;
   width: max-content;
-  max-width: 100%;
-  min-width: 0;
+  max-width: none;
+  min-width: max-content;
 }
 .ws-progress {
   display: inline-flex;
   align-items: center;
   flex-wrap: nowrap;
+  flex: none;
   gap: 8px;
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 100%;
+  width: max-content;
+  max-width: none;
+  min-width: max-content;
 }
 .ws-abort-btn {
-  flex: 0 0 auto;
+  flex: none;
   white-space: nowrap;
 }
 .ws-progress-text {
   font-size: 12px;
   font-weight: 600;
-  flex: 0 1 auto;
-  min-width: 0;
-  white-space: normal;
+  flex: none;
+  width: max-content;
+  min-width: max-content;
+  white-space: nowrap;
 }
 .ws-progress-phase,
 .ws-progress-node {
-  white-space: normal;
+  white-space: nowrap;
 }
 .ws-progress-bar {
   /* 固定 ~72，永不收缩，永不叠到停止按钮下 */
