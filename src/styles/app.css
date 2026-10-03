@@ -886,22 +886,22 @@ select {
   min-width: 0;
 }
 
-/* 进度 + 停止：组吃测全部↔展开余宽，子项靠左；
-   文案→条(72)→停止(gap10)，条/停止不顶到展开；窄时只缩节点名 */
+/* 进度 + 停止：文案→条(72)→停止。提示文字一律完整显示，不够宽就整组换行，不截断。 */
 .ws-progress-group {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px; /* 条与「停止并切回」间距 ~8–10px */
-  flex: 1 1 0%;
+  flex: 1 1 auto;
   min-width: 0;
 }
 .ws-progress {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
-  /* 随文案宽；可缩；不 grow（否则条被推到组右缘≈窗口右） */
-  flex: 0 1 auto;
+  flex: 1 1 auto;
 }
 .ws-abort-btn {
   flex: 0 0 auto;
@@ -912,22 +912,23 @@ select {
   font-weight: 600;
   display: flex;
   align-items: baseline;
-  flex: 0 1 auto;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
+  overflow: visible;
 }
-/* 阶段文案（连通性预检 N/M、检测 N/M）不省略，避免闪成「连…」 */
+/* 阶段和节点名都不省略。长名字换行，不再出现「连…」或节点名被截断。 */
 .ws-progress-phase {
   flex: 0 0 auto;
-}
-/* 仅节点名可缩省略；条/停止永不被挤叠 */
-.ws-progress-node {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+.ws-progress-node {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: visible;
+  text-overflow: unset;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .ws-progress-bar {
   /* 固定 ~72，永不收缩，永不叠到停止按钮下 */
@@ -1116,7 +1117,7 @@ select {
   opacity: 0.5;
   cursor: default;
 }
-/* 测全部进行中，已测完的「再测」灰掉，明确不可点 */
+/* 这次点击不会马上测这一张时，「测」和「再测」都灰掉 */
 .nc-act.is-locked,
 .nc-act.is-locked:hover {
   color: var(--text-muted);

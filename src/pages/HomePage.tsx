@@ -37,7 +37,7 @@ function colCountFor(vw: number): number {
   return Math.min(8, Math.max(1, Math.floor((vw - 72) / 319)));
 }
 
-/** 进度文案拆成「阶段」+「节点名」：阶段不省略；名可 ellipsis。 */
+/** 进度文案拆成「阶段」+「节点名」。两段都完整显示，不截断。 */
 function splitProgressDisplay(p: RunnerProgress | null): {
   phase: string;
   node?: string;
@@ -625,7 +625,7 @@ export function HomePage({
                       isCurrent={n.name === connection.currentProxy}
                       expanded={expanded.has(n.name)}
                       testing={testingNode === n.name}
-                      retestLocked={running && mode === "all"}
+                      retestLocked={running}
                       onToggle={() => toggleExpand(n.name)}
                       onTest={() => void testOneNode(n)}
                     />
