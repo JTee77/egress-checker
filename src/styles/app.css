@@ -886,25 +886,26 @@ select {
   min-width: 0;
 }
 
-/* 进度 + 停止：同一行，文案 → 进度条 → 停止。条不掉到文字下面，也不被推到停止旁边。
-   文字不拉伸，空档留给右侧「展开全部详情」。提示完整显示，长名字在文字内部换行。 */
+/* 进度簇按内容宽：文字 → 进度条 → 停止，三者同一行、紧挨着。
+   空档留给右侧「展开全部详情」。整行放不下时，只在文字内部换行，条仍在文字右侧，不压字。 */
 .ws-progress-group {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 10px; /* 条与「停止并切回」间距 ~8–10px */
+  gap: 10px;
   flex: 0 1 auto;
-  min-width: 0;
+  width: max-content;
   max-width: 100%;
+  min-width: 0;
 }
 .ws-progress {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   flex-wrap: nowrap;
   gap: 8px;
-  min-width: 0;
-  /* 不 grow：否则文字区被拉满，进度条被推到停止按钮旁边 */
   flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 .ws-abort-btn {
   flex: 0 0 auto;
@@ -913,25 +914,13 @@ select {
 .ws-progress-text {
   font-size: 12px;
   font-weight: 600;
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
   flex: 0 1 auto;
   min-width: 0;
-  overflow: visible;
-}
-/* 阶段和节点名都不省略。长名字换行，不再出现「连…」或节点名被截断。 */
-.ws-progress-phase {
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
-.ws-progress-node {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: visible;
-  text-overflow: unset;
   white-space: normal;
-  overflow-wrap: anywhere;
+}
+.ws-progress-phase,
+.ws-progress-node {
+  white-space: normal;
 }
 .ws-progress-bar {
   /* 固定 ~72，永不收缩，永不叠到停止按钮下 */
