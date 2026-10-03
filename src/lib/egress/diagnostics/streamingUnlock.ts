@@ -653,7 +653,7 @@ async function probePrimeVideoLine(
   mixedPort?: number | null,
   signal?: AbortSignal,
 ): Promise<ProbeLine> {
-  // Prime Video：HTML 线索启发式。isServiceRestricted→fail；currentTerritory→pass+区；
+  // Prime Video：HTML 线索启发式。isServiceRestricted→fail；currentTerritory→可见+警告（不计星）；
   // 页可达但无 territory→warn（无法确认区域），不照搬 Verge 的 PAGE ERROR=Failed。
   const url = "https://www.primevideo.com";
   const timeoutMs = 4000;
@@ -686,7 +686,7 @@ async function probePrimeVideoLine(
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         verdict.processNote,
-        "测了什么：primevideo.com 首页 HTML 线索（启发式，非硬解锁）。",
+        "测了什么：primevideo.com 首页 HTML 线索（启发式）。有地区只写可见，不是已解锁。",
         "没测：登录、片库、Channels、下载、4K。",
       ].join("\n"),
     };
@@ -702,7 +702,7 @@ async function probePrimeVideoLine(
 
 /**
  * Prime Video 状态→结论。
- * restricted→fail；有 territory→pass；页可达无 territory→warn（启发式/无法确认区域）。
+ * restricted→fail；有 territory→warn「可见（地区）」不计星；页可达无 territory→warn。
  */
 export function primeVideoVerdict(opts: {
   restricted: boolean;
@@ -718,9 +718,9 @@ export function primeVideoVerdict(opts: {
   }
   if (opts.region) {
     return {
-      level: "pass",
-      conclusion: `可用（${opts.region}）`,
-      processNote: `地区线索：currentTerritory=${opts.region}（HTML 启发式）。`,
+      level: "warn",
+      conclusion: `可见（${opts.region}）`,
+      processNote: `地区线索：currentTerritory=${opts.region}（页面启发式）。角标是警告，行内写可见，不进星级，不是已解锁。`,
     };
   }
   if (opts.pageReachable) {
@@ -867,7 +867,7 @@ export async function checkSpotifyUnlock(
   }, signal);
 }
 
-/** Prime Video 单独卡：isServiceRestricted / currentTerritory（启发式；无区→warn）。 */
+/** Prime Video 单独卡：有地区写「可见」，角标警告；地区限制仍是不可用。 */
 export async function checkPrimeVideoUnlock(
   mixedPort?: number | null,
   signal?: AbortSignal,

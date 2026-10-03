@@ -300,17 +300,18 @@ describe("TikTok 可见不计星", () => {
       card("reachability", "pass", "通"),
       card("netflix", "pass", "可用"),
       card("tiktok", "warn", "可见（JP）"),
+      card("prime-video", "warn", "可见（US）"),
     ];
-    const withTik = scoreNodeFromCards("a", base, "t");
+    const withVisible = scoreNodeFromCards("a", base, "t");
     const without = scoreNodeFromCards(
       "a",
-      base.filter((c) => c.id !== "tiktok"),
+      base.filter((c) => c.id !== "tiktok" && c.id !== "prime-video"),
       "t",
     );
     const svc = (r: ReturnType<typeof scoreNodeFromCards>) =>
       r.breakdown.find((b) => b.key === "services")!;
-    expect(svc(withTik).score).toBe(svc(without).score);
-    expect(svc(withTik).note).toBe(svc(without).note);
-    expect(svc(withTik).note).not.toContain("2 项");
+    expect(svc(withVisible).score).toBe(svc(without).score);
+    expect(svc(withVisible).note).toBe(svc(without).note);
+    expect(svc(withVisible).note).not.toContain("2 项");
   });
 });

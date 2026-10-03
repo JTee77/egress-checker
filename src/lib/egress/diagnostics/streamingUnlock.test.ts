@@ -61,7 +61,7 @@ describe("Spotify / Prime Video region extract", () => {
     expect(extractPrimeVideoRegion("isServiceRestricted")).toBeNull();
   });
 
-  it("Prime：restricted→fail；有 territory→pass；可达无区→warn（启发式）", () => {
+  it("Prime：restricted→fail；有 territory→可见警告；可达无区→warn（启发式）", () => {
     expect(
       primeVideoVerdict({
         restricted: true,
@@ -70,13 +70,13 @@ describe("Spotify / Prime Video region extract", () => {
       })?.level,
     ).toBe("fail");
 
-    const unlocked = primeVideoVerdict({
+    const visible = primeVideoVerdict({
       restricted: false,
       region: "US",
       pageReachable: true,
     });
-    expect(unlocked?.level).toBe("pass");
-    expect(unlocked?.conclusion).toBe("可用（US）");
+    expect(visible?.level).toBe("warn");
+    expect(visible?.conclusion).toBe("可见（US）");
 
     const weak = primeVideoVerdict({
       restricted: false,

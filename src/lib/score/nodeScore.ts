@@ -98,9 +98,14 @@ function scoreServices(cards: CheckCard[]): {
   if (!measured.length) {
     return { score: 0, note: "未验证：服务面未经代理测试", measured: false };
   }
-  // TikTok「可见」是启发式：角标可以是警告，但不进星级，也不算进「较顺」。
+  // TikTok / Prime「可见」只说明页面打得开：不进星级，也不算进「较顺」。
+  // 不可用（地区限制）仍计入。
   const usable = measured.filter(
-    (c) => !(c.id === "tiktok" && (c.conclusion ?? "").trim().startsWith("可见")),
+    (c) =>
+      !(
+        (c.id === "tiktok" || c.id === "prime-video") &&
+        (c.conclusion ?? "").trim().startsWith("可见")
+      ),
   );
   if (!usable.length) {
     return { score: 35, note: "未测服务面", measured: true };
