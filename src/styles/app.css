@@ -886,14 +886,16 @@ select {
   min-width: 0;
 }
 
-/* 进度 + 停止：文案→条(72)→停止。提示文字一律完整显示，不够宽就整组换行，不截断。 */
+/* 进度 + 停止：文案紧贴进度条，再跟停止。文字不拉伸，空档留给右侧「展开全部详情」。
+   提示一律完整显示；一行排不下就换行，不截断。 */
 .ws-progress-group {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px; /* 条与「停止并切回」间距 ~8–10px */
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 100%;
 }
 .ws-progress {
   display: flex;
@@ -901,7 +903,9 @@ select {
   flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
-  flex: 1 1 auto;
+  max-width: 100%;
+  /* 不 grow：否则文字区被拉满，进度条被推到停止按钮旁边 */
+  flex: 0 1 auto;
 }
 .ws-abort-btn {
   flex: 0 0 auto;
@@ -913,7 +917,8 @@ select {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  max-width: 100%;
   min-width: 0;
   overflow: visible;
 }
@@ -923,7 +928,7 @@ select {
   white-space: nowrap;
 }
 .ws-progress-node {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: visible;
   text-overflow: unset;
