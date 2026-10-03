@@ -72,7 +72,7 @@ export async function checkDnsResolvers(
   // 拖向 envRun 的 12s deadline（观测到的"超时未响应"根因之一）。
   const [dns, whoami, cf] = await Promise.all([
     listDnsResolvers(),
-    dnsWhoami({ timeoutMs: 4500 }),
+    dnsWhoami({ timeoutMs: 4500, signal }),
     probeText("https://www.cloudflare.com/cdn-cgi/trace", {
       mixedPort,
       timeoutMs: 2500,
@@ -115,7 +115,9 @@ export async function checkDnsResolvers(
     conclusion = `DNS 查询从 ${qIp} 出去，但缺少代理出口 IP 可对照，无法判定是否泄漏`;
     suggestion = "先完成「出口 IP」检查（或连上代理）后再测 DNS。";
   } else {
-    const qCountry = await fetchIpCountry(qIp, mixedPort ?? null);
+    const qCountry = signal?.aborted
+      ? null
+      : await fetchIpCountry(qIp, mixedPort ?? null, signal);
     const realCountry =
       realCountryOverride !== undefined ? realCountryOverride : localeCountry();
     const v = judgeDnsEgress({ qIp, exitIp, qCountry, realCountry });

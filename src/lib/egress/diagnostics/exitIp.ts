@@ -179,15 +179,18 @@ export async function fetchExitIp(
 export async function fetchIpCountry(
   ip: string,
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   const urls = [
     `https://ipwho.is/${encodeURIComponent(ip)}`,
     `https://get.geojs.io/v1/ip/geo.json?ip=${encodeURIComponent(ip)}`,
   ];
   for (const url of urls) {
+    if (signal?.aborted) return null;
     const r = await fetchTextViaProxy(url, {
       mixedPort: mixedPort ?? null,
       timeoutMs: 3000,
+      signal,
     });
     if (!r.ok || !r.text) continue;
     try {

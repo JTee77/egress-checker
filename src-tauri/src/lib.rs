@@ -267,17 +267,45 @@ struct DnsWhoamiRequest {
     /// None/empty uses the system default path.
     resolver: Option<String>,
     timeout_ms: Option<u64>,
+    /// 卡片到点时前端拿这个号把还在等的域名查询停掉。
+    cancel_id: Option<String>,
 }
 
 #[tauri::command]
 async fn egress_dns_whoami(req: DnsWhoamiRequest) -> Result<dns::DnsWhoamiResult, String> {
     let resolver = req.resolver.filter(|s| !s.trim().is_empty());
     let timeout_ms = req.timeout_ms.unwrap_or(4000);
-    tauri::async_runtime::spawn_blocking(move || {
-        catch_disk(|| Ok(dns::dns_whoami_blocking(resolver.as_deref(), timeout_ms)))
+    let cancel_id = req.cancel_id.filter(|s| !s.trim().is_empty());
+    let armed = cancel_id.as_deref().map(arm_cancel);
+    if matches!(&armed, Some(None)) {
+        return Ok(dns::DnsWhoamiResult {
+            ok: false,
+            client_ip: None,
+            resolver_ns: None,
+            ecs: None,
+            via: "system".into(),
+            raw: String::new(),
+            error: Some("已取消".into()),
+        });
+    }
+    let wait = armed.flatten();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let wait = std::panic::AssertUnwindSafe(wait);
+        catch_disk(move || {
+            let cancelled = || wait.as_ref().map(|w| w.is_cancelled()).unwrap_or(false);
+            Ok(dns::dns_whoami_blocking(
+                resolver.as_deref(),
+                timeout_ms,
+                &cancelled,
+            ))
+        })
     })
     .await
-    .map_err(join_err)?
+    .map_err(join_err)?;
+    if let Some(id) = cancel_id.as_deref() {
+        disarm_cancel(id);
+    }
+    result
 }
 
 

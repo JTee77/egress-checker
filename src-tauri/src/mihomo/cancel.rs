@@ -33,6 +33,16 @@ pub struct CancelWait {
     slot: Arc<Mutex<Slot>>,
 }
 
+impl CancelWait {
+    /// 阻塞查询（域名解析）不能靠唤醒，隔一小段看一眼这个标志。
+    pub fn is_cancelled(&self) -> bool {
+        self.slot
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .cancelled
+    }
+}
+
 impl Future for CancelWait {
     type Output = ();
 

@@ -169,8 +169,11 @@ export type DnsWhoamiPayload = {
  * actually left from (clientIp) and which resolver served it (resolverNs).
  */
 export async function dnsWhoami(
-  opts: { resolver?: string | null; timeoutMs?: number } = {},
+  opts: { resolver?: string | null; timeoutMs?: number; signal?: AbortSignal } = {},
 ): Promise<DnsWhoamiPayload> {
+  if (opts.signal?.aborted) {
+    return { ok: false, via: "system", raw: "", error: "已取消" };
+  }
   if (!isTauri()) {
     return {
       ok: false,
@@ -179,11 +182,13 @@ export async function dnsWhoami(
       error: "非 Tauri 环境，无法执行 UDP DNS 实测。",
     };
   }
+  const cancel = bindProxyCancel(opts.signal);
   try {
     const res = await invoke<DnsWhoamiPayload>("egress_dns_whoami", {
       req: {
         resolver: opts.resolver ?? null,
         timeoutMs: opts.timeoutMs ?? 4000,
+        cancelId: cancel.cancelId,
       },
     });
     return {
@@ -203,6 +208,8 @@ export async function dnsWhoami(
       raw: "",
       error: `调用 egress_dns_whoami 失败: ${msg}`,
     };
+  } finally {
+    cancel.finish();
   }
 }
 
