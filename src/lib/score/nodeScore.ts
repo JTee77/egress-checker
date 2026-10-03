@@ -87,6 +87,14 @@ export const SERVICE_IDS = [
   "chatgpt",
 ] as const;
 
+
+function pageLevelPass(c: CheckCard): boolean {
+  const text = (c.conclusion ?? "").trim();
+  if ((c.id === "tiktok" || c.id === "prime-video") && text.startsWith("可见")) return true;
+  if ((c.id === "gemini" || c.id === "chatgpt") && text.startsWith("可用")) return true;
+  return false;
+}
+
 function scoreServices(cards: CheckCard[]): {
   score: number;
   note: string;
@@ -98,19 +106,20 @@ function scoreServices(cards: CheckCard[]): {
   if (!measured.length) {
     return { score: 0, note: "未验证：服务面未经代理测试", measured: false };
   }
-  // TikTok / Prime「可见」只说明页面打得开：不进星级，也不算进「较顺」。
-  // 不可用（地区限制）仍计入。
-  const usable = measured.filter(
-    (c) =>
-      !(
-        (c.id === "tiktok" || c.id === "prime-video") &&
-        (c.conclusion ?? "").trim().startsWith("可见")
-      ),
-  );
+  // 页面级通过不加分：TikTok / Prime「可见」，Gemini / ChatGPT「可用」。
+  // 它们的「不可用」仍计入。明确不可用按两票，通过按一票。
+  const usable = measured.filter((c) => !pageLevelPass(c));
   if (!usable.length) {
     return { score: 35, note: "未测服务面", measured: true };
   }
-  const avg = usable.reduce((s, c) => s + levelToScore(c.level), 0) / usable.length;
+  let points = 0;
+  let votes = 0;
+  for (const c of usable) {
+    const vote = c.level === "fail" ? 2 : 1;
+    points += levelToScore(c.level) * vote;
+    votes += vote;
+  }
+  const avg = points / votes;
   const passN = usable.filter((c) => c.level === "pass").length;
   const failN = usable.filter((c) => c.level === "fail").length;
   return {
