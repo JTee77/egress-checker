@@ -292,7 +292,7 @@ export async function checkBareEgress(
         ? "直连境外可达；尚未连上代理口，无法判断是否存在未走代理直连"
         : "直连境外不可达；尚未连上代理口",
       process: lines.join("\n"),
-      suggestion: "请先点「获取节点」确保已连上软件，再重测。",
+      suggestion: undefined,
     };
   }
 
@@ -319,6 +319,6 @@ export async function checkBareEgress(
     level,
     conclusion,
     process: lines.join("\n"),
-    suggestion: "若提示可能未走代理直连：检查VPN软件是否断连，以及系统代理 / TUN 是否关掉。",
+    suggestion: undefined,
   };
 }

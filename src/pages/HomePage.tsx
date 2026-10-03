@@ -408,7 +408,7 @@ export function HomePage({
           </span>
           <span className="fh-arrow">→</span>
           <span className={`fh-step ${gate?.ok ? "done" : "todo"}`}>
-            <i>2</i>在下方选择你使用的VPN软件 · 获取节点
+            <i>{gate?.ok ? "✓" : "2"}</i>在下方选择你使用的VPN软件 · 获取节点
           </span>
           <span className="fh-arrow">→</span>
           <span
@@ -447,31 +447,33 @@ export function HomePage({
               ))}
             </select>
           </div>
-          <button
-            className="btn btn-primary btn-sm home-ops-refresh action-btn"
-            type="button"
-            disabled={!!busy || refreshing || running || clientUnset}
-            title={clientUnset ? "请先选择软件" : undefined}
-            onClick={() => void refreshAndGate()}
-          >
-            {busy || refreshing ? "获取中…" : "获取节点"}
-          </button>
+          <div className="action-with-ok">
+            <button
+              className="btn btn-primary btn-sm home-ops-refresh action-btn"
+              type="button"
+              disabled={!!busy || refreshing || running || clientUnset}
+              title={clientUnset ? "请先选择软件" : undefined}
+              onClick={() => void refreshAndGate()}
+            >
+              {busy || refreshing ? "获取中…" : "获取节点"}
+            </button>
+            {!refreshing &&
+            (connection.status === "connected" && gate?.ok ? (
+              <span className="fetch-ok" title={connection.message}>
+                <span className="status-ok-mark">✓</span>成功
+              </span>
+            ) : gate && !gate.ok ? (
+              <>
+                <span className="fetch-fail">
+                  <span className="status-fail-mark">✗</span>失败
+                </span>
+                <span className="fetch-fail-msg" role="status">
+                  {gate.message}
+                </span>
+              </>
+            ) : null)}
+          </div>
         </div>
-        {!refreshing &&
-        (connection.status === "connected" && gate?.ok ? (
-          <span className="fetch-ok" title={connection.message}>
-            <span className="status-ok-mark">✓</span>成功
-          </span>
-        ) : gate && !gate.ok ? (
-          <>
-            <span className="fetch-fail">
-              <span className="status-fail-mark">✗</span>失败
-            </span>
-            <span className="fetch-fail-msg" role="status">
-              {gate.message}
-            </span>
-          </>
-        ) : null)}
       </div>
 
       {gate?.ok && orderedNodes.length > 0 ? (

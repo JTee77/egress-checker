@@ -168,6 +168,17 @@ export async function testAll(
       }
     }
 
+    // 正式检测从正在使用的节点开始，其余保持原顺序。预检仍并发，不排先后。
+    // 正在用的节点若已在预检里判死，不在 alive 里，就不会被提前再测一遍。
+    const inUse = connection.currentProxy;
+    if (inUse) {
+      const at = alive.findIndex((n) => n.name === inUse);
+      if (at > 0) {
+        const [row] = alive.splice(at, 1);
+        if (row) alive.unshift(row);
+      }
+    }
+
     if (canSwitch && !shouldAbort() && originalSnap?.group && originalSnap.now) {
       for (let i = 0; i < alive.length; i++) {
         if (shouldAbort()) break;

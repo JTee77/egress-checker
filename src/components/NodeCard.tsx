@@ -123,7 +123,7 @@ export function NodeCard({
   return (
     <div className="nc-wrap">
       <div
-        className={`ncard${expanded ? " exp" : ""}${isCurrent ? " cur" : ""}`}
+        className={`ncard${expanded ? " exp" : ""}${testing ? " testing" : ""}`}
         onClick={onToggle}
       >
         <div className="nc-sum">
