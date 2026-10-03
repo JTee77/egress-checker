@@ -21,6 +21,7 @@ export async function checkWebRtcLeak(
   mixedPort?: number | null,
   /** 真实归属参照（由 envRun 实测/推断后传入）；不传时退回系统区域启发式 */
   realCountryOverride?: string | null,
+  signal?: AbortSignal,
 ): Promise<CheckCard> {
   const RTCPeer =
     typeof window !== "undefined"
@@ -56,6 +57,13 @@ export async function checkWebRtcLeak(
 
     const gatherDone = new Promise<void>((resolve) => {
       const timer = setTimeout(() => resolve(), 2800);
+      const stop = () => {
+        clearTimeout(timer);
+        try { pc.close(); } catch { /* already closed */ }
+        resolve();
+      };
+      if (signal?.aborted) stop();
+      else signal?.addEventListener("abort", stop, { once: true });
       pc.onicecandidate = (ev) => {
         if (!ev.candidate) {
           clearTimeout(timer);

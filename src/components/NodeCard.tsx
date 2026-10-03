@@ -34,6 +34,7 @@ export function NodeCard({
   isCurrent,
   expanded,
   testing,
+  retestLocked = false,
   onToggle,
   onTest,
 }: {
@@ -44,6 +45,8 @@ export function NodeCard({
   isCurrent: boolean;
   expanded: boolean;
   testing: boolean;
+  /** 正在测别的：这次点击不会马上测这一张，所以「测 / 再测」都不可点 */
+  retestLocked?: boolean;
   onToggle: () => void;
   onTest: () => void;
 }) {
@@ -96,8 +99,8 @@ export function NodeCard({
       </button>
       <button
         type="button"
-        className="nc-act"
-        disabled={testing}
+        className={`nc-act${retestLocked && !testing ? " is-locked" : ""}`}
+        disabled={testing || retestLocked}
         onClick={(e) => {
           e.stopPropagation();
           onTest();
@@ -109,8 +112,8 @@ export function NodeCard({
   ) : (
     <button
       type="button"
-      className="nc-act"
-      disabled={testing}
+      className={`nc-act${retestLocked && !testing ? " is-locked" : ""}`}
+      disabled={testing || retestLocked}
       onClick={(e) => {
         e.stopPropagation();
         onTest();
@@ -123,7 +126,7 @@ export function NodeCard({
   return (
     <div className="nc-wrap">
       <div
-        className={`ncard${expanded ? " exp" : ""}${isCurrent ? " cur" : ""}`}
+        className={`ncard${expanded ? " exp" : ""}${testing ? " testing" : ""}`}
         onClick={onToggle}
       >
         <div className="nc-sum">

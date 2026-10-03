@@ -39,15 +39,19 @@ function timeoutCard(id: string, title: string): CheckCard {
 async function withDeadline(
   title: string,
   id: string,
-  work: () => Promise<CheckCard>,
+  work: (signal: AbortSignal) => Promise<CheckCard>,
   deadlineMs: number,
 ): Promise<CheckCard> {
+  const ac = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      work(),
+      work(ac.signal),
       new Promise<CheckCard>((resolve) => {
-        timer = setTimeout(() => resolve(timeoutCard(id, title)), deadlineMs);
+        timer = setTimeout(() => {
+          ac.abort();
+          resolve(timeoutCard(id, title));
+        }, deadlineMs);
       }),
     ]);
   } catch (err) {
@@ -84,11 +88,14 @@ export async function runEnvDiagnostics(
 
   let exit = options?.exitIp ?? null;
   if (!exit) {
-    exit = await Promise.race([
-      fetchExitIp(mixedPort),
-      new Promise<ExitIpInfo>((resolve) =>
-        setTimeout(
-          () =>
+    const exitAc = new AbortController();
+    let exitTimer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      exit = await Promise.race([
+        fetchExitIp(mixedPort, exitAc.signal),
+        new Promise<ExitIpInfo>((resolve) => {
+          exitTimer = setTimeout(() => {
+            exitAc.abort();
             resolve({
               ip: null,
               country: null,
@@ -97,11 +104,13 @@ export async function runEnvDiagnostics(
               isp: null,
               hosting: null,
               ipTypeLabel: "--",
-            }),
-          5000,
-        ),
-      ),
-    ]);
+            });
+          }, 5000);
+        }),
+      ]);
+    } finally {
+      if (exitTimer) clearTimeout(exitTimer);
+    }
   }
 
   // 真实归属参照（归属地判定的锚点）：优先实测直连出口——
@@ -128,23 +137,23 @@ export async function runEnvDiagnostics(
     id: string;
     title: string;
     deadlineMs: number;
-    run: () => Promise<CheckCard>;
+    run: (signal: AbortSignal) => Promise<CheckCard>;
   }[] = [
     {
       // 按严重程度排序：直连旁路是唯一"整机裸奔"级的失败，放在最前
       id: "bare-egress",
       title: "直连旁路检查",
       deadlineMs: 14000,
-      run: () => checkBareEgress(mixedPort),
+      run: (signal) => checkBareEgress(mixedPort, signal),
     },
     {
       id: "dns-leak",
       title: "DNS 解析器",
       deadlineMs: 12000,
-      run: async () => {
+      run: async (signal) => {
         // 优先系统解析器；失败时仍给出启发式对照
         try {
-          return await checkDnsResolvers(exit!, mixedPort, realCountry);
+          return await checkDnsResolvers(exit!, mixedPort, realCountry, signal);
         } catch {
           return checkDnsLeakApproach(exit!, mixedPort);
         }
@@ -154,19 +163,19 @@ export async function runEnvDiagnostics(
       id: "ipv6-leak",
       title: "IPv6 泄漏",
       deadlineMs: 12000,
-      run: () => checkIpv6Leak(mixedPort),
+      run: (signal) => checkIpv6Leak(mixedPort, signal),
     },
     {
       id: "webrtc",
       title: "WebRTC",
       deadlineMs: 10000,
-      run: () => checkWebRtcLeak(exit, mixedPort, realCountry),
+      run: (signal) => checkWebRtcLeak(exit, mixedPort, realCountry, signal),
     },
     {
       id: "split-routing",
       title: "分流检查",
       deadlineMs: 22000,
-      run: () => checkSplitRouting(mixedPort, mihomoConfig),
+      run: (signal) => checkSplitRouting(mixedPort, mihomoConfig, signal),
     },
   ];
 

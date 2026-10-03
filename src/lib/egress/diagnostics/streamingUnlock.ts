@@ -25,6 +25,7 @@ function extractNetflixRegion(text: string): string | null {
 
 async function probeNetflixLine(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<ProbeLine> {
   // Common Clash unlock title used for region redirect hints
   const url = "https://www.netflix.com/title/80018499";
@@ -34,6 +35,7 @@ async function probeNetflixLine(
     mixedPort,
     timeoutMs,
     userAgent: UA,
+    signal,
   });
   const ms = Math.round(performance.now() - t0);
   const body = r.text ?? "";
@@ -104,6 +106,7 @@ async function probeNetflixLine(
 
 async function probeDisneyLine(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<ProbeLine> {
   const url = "https://www.disneyplus.com/";
   const timeoutMs = 4000;
@@ -112,6 +115,7 @@ async function probeDisneyLine(
     mixedPort,
     timeoutMs,
     userAgent: UA,
+    signal,
   });
   const ms = Math.round(performance.now() - t0);
   const body = r.text ?? "";
@@ -177,6 +181,7 @@ async function probeDisneyLine(
 
 async function probeYoutubeLine(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<ProbeLine> {
   const url = "https://www.youtube.com/premium";
   const timeoutMs = 4000;
@@ -185,6 +190,7 @@ async function probeYoutubeLine(
     mixedPort,
     timeoutMs,
     userAgent: UA,
+    signal,
   });
   const ms = Math.round(performance.now() - t0);
   const body = r.text ?? "";
@@ -272,6 +278,7 @@ function extractAppleStorefront(text: string): string | null {
 
 async function probeAppleStoreLine(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<ProbeLine> {
   const url = "https://apps.apple.com/";
   const timeoutMs = 4000;
@@ -280,6 +287,7 @@ async function probeAppleStoreLine(
     mixedPort,
     timeoutMs,
     userAgent: UA,
+    signal,
   });
   const ms = Math.round(performance.now() - t0);
   const body = r.text ?? "";
@@ -339,6 +347,7 @@ async function probeAppleStoreLine(
 
 async function probeGooglePlayLine(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<ProbeLine> {
   const url = "https://play.google.com/store/games";
   const timeoutMs = 4000;
@@ -347,6 +356,7 @@ async function probeGooglePlayLine(
     mixedPort,
     timeoutMs,
     userAgent: UA,
+    signal,
   });
   const ms = Math.round(performance.now() - t0);
   const body = r.text ?? "";
@@ -410,6 +420,7 @@ async function probeGooglePlayLine(
 
 async function probeTikTokLine(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<ProbeLine> {
   // TikTok：连通/可见启发式，非硬「解锁」。cdn-cgi/trace 优先，失败再看首页。
   // 参考 Verge 探测路径，但不照搬 Yes=已解锁；403/451/拦截文案仍明确 fail。
@@ -419,13 +430,13 @@ async function probeTikTokLine(
 
   const t0 = performance.now();
   let url = primary;
-  let r = await probeText(url, { mixedPort, timeoutMs, userAgent: UA });
+  let r = await probeText(url, { mixedPort, timeoutMs, userAgent: UA, signal });
   let body = r.text ?? "";
   let region = extractTikTokRegion(body);
   let statusKind = classifyTikTokStatus(r.status, body);
 
   if (statusKind === "failed" || !region) {
-    const r2 = await probeText(fallback, { mixedPort, timeoutMs, userAgent: UA });
+    const r2 = await probeText(fallback, { mixedPort, timeoutMs, userAgent: UA, signal });
     const body2 = r2.text ?? "";
     const region2 = extractTikTokRegion(body2);
     const kind2 = classifyTikTokStatus(r2.status, body2);
@@ -477,7 +488,7 @@ async function probeTikTokLine(
 /**
  * TikTok 状态→结论映射（启发式）。
  * - no → fail（地区封锁明确）
- * - yes + region → 谨慎 pass（可见≠已解锁）
+ * - yes + region → warn（可见≠已解锁；行内仍写可见，不进星级）
  * - yes 无 region → warn
  * - failed → null（由调用方标 unknown）
  */
@@ -497,9 +508,9 @@ export function tikTokVerdict(
   if (kind === "yes") {
     if (region) {
       return {
-        level: "pass",
+        level: "warn",
         conclusion: `可见（${region}）`,
-        processNote: "结论边界：CDN/页面可见启发式；Yes≠「已解锁」会员/推荐/直播。",
+        processNote: "结论边界：CDN/页面可见启发式；Yes≠「已解锁」会员/推荐/直播。角标是警告，行内仍写可见，不进星级。",
       };
     }
     return {
@@ -548,13 +559,14 @@ export function extractTikTokRegion(body: string): string | null {
 
 async function probeSpotifyLine(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<ProbeLine> {
   // Clash Verge Rev spotify.rs：country-selector JSON（GET）；桌面侧拿不到最终 URL，地区靠 body。
   const url =
     "https://www.spotify.com/api/content/v1/country-selector?platform=web&format=json";
   const timeoutMs = 4000;
   const t0 = performance.now();
-  const r = await probeText(url, { mixedPort, timeoutMs, userAgent: UA });
+  const r = await probeText(url, { mixedPort, timeoutMs, userAgent: UA, signal });
   const ms = Math.round(performance.now() - t0);
   const body = r.text ?? "";
   const lower = body.toLowerCase();
@@ -639,13 +651,14 @@ export function extractSpotifyRegion(body: string): string | null {
 
 async function probePrimeVideoLine(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<ProbeLine> {
-  // Prime Video：HTML 线索启发式。isServiceRestricted→fail；currentTerritory→pass+区；
+  // Prime Video：HTML 线索启发式。isServiceRestricted→fail；currentTerritory→可见+警告（不计星）；
   // 页可达但无 territory→warn（无法确认区域），不照搬 Verge 的 PAGE ERROR=Failed。
   const url = "https://www.primevideo.com";
   const timeoutMs = 4000;
   const t0 = performance.now();
-  const r = await probeText(url, { mixedPort, timeoutMs, userAgent: UA });
+  const r = await probeText(url, { mixedPort, timeoutMs, userAgent: UA, signal });
   const ms = Math.round(performance.now() - t0);
   const body = r.text ?? "";
 
@@ -673,7 +686,7 @@ async function probePrimeVideoLine(
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         verdict.processNote,
-        "测了什么：primevideo.com 首页 HTML 线索（启发式，非硬解锁）。",
+        "测了什么：primevideo.com 首页 HTML 线索（启发式）。有地区只写可见，不是已解锁。",
         "没测：登录、片库、Channels、下载、4K。",
       ].join("\n"),
     };
@@ -689,7 +702,7 @@ async function probePrimeVideoLine(
 
 /**
  * Prime Video 状态→结论。
- * restricted→fail；有 territory→pass；页可达无 territory→warn（启发式/无法确认区域）。
+ * restricted→fail；有 territory→warn「可见（地区）」不计星；页可达无 territory→warn。
  */
 export function primeVideoVerdict(opts: {
   restricted: boolean;
@@ -705,9 +718,9 @@ export function primeVideoVerdict(opts: {
   }
   if (opts.region) {
     return {
-      level: "pass",
-      conclusion: `可用（${opts.region}）`,
-      processNote: `地区线索：currentTerritory=${opts.region}（HTML 启发式）。`,
+      level: "warn",
+      conclusion: `可见（${opts.region}）`,
+      processNote: `地区线索：currentTerritory=${opts.region}（页面启发式）。角标是警告，行内写可见，不进星级，不是已解锁。`,
     };
   }
   if (opts.pageReachable) {
@@ -768,39 +781,43 @@ const STORE_TIP = "";
 /** Netflix 单独卡：粗可达与地区线索。 */
 export async function checkNetflixUnlock(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<CheckCard> {
   return withFailRetry(async () => {
-    const line = await probeNetflixLine(mixedPort);
+    const line = await probeNetflixLine(mixedPort, signal);
     return serviceCardFromLine("netflix", "Netflix", line, STREAM_TIP, mixedPort);
-  });
+  }, signal);
 }
 
 /** Disney+ 单独卡：首页粗可达与地区线索。 */
 export async function checkDisneyUnlock(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<CheckCard> {
   return withFailRetry(async () => {
-    const line = await probeDisneyLine(mixedPort);
+    const line = await probeDisneyLine(mixedPort, signal);
     return serviceCardFromLine("disney", "Disney+", line, STREAM_TIP, mixedPort);
-  });
+  }, signal);
 }
 
 /** YouTube Premium 单独卡（探测 Premium 页）：粗可达与地区线索。 */
 export async function checkYoutubeUnlock(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<CheckCard> {
   return withFailRetry(async () => {
-    const line = await probeYoutubeLine(mixedPort);
+    const line = await probeYoutubeLine(mixedPort, signal);
     return serviceCardFromLine("youtube", "YouTube Premium", line, STREAM_TIP, mixedPort);
-  });
+  }, signal);
 }
 
 /** App Store 单独卡：粗可达与地区路径线索。 */
 export async function checkAppStoreUnlock(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<CheckCard> {
   return withFailRetry(async () => {
-    const line = await probeAppleStoreLine(mixedPort);
+    const line = await probeAppleStoreLine(mixedPort, signal);
     return serviceCardFromLine(
       "app-store",
       "App Store",
@@ -808,15 +825,16 @@ export async function checkAppStoreUnlock(
       STORE_TIP,
       mixedPort,
     );
-  });
+  }, signal);
 }
 
 /** Google Play 单独卡：粗可达与地区线索。 */
 export async function checkGooglePlayUnlock(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<CheckCard> {
   return withFailRetry(async () => {
-    const line = await probeGooglePlayLine(mixedPort);
+    const line = await probeGooglePlayLine(mixedPort, signal);
     return serviceCardFromLine(
       "google-play",
       "Google Play",
@@ -824,35 +842,38 @@ export async function checkGooglePlayUnlock(
       STORE_TIP,
       mixedPort,
     );
-  });
+  }, signal);
 }
 
 /** TikTok 单独卡：cdn-cgi/trace + 首页——连通/可见启发式（非硬解锁）。 */
 export async function checkTikTokUnlock(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<CheckCard> {
   return withFailRetry(async () => {
-    const line = await probeTikTokLine(mixedPort);
+    const line = await probeTikTokLine(mixedPort, signal);
     return serviceCardFromLine("tiktok", "TikTok", line, STREAM_TIP, mixedPort);
-  });
+  }, signal);
 }
 
 /** Spotify 单独卡：country-selector JSON（地区选择器；保持既有判定）。 */
 export async function checkSpotifyUnlock(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<CheckCard> {
   return withFailRetry(async () => {
-    const line = await probeSpotifyLine(mixedPort);
+    const line = await probeSpotifyLine(mixedPort, signal);
     return serviceCardFromLine("spotify", "Spotify", line, STREAM_TIP, mixedPort);
-  });
+  }, signal);
 }
 
-/** Prime Video 单独卡：isServiceRestricted / currentTerritory（启发式；无区→warn）。 */
+/** Prime Video 单独卡：有地区写「可见」，角标警告；地区限制仍是不可用。 */
 export async function checkPrimeVideoUnlock(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<CheckCard> {
   return withFailRetry(async () => {
-    const line = await probePrimeVideoLine(mixedPort);
+    const line = await probePrimeVideoLine(mixedPort, signal);
     return serviceCardFromLine(
       "prime-video",
       "Prime Video",
@@ -860,5 +881,5 @@ export async function checkPrimeVideoUnlock(
       STREAM_TIP,
       mixedPort,
     );
-  });
+  }, signal);
 }

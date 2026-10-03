@@ -144,7 +144,10 @@ export async function testAll(
         if (shouldAbort()) {
           return { n, delay: null as number | null, skipped: true };
         }
-        const delay = await probeDelay(config!, n.name, DELAY_URL, 5000);
+        let delay = await probeDelay(config!, n.name, DELAY_URL, 5000);
+        if (delay == null && !shouldAbort()) {
+          delay = await probeDelay(config!, n.name, DELAY_URL, 5000);
+        }
         cullDone += 1;
         hooks.onProgress({
           text: `连通性预检 ${cullDone}/${toCheck.length}`,
@@ -162,6 +165,17 @@ export async function testAll(
         if (row.skipped) continue;
         if (row.delay == null) continue;
         alive.push(row.n);
+      }
+    }
+
+    // 正式检测从正在使用的节点开始，其余保持原顺序。预检仍并发，不排先后。
+    // 正在用的节点若已在预检里判死，不在 alive 里，就不会被提前再测一遍。
+    const inUse = connection.currentProxy;
+    if (inUse) {
+      const at = alive.findIndex((n) => n.name === inUse);
+      if (at > 0) {
+        const [row] = alive.splice(at, 1);
+        if (row) alive.unshift(row);
       }
     }
 

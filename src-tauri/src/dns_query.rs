@@ -20,6 +20,7 @@ pub enum DnsError {
     MalformedPacket(&'static str),
     CompressionLoop,
     NoAnswer,
+    Cancelled,
 }
 
 impl std::fmt::Display for DnsError {
@@ -29,6 +30,7 @@ impl std::fmt::Display for DnsError {
             Self::MalformedPacket(msg) => write!(f, "malformed: {msg}"),
             Self::CompressionLoop => write!(f, "compression pointer loop"),
             Self::NoAnswer => write!(f, "no answer records"),
+            Self::Cancelled => write!(f, "cancelled"),
         }
     }
 }
@@ -180,7 +182,15 @@ fn parse_txt_rdata(rdata: &[u8]) -> Result<Vec<String>, DnsError> {
 
 /// Send a DNS query over UDP to `server_ip:53`, wait for response with `timeout`.
 /// Returns the raw response bytes. Auto-selects IPv4/IPv6 socket family.
-fn send_udp_query(server_ip: &str, query: &[u8], timeout: Duration) -> Result<Vec<u8>, DnsError> {
+fn send_udp_query(
+    server_ip: &str,
+    query: &[u8],
+    timeout: Duration,
+    cancelled: &dyn Fn() -> bool,
+) -> Result<Vec<u8>, DnsError> {
+    if cancelled() {
+        return Err(DnsError::Cancelled);
+    }
     // Strip brackets if caller passes "[::1]" form
     let bare = server_ip.trim_start_matches('[').trim_end_matches(']');
     let addr: SocketAddr = format!("{bare}:{DNS_PORT}")
@@ -197,23 +207,54 @@ fn send_udp_query(server_ip: &str, query: &[u8], timeout: Duration) -> Result<Ve
 
     let socket = UdpSocket::bind(bind_addr)?;
     socket.connect(addr)?;
-    socket.set_read_timeout(Some(timeout))?;
+    let slice = Duration::from_millis(200).min(timeout);
+    socket.set_read_timeout(Some(slice))?;
     socket.set_write_timeout(Some(timeout))?;
 
     socket.send(query)?;
 
     // 4096 is well above any typical UDP DNS response (512 without EDNS,
     // up to 4096 with EDNS). whoami TXT is tiny, but be generous.
+    // Read in short slices so a card deadline can close this wait early.
     let mut buf = vec![0u8; 4096];
-    let n = socket.recv(&mut buf)?;
-    buf.truncate(n);
-    Ok(buf)
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        if cancelled() {
+            return Err(DnsError::Cancelled);
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(DnsError::Io(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "dns timeout",
+            )));
+        }
+        match socket.recv(&mut buf) {
+            Ok(n) => {
+                buf.truncate(n);
+                return Ok(buf);
+            }
+            Err(e)
+                if e.kind() == io::ErrorKind::TimedOut || e.kind() == io::ErrorKind::WouldBlock =>
+            {
+                continue;
+            }
+            Err(e) => return Err(DnsError::Io(e)),
+        }
+    }
 }
 
 /// Convenience: encode + send + decode, returning joined TXT strings.
-pub fn dns_txt_lookup(name: &str, server: &str, timeout: Duration) -> Result<Vec<String>, DnsError> {
+pub fn dns_txt_lookup(
+    name: &str,
+    server: &str,
+    timeout: Duration,
+    cancelled: &dyn Fn() -> bool,
+) -> Result<Vec<String>, DnsError> {
+    if cancelled() {
+        return Err(DnsError::Cancelled);
+    }
     let (id, query) = encode_txt_query(name);
-    let response = send_udp_query(server, &query, timeout)?;
+    let response = send_udp_query(server, &query, timeout, cancelled)?;
     decode_txt_response(&response, id)
 }
 
@@ -275,6 +316,17 @@ mod tests {
     }
 
     // ---------- encode tests ----------
+
+    #[test]
+    fn lookup_stops_when_already_cancelled() {
+        let err = dns_txt_lookup(
+            "example.com",
+            "127.0.0.1",
+            Duration::from_secs(5),
+            &|| true,
+        );
+        assert!(matches!(err, Err(DnsError::Cancelled)));
+    }
 
     #[test]
     fn encode_known_query_bytes() {

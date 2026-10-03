@@ -28,9 +28,9 @@ describe("TikTok unlock heuristics（连通/可见，非硬解锁）", () => {
     expect(extractTikTokRegion("loc=XX\n")).toBeNull();
   });
 
-  it("yes+区 → 谨慎 pass（可见≠已解锁）；yes 无区 → warn；no → fail", () => {
+  it("yes+区 → 警告角标，行内仍写可见；yes 无区 → warn；no → fail", () => {
     const withRegion = tikTokVerdict("yes", "JP");
-    expect(withRegion?.level).toBe("pass");
+    expect(withRegion?.level).toBe("warn");
     expect(withRegion?.conclusion).toBe("可见（JP）");
     expect(withRegion?.conclusion).not.toMatch(/已解锁/);
     expect(withRegion?.processNote).toMatch(/启发式|可见/);
@@ -61,7 +61,7 @@ describe("Spotify / Prime Video region extract", () => {
     expect(extractPrimeVideoRegion("isServiceRestricted")).toBeNull();
   });
 
-  it("Prime：restricted→fail；有 territory→pass；可达无区→warn（启发式）", () => {
+  it("Prime：restricted→fail；有 territory→可见警告；可达无区→warn（启发式）", () => {
     expect(
       primeVideoVerdict({
         restricted: true,
@@ -70,13 +70,13 @@ describe("Spotify / Prime Video region extract", () => {
       })?.level,
     ).toBe("fail");
 
-    const unlocked = primeVideoVerdict({
+    const visible = primeVideoVerdict({
       restricted: false,
       region: "US",
       pageReachable: true,
     });
-    expect(unlocked?.level).toBe("pass");
-    expect(unlocked?.conclusion).toBe("可用（US）");
+    expect(visible?.level).toBe("warn");
+    expect(visible?.conclusion).toBe("可见（US）");
 
     const weak = primeVideoVerdict({
       restricted: false,

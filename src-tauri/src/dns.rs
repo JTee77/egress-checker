@@ -302,7 +302,11 @@ fn find_system_resolver() -> Option<String> {
 /// Blocking raw-UDP DNS TXT query to `whoami.ds.akahelp.net`.
 /// `resolver` = Some("1.1.1.1") to force a specific recursive resolver;
 /// None uses the system default path (discovered via `find_system_resolver`).
-pub fn dns_whoami_blocking(resolver: Option<&str>, timeout_ms: u64) -> DnsWhoamiResult {
+pub fn dns_whoami_blocking(
+    resolver: Option<&str>,
+    timeout_ms: u64,
+    cancelled: &dyn Fn() -> bool,
+) -> DnsWhoamiResult {
     use crate::dns_query;
     use std::time::Duration;
 
@@ -318,6 +322,10 @@ pub fn dns_whoami_blocking(resolver: Option<&str>, timeout_ms: u64) -> DnsWhoami
         }
     }
 
+    if cancelled() {
+        return whoami_err("system".to_string(), "已取消".to_string());
+    }
+
     let host = "whoami.ds.akahelp.net";
     let timeout = Duration::from_millis(timeout_ms.max(500));
 
@@ -331,7 +339,7 @@ pub fn dns_whoami_blocking(resolver: Option<&str>, timeout_ms: u64) -> DnsWhoami
 
     let via = server.clone();
 
-    match dns_query::dns_txt_lookup(host, &server, timeout) {
+    match dns_query::dns_txt_lookup(host, &server, timeout, cancelled) {
         Ok(txt_strings) => {
             let raw = txt_strings.join("\n");
             let (client_ip, resolver_ns, ecs) = parse_whoami_txt(&raw);
@@ -350,6 +358,7 @@ pub fn dns_whoami_blocking(resolver: Option<&str>, timeout_ms: u64) -> DnsWhoami
                 },
             }
         }
+        Err(dns_query::DnsError::Cancelled) => whoami_err(via, "已取消".to_string()),
         Err(e) => whoami_err(via, format!("UDP DNS 查询失败: {e}")),
     }
 }

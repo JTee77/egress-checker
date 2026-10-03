@@ -139,12 +139,15 @@ const EXIT_IP_SOURCES: {
 
 export async function fetchExitIp(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<ExitIpInfo> {
   // 顺序尝试（house convention：避免同时打满 Rust spawn_blocking 池）
   for (const source of EXIT_IP_SOURCES) {
+    if (signal?.aborted) break;
     const r = await fetchTextViaProxy(source.url, {
       mixedPort: mixedPort ?? null,
       timeoutMs: 4000,
+      signal,
     });
     if (!r.ok || !r.text) continue;
     try {
@@ -176,15 +179,18 @@ export async function fetchExitIp(
 export async function fetchIpCountry(
   ip: string,
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   const urls = [
     `https://ipwho.is/${encodeURIComponent(ip)}`,
     `https://get.geojs.io/v1/ip/geo.json?ip=${encodeURIComponent(ip)}`,
   ];
   for (const url of urls) {
+    if (signal?.aborted) return null;
     const r = await fetchTextViaProxy(url, {
       mixedPort: mixedPort ?? null,
       timeoutMs: 3000,
+      signal,
     });
     if (!r.ok || !r.text) continue;
     try {

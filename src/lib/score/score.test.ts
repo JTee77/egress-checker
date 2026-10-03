@@ -293,3 +293,76 @@ describe("scoreNodeFromCards · 未验证态剔除与权重归一", () => {
     expect(r.blurb).toContain("未经代理验证");
   });
 });
+
+describe("TikTok 可见不计星", () => {
+  it("「可见」不改变服务面分数，也不算进较顺", () => {
+    const base = [
+      card("reachability", "pass", "通"),
+      card("netflix", "pass", "可用"),
+      card("tiktok", "warn", "可见（JP）"),
+      card("prime-video", "warn", "可见（US）"),
+    ];
+    const withVisible = scoreNodeFromCards("a", base, "t");
+    const without = scoreNodeFromCards(
+      "a",
+      base.filter((c) => c.id !== "tiktok" && c.id !== "prime-video"),
+      "t",
+    );
+    const svc = (r: ReturnType<typeof scoreNodeFromCards>) =>
+      r.breakdown.find((b) => b.key === "services")!;
+    expect(svc(withVisible).score).toBe(svc(without).score);
+    expect(svc(withVisible).note).toBe(svc(without).note);
+    expect(svc(withVisible).note).not.toContain("2 项");
+  });
+});
+
+describe("服务计票", () => {
+  it("Gemini / ChatGPT 的「可用」不进服务分，也不算较顺", () => {
+    const base = [
+      card("reachability", "pass", "通"),
+      card("netflix", "pass", "可用"),
+      card("gemini", "pass", "可用（US）"),
+      card("chatgpt", "pass", "可用"),
+    ];
+    const withAi = scoreNodeFromCards("a", base, "t");
+    const without = scoreNodeFromCards(
+      "a",
+      base.filter((c) => c.id !== "gemini" && c.id !== "chatgpt"),
+      "t",
+    );
+    const svc = (r: ReturnType<typeof scoreNodeFromCards>) =>
+      r.breakdown.find((b) => b.key === "services")!;
+    expect(svc(withAi).score).toBe(svc(without).score);
+    expect(svc(withAi).note).toBe("1 项较顺、0 项不行（共 1 项）");
+  });
+
+  it("一项不可用按两票，大约把服务分从 50 拉到 33", () => {
+    const r = scoreNodeFromCards(
+      "a",
+      [
+        card("reachability", "pass", "通"),
+        card("netflix", "pass", "可用"),
+        card("disney", "fail", "不可用（地区限制）"),
+        card("gemini", "pass", "可用"),
+      ],
+      "t",
+    );
+    const svc = r.breakdown.find((b) => b.key === "services")!;
+    expect(svc.score).toBe(33);
+    expect(svc.note).toBe("1 项较顺、1 项不行（共 2 项）");
+  });
+
+  it("Gemini 不可用仍计两票", () => {
+    const r = scoreNodeFromCards(
+      "a",
+      [
+        card("netflix", "pass", "可用"),
+        card("gemini", "fail", "不可用（地区限制）"),
+      ],
+      "t",
+    );
+    const svc = r.breakdown.find((b) => b.key === "services")!;
+    expect(svc.score).toBe(33);
+    expect(svc.note).toContain("1 项不行");
+  });
+});

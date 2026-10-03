@@ -15,16 +15,19 @@ function medianNumber(values: number[]): number {
 /** 同 URL 连续采样 3 次，取成功值中位数；全失败才判失败。 */
 export async function sampleLatency(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<{ ms: number | null; card: CheckCard }> {
   const url = "https://www.gstatic.com/generate_204";
   const attemptLines: string[] = [];
   const successMs: number[] = [];
 
   for (let i = 0; i < 3; i++) {
+    if (signal?.aborted) break;
     const t0 = performance.now();
     const r = await probeText(url, {
       mixedPort,
       timeoutMs: PROBE_TIMEOUT_MS,
+      signal,
     });
     const reachable = isReachableStatus(r.status, r.ok);
     const elapsed = Math.round(performance.now() - t0);
@@ -95,6 +98,7 @@ export type BandwidthSampleOptions = {
   mode?: "full" | "light";
   /** @deprecated 请用 mode:"light"；保留兼容旧调用 */
   light?: boolean;
+  signal?: AbortSignal;
 };
 
 function bytesToMbps(bytes: number, elapsedMs: number): number | null {
@@ -126,6 +130,7 @@ type BandwidthShot = {
 async function sampleBandwidthOnce(
   mixedPort: number | null | undefined,
   light: boolean,
+  signal?: AbortSignal,
 ): Promise<BandwidthShot> {
   const downBytes = light ? BW_DOWN_BYTES_LIGHT : BW_DOWN_BYTES_FULL;
   const upBytes = light ? BW_UP_BYTES_LIGHT : BW_UP_BYTES_FULL;
@@ -137,13 +142,29 @@ async function sampleBandwidthOnce(
     mixedPort: mixedPort ?? null,
     method: "GET",
     timeoutMs,
+    signal,
   });
+  if (signal?.aborted) {
+    return {
+      downMbps: null,
+      upMbps: null,
+      downPartial: false,
+      downOk: false,
+      level: "unknown",
+      conclusion: "超时未响应",
+      process: "探测超时或卡住，已按截止时间结束本项。",
+      downErr: "已取消",
+      upErr: "已取消",
+      unverified: false,
+    };
+  }
   const up = await timedTransferViaProxy({
     url: BW_UP_URL,
     mixedPort: mixedPort ?? null,
     method: "POST",
     uploadBytes: upBytes,
     timeoutMs,
+    signal,
   });
 
   const downMbps =
@@ -246,8 +267,18 @@ export async function sampleBandwidth(
   const mode: "full" | "light" =
     opts?.mode ?? (opts?.light ? "light" : "full");
   const lightPrimary = mode === "light";
+  const signal = opts?.signal;
 
-  const first = await sampleBandwidthOnce(mixedPort, lightPrimary);
+  const first = await sampleBandwidthOnce(mixedPort, lightPrimary, signal);
+  if (signal?.aborted) {
+    return {
+      id: "bandwidth",
+      title: "抽样带宽",
+      level: "unknown",
+      conclusion: "超时未响应",
+      process: "探测超时或卡住，已按截止时间结束本项。",
+    };
+  }
 
   // No proxy port and direct-fallback refused → we could not measure throughput
   // at all. Return a neutral 未验证 card and skip retries (a retry can't help).
@@ -276,7 +307,7 @@ export async function sampleBandwidth(
         metrics: { downMbps: first.downMbps, upMbps: first.upMbps },
       };
     }
-    const second = await sampleBandwidthOnce(mixedPort, true);
+    const second = await sampleBandwidthOnce(mixedPort, true, signal);
     return {
       id: "bandwidth",
       title: "抽样带宽",
@@ -304,7 +335,7 @@ export async function sampleBandwidth(
     };
   }
 
-  const confirm = await sampleBandwidthOnce(mixedPort, true);
+  const confirm = await sampleBandwidthOnce(mixedPort, true, signal);
   const process = [
     `第 1 次（主抽样）：\n${first.process}`,
     `第 2 次（轻量复核）：\n${confirm.process}`,
