@@ -34,6 +34,7 @@ export function NodeCard({
   isCurrent,
   expanded,
   testing,
+  retestLocked = false,
   onToggle,
   onTest,
 }: {
@@ -44,6 +45,8 @@ export function NodeCard({
   isCurrent: boolean;
   expanded: boolean;
   testing: boolean;
+  /** 测全部进行中：已测完卡片的「再测」不可点 */
+  retestLocked?: boolean;
   onToggle: () => void;
   onTest: () => void;
 }) {
@@ -96,8 +99,8 @@ export function NodeCard({
       </button>
       <button
         type="button"
-        className="nc-act"
-        disabled={testing}
+        className={`nc-act${retestLocked && !testing ? " is-locked" : ""}`}
+        disabled={testing || retestLocked}
         onClick={(e) => {
           e.stopPropagation();
           onTest();

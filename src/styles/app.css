@@ -1116,6 +1116,15 @@ select {
   opacity: 0.5;
   cursor: default;
 }
+/* 测全部进行中，已测完的「再测」灰掉，明确不可点 */
+.nc-act.is-locked,
+.nc-act.is-locked:hover {
+  color: var(--text-muted);
+  border-color: var(--border);
+  background: transparent;
+  opacity: 1;
+  cursor: not-allowed;
+}
 .nc-full {
   height: calc(var(--nc-exp-h) - var(--nc-sum-h) - 2px);
   min-height: 0;

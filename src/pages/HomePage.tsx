@@ -625,6 +625,7 @@ export function HomePage({
                       isCurrent={n.name === connection.currentProxy}
                       expanded={expanded.has(n.name)}
                       testing={testingNode === n.name}
+                      retestLocked={running && mode === "all"}
                       onToggle={() => toggleExpand(n.name)}
                       onTest={() => void testOneNode(n)}
                     />
