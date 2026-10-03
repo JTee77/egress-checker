@@ -13,6 +13,30 @@ pub async fn proxy_timed_transfer_async(
     method: &str,
     upload_bytes: Option<u64>,
     timeout_ms: u64,
+    cancel: Option<super::cancel::CancelWait>,
+) -> Result<TimedTransferResult, String> {
+    let work = proxy_timed_transfer_inner(url, mixed_port, method, upload_bytes, timeout_ms);
+    if let Some(cancel) = cancel {
+        return match futures_util::future::select(std::pin::pin!(work), std::pin::pin!(cancel)).await {
+            futures_util::future::Either::Left((result, _)) => result,
+            futures_util::future::Either::Right((_, _)) => Ok(TimedTransferResult {
+                ok: false,
+                status: 0,
+                bytes: 0,
+                elapsed_ms: 0,
+                error: Some("已取消".into()),
+            }),
+        };
+    }
+    work.await
+}
+
+async fn proxy_timed_transfer_inner(
+    url: &str,
+    mixed_port: Option<u16>,
+    method: &str,
+    upload_bytes: Option<u64>,
+    timeout_ms: u64,
 ) -> Result<TimedTransferResult, String> {
     use futures_util::StreamExt;
     use std::time::Instant;
@@ -167,6 +191,7 @@ mod tests {
                 "GET",
                 None,
                 800,
+                None,
             ))
         });
         assert!(result.is_ok(), "proxy_timed_transfer_async panicked");

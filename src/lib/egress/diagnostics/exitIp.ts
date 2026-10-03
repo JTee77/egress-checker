@@ -139,12 +139,15 @@ const EXIT_IP_SOURCES: {
 
 export async function fetchExitIp(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<ExitIpInfo> {
   // 顺序尝试（house convention：避免同时打满 Rust spawn_blocking 池）
   for (const source of EXIT_IP_SOURCES) {
+    if (signal?.aborted) break;
     const r = await fetchTextViaProxy(source.url, {
       mixedPort: mixedPort ?? null,
       timeoutMs: 4000,
+      signal,
     });
     if (!r.ok || !r.text) continue;
     try {

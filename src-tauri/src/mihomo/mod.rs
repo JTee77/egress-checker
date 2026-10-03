@@ -7,6 +7,7 @@
 //! Secrets are returned to the frontend for local API use only; never log secret values.
 //! OS-specific paths/sockets live in `crate::platform` (macOS behavior unchanged).
 
+mod cancel;
 mod discovery;
 mod http_parse;
 mod nodes;
@@ -17,6 +18,7 @@ mod types;
 // Public controller-layer API surface (referenced as `mihomo::X` from `crate::lib`).
 pub use discovery::{discover_controller, discover_for_client, read_verge_config};
 pub use nodes::list_nodes_async;
+pub use cancel::{arm_cancel, disarm_cancel, fire_cancel};
 pub use timed::proxy_timed_transfer_async;
 pub use transport::{http_via_tcp_async, http_via_unix, proxy_fetch_async};
 pub use types::{DiscoverResult, ListNodesResult, TimedTransferResult, UnixHttpResult};

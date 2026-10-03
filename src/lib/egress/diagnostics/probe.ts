@@ -11,9 +11,12 @@ async function fetchTextBrowser(
   url: string,
   init: RequestInit & { timeoutMs?: number } = {},
 ): Promise<{ ok: boolean; status: number; text: string }> {
-  const { timeoutMs = 5000, ...rest } = init;
+  const { timeoutMs = 5000, signal, ...rest } = init;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const onAbort = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener("abort", onAbort, { once: true });
   try {
     const res = await fetch(url, { ...rest, signal: controller.signal });
     const text = await res.text();
@@ -22,6 +25,7 @@ async function fetchTextBrowser(
     return { ok: false, status: 0, text: "" };
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
   }
 }
 
@@ -41,6 +45,7 @@ async function probeText(
     timeoutMs?: number;
     userAgent?: string;
     method?: string;
+    signal?: AbortSignal;
   } = {},
 ): Promise<{ ok: boolean; status: number; text: string; unverified: boolean }> {
   const timeoutMs = opts.timeoutMs ?? PROBE_TIMEOUT_MS;
@@ -52,6 +57,7 @@ async function probeText(
       mixedPort,
       timeoutMs,
       userAgent: opts.userAgent,
+      signal: opts.signal,
     });
     const success =
       viaProxy.status === 204 ||
@@ -80,6 +86,7 @@ async function probeText(
     method: opts.method ?? "GET",
     timeoutMs,
     headers: opts.userAgent ? { "User-Agent": opts.userAgent } : undefined,
+    signal: opts.signal,
   });
   return { ...viaBrowser, unverified: false };
 }
@@ -91,6 +98,7 @@ function isReachableStatus(status: number, ok: boolean): boolean {
 export type ReachabilityOptions = {
   /** light：只探一个点 + 更短超时，供「测全部」批量深测 */
   light?: boolean;
+  signal?: AbortSignal;
 };
 
 export async function checkReachability(
@@ -115,11 +123,13 @@ export async function checkReachability(
     unverified: boolean;
   }[] = [];
   for (const url of targets) {
+    if (opts?.signal?.aborted) break;
     const t0 = performance.now();
     const r = await probeText(url, {
       mixedPort,
       timeoutMs,
       method: "GET",
+      signal: opts?.signal,
     });
     results.push({ url, ...r, ms: Math.round(performance.now() - t0) });
   }
@@ -172,9 +182,10 @@ function serviceNeedsRetry(card: CheckCard): boolean {
 /** 失败/未成功类结论自动再探一次；用户可见结论取最后一次有意义结果。 */
 export async function withFailRetry(
   fn: () => Promise<CheckCard>,
+  signal?: AbortSignal,
 ): Promise<CheckCard> {
   const first = await fn();
-  if (!serviceNeedsRetry(first)) return first;
+  if (signal?.aborted || !serviceNeedsRetry(first)) return first;
   const second = await fn();
   return {
     ...second,
@@ -196,9 +207,10 @@ function unlockNeedsRetry(result: UnlockResult): boolean {
 
 export async function withFailRetryUnlock(
   fn: () => Promise<UnlockResult>,
+  signal?: AbortSignal,
 ): Promise<UnlockResult> {
   const first = await fn();
-  if (!unlockNeedsRetry(first)) return first;
+  if (signal?.aborted || !unlockNeedsRetry(first)) return first;
   const second = await fn();
   const note = "第 2 次复测";
   return {
@@ -227,15 +239,19 @@ function timeoutCard(
 async function withCardDeadline(
   title: string,
   id: string,
-  work: () => Promise<CheckCard>,
+  work: (signal: AbortSignal) => Promise<CheckCard>,
   deadlineMs: number,
 ): Promise<CheckCard> {
+  const ac = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      work(),
+      work(ac.signal),
       new Promise<CheckCard>((resolve) => {
-        timer = setTimeout(() => resolve(timeoutCard(id, title)), deadlineMs);
+        timer = setTimeout(() => {
+          ac.abort();
+          resolve(timeoutCard(id, title));
+        }, deadlineMs);
       }),
     ]);
   } catch (err) {

@@ -28,9 +28,9 @@ describe("TikTok unlock heuristics（连通/可见，非硬解锁）", () => {
     expect(extractTikTokRegion("loc=XX\n")).toBeNull();
   });
 
-  it("yes+区 → 谨慎 pass（可见≠已解锁）；yes 无区 → warn；no → fail", () => {
+  it("yes+区 → 警告角标，行内仍写可见；yes 无区 → warn；no → fail", () => {
     const withRegion = tikTokVerdict("yes", "JP");
-    expect(withRegion?.level).toBe("pass");
+    expect(withRegion?.level).toBe("warn");
     expect(withRegion?.conclusion).toBe("可见（JP）");
     expect(withRegion?.conclusion).not.toMatch(/已解锁/);
     expect(withRegion?.processNote).toMatch(/启发式|可见/);

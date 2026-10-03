@@ -149,6 +149,23 @@ pub async fn proxy_fetch_async(
     mixed_port: Option<u16>,
     user_agent: Option<&str>,
     timeout_ms: u64,
+    cancel: Option<super::cancel::CancelWait>,
+) -> Result<UnixHttpResult, String> {
+    let work = proxy_fetch_inner(url, mixed_port, user_agent, timeout_ms);
+    if let Some(cancel) = cancel {
+        return match futures_util::future::select(std::pin::pin!(work), std::pin::pin!(cancel)).await {
+            futures_util::future::Either::Left((result, _)) => result,
+            futures_util::future::Either::Right((_, _)) => Err("已取消".into()),
+        };
+    }
+    work.await
+}
+
+async fn proxy_fetch_inner(
+    url: &str,
+    mixed_port: Option<u16>,
+    user_agent: Option<&str>,
+    timeout_ms: u64,
 ) -> Result<UnixHttpResult, String> {
     let mut builder = reqwest::Client::builder()
         .timeout(Duration::from_millis(timeout_ms))
@@ -203,6 +220,7 @@ mod tests {
                 Some(1),
                 None,
                 800,
+                None,
             ))
         });
         assert!(result.is_ok(), "proxy_fetch_async panicked");
@@ -220,6 +238,7 @@ mod tests {
                 None,
                 None,
                 3000,
+                None,
             ))
         });
         assert!(result.is_ok(), "proxy_fetch_async (no_proxy) panicked");

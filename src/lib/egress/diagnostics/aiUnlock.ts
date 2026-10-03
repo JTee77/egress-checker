@@ -5,11 +5,13 @@ import type { CheckCard, CheckLevel, UnlockResult } from "../types";
 
 export async function probeGeminiUnlock(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<UnlockResult> {
   const r = await fetchTextViaProxy("https://gemini.google.com/app", {
     mixedPort: mixedPort ?? null,
     userAgent: UA,
     timeoutMs: 5000,
+    signal,
   });
   const out = r.text;
   const blocked = [
@@ -83,12 +85,14 @@ export async function probeGeminiUnlock(
 
 export async function probeChatgptUnlock(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<UnlockResult> {
   let loc: string | null = null;
   const trace = await fetchTextViaProxy("https://chatgpt.com/cdn-cgi/trace", {
     mixedPort: mixedPort ?? null,
     userAgent: "Mozilla/5.0",
     timeoutMs: 3000,
+    signal,
   });
   for (const line of trace.text.split("\n")) {
     if (line.startsWith("loc=")) {
@@ -104,6 +108,7 @@ export async function probeChatgptUnlock(
       mixedPort: mixedPort ?? null,
       userAgent: UA,
       timeoutMs: 3500,
+      signal,
     },
   );
   if (web.text && !web.text.includes("unsupported_country")) {
@@ -118,6 +123,7 @@ export async function probeChatgptUnlock(
       mixedPort: mixedPort ?? null,
       userAgent: UA,
       timeoutMs: 4000,
+      signal,
     });
     if (home.ok || home.status === 200 || home.text.length > 1000) {
       webOk = !home.text.includes("unsupported_country");

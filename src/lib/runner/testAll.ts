@@ -144,7 +144,10 @@ export async function testAll(
         if (shouldAbort()) {
           return { n, delay: null as number | null, skipped: true };
         }
-        const delay = await probeDelay(config!, n.name, DELAY_URL, 5000);
+        let delay = await probeDelay(config!, n.name, DELAY_URL, 5000);
+        if (delay == null && !shouldAbort()) {
+          delay = await probeDelay(config!, n.name, DELAY_URL, 5000);
+        }
         cullDone += 1;
         hooks.onProgress({
           text: `连通性预检 ${cullDone}/${toCheck.length}`,

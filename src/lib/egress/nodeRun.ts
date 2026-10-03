@@ -86,15 +86,19 @@ function timeoutCard(id: string, title: string): CheckCard {
 async function withDeadline(
   title: string,
   id: string,
-  work: () => Promise<CheckCard>,
+  work: (signal: AbortSignal) => Promise<CheckCard>,
   deadlineMs: number,
 ): Promise<CheckCard> {
+  const ac = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      work(),
+      work(ac.signal),
       new Promise<CheckCard>((resolve) => {
-        timer = setTimeout(() => resolve(timeoutCard(id, title)), deadlineMs);
+        timer = setTimeout(() => {
+          ac.abort();
+          resolve(timeoutCard(id, title));
+        }, deadlineMs);
       }),
     ]);
   } catch (err) {
@@ -133,27 +137,38 @@ export async function runNodeDiagnostics(
   };
 
   const reach = push(
-    await withDeadline("连通性", "reachability", () => checkReachability(mixedPort), 14000),
+    await withDeadline(
+      "连通性",
+      "reachability",
+      (signal) => checkReachability(mixedPort, { signal }),
+      14000,
+    ),
   );
 
-  let exit = await Promise.race([
-    fetchExitIp(mixedPort),
-    new Promise<Awaited<ReturnType<typeof fetchExitIp>>>((resolve) =>
-      setTimeout(
-        () =>
-          resolve({
-            ip: null,
-            country: null,
-            countryCode: null,
-            org: null,
-            isp: null,
-            hosting: null,
-            ipTypeLabel: "--",
-          }),
-        5000,
-      ),
-    ),
+  const exitAc = new AbortController();
+  let exitTimer: ReturnType<typeof setTimeout> | undefined;
+  let exit: Awaited<ReturnType<typeof fetchExitIp>>;
+  try {
+    exit = await Promise.race([
+      fetchExitIp(mixedPort, exitAc.signal),
+    new Promise<Awaited<ReturnType<typeof fetchExitIp>>>((resolve) => {
+      exitTimer = setTimeout(() => {
+        exitAc.abort();
+        resolve({
+          ip: null,
+          country: null,
+          countryCode: null,
+          org: null,
+          isp: null,
+          hosting: null,
+          ipTypeLabel: "--",
+        });
+      }, 5000);
+    }),
   ]);
+  } finally {
+    if (exitTimer) clearTimeout(exitTimer);
+  }
   const exitCardResult = push(exitIpCard(exit));
 
   let gemini: UnlockResult = {
@@ -174,7 +189,7 @@ export async function runNodeDiagnostics(
     id: string;
     title: string;
     deadlineMs: number;
-    run: () => Promise<CheckCard>;
+    run: (signal: AbortSignal) => Promise<CheckCard>;
   };
 
   const jobs: Job[] = [
@@ -182,8 +197,8 @@ export async function runNodeDiagnostics(
       id: "gemini",
       title: "Gemini",
       deadlineMs: 16000,
-      run: async () => {
-        gemini = await withFailRetryUnlock(() => probeGeminiUnlock(mixedPort));
+      run: async (signal) => {
+        gemini = await withFailRetryUnlock(() => probeGeminiUnlock(mixedPort, signal), signal);
         return unlockCard("gemini", "Gemini", gemini);
       },
     },
@@ -191,8 +206,8 @@ export async function runNodeDiagnostics(
       id: "chatgpt",
       title: "ChatGPT",
       deadlineMs: 22000,
-      run: async () => {
-        chatgpt = await withFailRetryUnlock(() => probeChatgptUnlock(mixedPort));
+      run: async (signal) => {
+        chatgpt = await withFailRetryUnlock(() => probeChatgptUnlock(mixedPort, signal), signal);
         return unlockCard("chatgpt", "ChatGPT", chatgpt);
       },
     },
@@ -200,8 +215,8 @@ export async function runNodeDiagnostics(
       id: "latency",
       title: "延迟采样",
       deadlineMs: 22000,
-      run: async () => {
-        const { ms, card: c } = await sampleLatency(mixedPort);
+      run: async (signal) => {
+        const { ms, card: c } = await sampleLatency(mixedPort, signal);
         latencyMs = ms;
         return c;
       },
@@ -210,55 +225,55 @@ export async function runNodeDiagnostics(
       id: "bandwidth",
       title: "抽样带宽",
       deadlineMs: 42000,
-      run: () => sampleBandwidth(mixedPort, { mode: "full" }),
+      run: (signal) => sampleBandwidth(mixedPort, { mode: "full", signal }),
     },
     {
       id: "netflix",
       title: "Netflix",
       deadlineMs: 16000,
-      run: () => checkNetflixUnlock(mixedPort),
+      run: (signal) => checkNetflixUnlock(mixedPort, signal),
     },
     {
       id: "disney",
       title: "Disney+",
       deadlineMs: 16000,
-      run: () => checkDisneyUnlock(mixedPort),
+      run: (signal) => checkDisneyUnlock(mixedPort, signal),
     },
     {
       id: "youtube",
       title: "YouTube Premium",
       deadlineMs: 16000,
-      run: () => checkYoutubeUnlock(mixedPort),
+      run: (signal) => checkYoutubeUnlock(mixedPort, signal),
     },
     {
       id: "tiktok",
       title: "TikTok",
       deadlineMs: 16000,
-      run: () => checkTikTokUnlock(mixedPort),
+      run: (signal) => checkTikTokUnlock(mixedPort, signal),
     },
     {
       id: "spotify",
       title: "Spotify",
       deadlineMs: 16000,
-      run: () => checkSpotifyUnlock(mixedPort),
+      run: (signal) => checkSpotifyUnlock(mixedPort, signal),
     },
     {
       id: "prime-video",
       title: "Prime Video",
       deadlineMs: 16000,
-      run: () => checkPrimeVideoUnlock(mixedPort),
+      run: (signal) => checkPrimeVideoUnlock(mixedPort, signal),
     },
     {
       id: "app-store",
       title: "App Store",
       deadlineMs: 16000,
-      run: () => checkAppStoreUnlock(mixedPort),
+      run: (signal) => checkAppStoreUnlock(mixedPort, signal),
     },
     {
       id: "google-play",
       title: "Google Play",
       deadlineMs: 16000,
-      run: () => checkGooglePlayUnlock(mixedPort),
+      run: (signal) => checkGooglePlayUnlock(mixedPort, signal),
     },
   ];
 

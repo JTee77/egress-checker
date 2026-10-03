@@ -24,10 +24,12 @@ async function probeSampleHost(
   kind: "cn" | "foreign",
   mixedPort: number | null,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<SampleProbe> {
   const t0 = performance.now();
   const r = await fetchTextViaProxy(url, {
     mixedPort,
+    signal,
     timeoutMs,
     userAgent: UA,
   });
@@ -55,6 +57,7 @@ async function probeSampleHost(
 export async function checkSplitRouting(
   mixedPort?: number | null,
   mihomoConfig?: ControllerConfig | null,
+  signal?: AbortSignal,
 ): Promise<CheckCard> {
   const port = mixedPort ?? null;
   const expectProxy = port != null && port > 0;
@@ -84,12 +87,12 @@ export async function checkSplitRouting(
   if (expectProxy) {
     for (const t of cnTargets) {
       cnViaMixed.push(
-        await probeSampleHost(t.label, t.host, t.url, "cn", port, timeoutMs),
+        await probeSampleHost(t.label, t.host, t.url, "cn", port, timeoutMs, signal),
       );
     }
     for (const t of foreignTargets) {
       foreignViaMixed.push(
-        await probeSampleHost(t.label, t.host, t.url, "foreign", port, timeoutMs),
+        await probeSampleHost(t.label, t.host, t.url, "foreign", port, timeoutMs, signal),
       );
     }
   }
@@ -97,7 +100,7 @@ export async function checkSplitRouting(
   // Direct CN baseline (true no-proxy) for rough DIRECT tendency
   for (const t of cnTargets) {
     cnDirect.push(
-      await probeSampleHost(t.label, t.host, t.url, "cn", null, timeoutMs),
+      await probeSampleHost(t.label, t.host, t.url, "cn", null, timeoutMs, signal),
     );
   }
 
@@ -206,6 +209,7 @@ export async function checkSplitRouting(
  */
 export async function checkBareEgress(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<CheckCard> {
   const port = mixedPort ?? null;
   const expectProxy = port != null && port > 0;
@@ -227,9 +231,13 @@ export async function checkBareEgress(
     mp: number | null,
   ): Promise<{ label: string; url: string; ok: boolean; status: number; ms: number; path: string }> {
     const t0 = performance.now();
+    if (signal?.aborted) {
+      return { label, url, ok: false, status: 0, ms: 0, path: "已取消" };
+    }
     const r = await fetchTextViaProxy(url, {
       mixedPort: mp,
       timeoutMs,
+      signal,
     });
     const ms = Math.round(performance.now() - t0);
     const ok = isReachableStatus(r.status, r.ok) || (r.status >= 200 && r.status < 400);

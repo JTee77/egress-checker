@@ -6,8 +6,8 @@ mod platform;
 use dns::DnsResolversResult;
 use mihomo::{
     discover_controller, discover_for_client, http_via_tcp_async, http_via_unix, list_nodes_async,
-    proxy_fetch_async, proxy_timed_transfer_async, DiscoverResult, ListNodesResult,
-    TimedTransferResult, UnixHttpResult,
+    arm_cancel, disarm_cancel, fire_cancel, proxy_fetch_async, proxy_timed_transfer_async,
+    DiscoverResult, ListNodesResult, TimedTransferResult, UnixHttpResult,
 };
 use serde::{Deserialize, Serialize};
 
@@ -169,17 +169,41 @@ struct ProxyFetchRequest {
     mixed_port: Option<u16>,
     user_agent: Option<String>,
     timeout_ms: Option<u64>,
+    cancel_id: Option<String>,
 }
 
 #[tauri::command]
 async fn egress_proxy_fetch(req: ProxyFetchRequest) -> Result<UnixHttpResult, String> {
-    proxy_fetch_async(
+    let cancel = match req.cancel_id.as_deref() {
+        Some(id) => match arm_cancel(id) {
+            Some(rx) => Some(rx),
+            None => return Err("已取消".into()),
+        },
+        None => None,
+    };
+    let result = proxy_fetch_async(
         &req.url,
         req.mixed_port,
         req.user_agent.as_deref(),
         req.timeout_ms.unwrap_or(5000),
+        cancel,
     )
-    .await
+    .await;
+    if let Some(id) = req.cancel_id.as_deref() {
+        disarm_cancel(id);
+    }
+    result
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CancelProxyOpRequest {
+    cancel_id: String,
+}
+
+#[tauri::command]
+fn egress_cancel_proxy_op(req: CancelProxyOpRequest) -> bool {
+    fire_cancel(&req.cancel_id)
 }
 
 #[derive(Debug, Deserialize)]
@@ -190,20 +214,41 @@ struct TimedTransferRequest {
     method: Option<String>,
     upload_bytes: Option<u64>,
     timeout_ms: Option<u64>,
+    cancel_id: Option<String>,
 }
 
 #[tauri::command]
 async fn egress_proxy_timed_transfer(
     req: TimedTransferRequest,
 ) -> Result<TimedTransferResult, String> {
-    proxy_timed_transfer_async(
+    let cancel = match req.cancel_id.as_deref() {
+        Some(id) => match arm_cancel(id) {
+            Some(rx) => Some(rx),
+            None => {
+                return Ok(TimedTransferResult {
+                    ok: false,
+                    status: 0,
+                    bytes: 0,
+                    elapsed_ms: 0,
+                    error: Some("已取消".into()),
+                });
+            }
+        },
+        None => None,
+    };
+    let result = proxy_timed_transfer_async(
         &req.url,
         req.mixed_port,
         req.method.as_deref().unwrap_or("GET"),
         req.upload_bytes,
         req.timeout_ms.unwrap_or(12000),
+        cancel,
     )
-    .await
+    .await;
+    if let Some(id) = req.cancel_id.as_deref() {
+        disarm_cancel(id);
+    }
+    result
 }
 
 #[tauri::command]
@@ -450,6 +495,7 @@ pub fn run() {
             mihomo_unix_http,
             egress_proxy_fetch,
             egress_proxy_timed_transfer,
+            egress_cancel_proxy_op,
             egress_list_dns_resolvers,
             egress_dns_whoami,
             get_cli_argv,

@@ -64,6 +64,7 @@ export async function checkDnsResolvers(
   mixedPort?: number | null,
   /** 真实归属参照（由 envRun 实测/推断后传入）；不传时退回系统区域启发式 */
   realCountryOverride?: string | null,
+  signal?: AbortSignal,
 ): Promise<CheckCard> {
   // whoami（主判定）与 Cloudflare loc（次要启发式）并行取：loc 只是 non-leak-proof
   // 的粗对照，绝不参与 verdict，因此单独收紧到 2500ms，缺席时降级为参考文案即可。
@@ -75,6 +76,7 @@ export async function checkDnsResolvers(
     probeText("https://www.cloudflare.com/cdn-cgi/trace", {
       mixedPort,
       timeoutMs: 2500,
+      signal,
     }),
   ]);
   const resolvers = dns.resolvers ?? [];

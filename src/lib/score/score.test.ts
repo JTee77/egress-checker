@@ -293,3 +293,24 @@ describe("scoreNodeFromCards · 未验证态剔除与权重归一", () => {
     expect(r.blurb).toContain("未经代理验证");
   });
 });
+
+describe("TikTok 可见不计星", () => {
+  it("「可见」不改变服务面分数，也不算进较顺", () => {
+    const base = [
+      card("reachability", "pass", "通"),
+      card("netflix", "pass", "可用"),
+      card("tiktok", "warn", "可见（JP）"),
+    ];
+    const withTik = scoreNodeFromCards("a", base, "t");
+    const without = scoreNodeFromCards(
+      "a",
+      base.filter((c) => c.id !== "tiktok"),
+      "t",
+    );
+    const svc = (r: ReturnType<typeof scoreNodeFromCards>) =>
+      r.breakdown.find((b) => b.key === "services")!;
+    expect(svc(withTik).score).toBe(svc(without).score);
+    expect(svc(withTik).note).toBe(svc(without).note);
+    expect(svc(withTik).note).not.toContain("2 项");
+  });
+});

@@ -27,10 +27,12 @@ function extractIpBody(text: string): string | null {
 export async function probeV4Via(
   port: number | null,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   const r = await fetchTextViaProxy("https://api.ipify.org", {
     mixedPort: port,
     timeoutMs,
+    signal,
   });
   const ip = extractIpBody(r.text);
   return r.ok && ip && !isIpv6Literal(ip) ? ip : null;
@@ -43,6 +45,7 @@ export function probeDirectV4(timeoutMs = 4500): Promise<string | null> {
 
 export async function checkIpv6Leak(
   mixedPort?: number | null,
+  signal?: AbortSignal,
 ): Promise<CheckCard> {
   const timeoutMs = 4500;
   // 直连模式下两个 v6 端点在国内大概率双双超时；把直连 v6 单独收紧到 3000ms，
@@ -59,7 +62,7 @@ export async function checkIpv6Leak(
     const urls = ["https://api64.ipify.org", "https://ipv6.icanhazip.com"];
     const results = await Promise.all(
       urls.map((url) =>
-        fetchTextViaProxy(url, { mixedPort: port, timeoutMs: timeout }),
+        fetchTextViaProxy(url, { mixedPort: port, timeoutMs: timeout, signal }),
       ),
     );
     for (const r of results) {
@@ -73,7 +76,7 @@ export async function checkIpv6Leak(
     port: number | null,
     timeout: number,
   ): Promise<string | null> {
-    return probeV4Via(port, timeout);
+    return probeV4Via(port, timeout, signal);
   }
 
   // 直连两路并行；代理两路并行；直连组先于代理组，保持与 v0.1.8 相同的在飞并发上界

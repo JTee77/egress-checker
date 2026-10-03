@@ -94,9 +94,16 @@ function scoreServices(cards: CheckCard[]): {
 } {
   const list = SERVICE_IDS.map((id) => card(cards, id)).filter(Boolean) as CheckCard[];
   if (!list.length) return { score: 35, note: "未测服务面", measured: true };
-  const usable = list.filter((c) => !c.unverified);
-  if (!usable.length) {
+  const measured = list.filter((c) => !c.unverified);
+  if (!measured.length) {
     return { score: 0, note: "未验证：服务面未经代理测试", measured: false };
+  }
+  // TikTok「可见」是启发式：角标可以是警告，但不进星级，也不算进「较顺」。
+  const usable = measured.filter(
+    (c) => !(c.id === "tiktok" && (c.conclusion ?? "").trim().startsWith("可见")),
+  );
+  if (!usable.length) {
+    return { score: 35, note: "未测服务面", measured: true };
   }
   const avg = usable.reduce((s, c) => s + levelToScore(c.level), 0) / usable.length;
   const passN = usable.filter((c) => c.level === "pass").length;

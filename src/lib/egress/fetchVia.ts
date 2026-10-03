@@ -1,5 +1,23 @@
 import { invoke } from "@tauri-apps/api/core";
 
+/** 把卡片截止信号接到 Rust 侧的取消号上。请求还没发出去就取消时，号会先到。 */
+function bindProxyCancel(signal?: AbortSignal): {
+  cancelId: string | null;
+  finish: () => void;
+} {
+  if (!signal || !isTauri()) return { cancelId: null, finish: () => {} };
+  const cancelId = crypto.randomUUID();
+  const fire = () => {
+    void invoke("egress_cancel_proxy_op", { req: { cancelId } }).catch(() => {});
+  };
+  if (signal.aborted) fire();
+  else signal.addEventListener("abort", fire, { once: true });
+  return {
+    cancelId,
+    finish: () => signal.removeEventListener("abort", fire),
+  };
+}
+
 const isTauri = () =>
   typeof window !== "undefined" &&
   ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
@@ -35,9 +53,14 @@ export async function fetchTextViaProxy(
     mixedPort?: number | null;
     userAgent?: string;
     timeoutMs?: number;
+    signal?: AbortSignal;
   } = {},
 ): Promise<{ ok: boolean; status: number; text: string; via: "rust" | "browser" }> {
+  if (opts.signal?.aborted) {
+    return { ok: false, status: 0, text: "", via: "rust" };
+  }
   if (isTauri()) {
+    const cancel = bindProxyCancel(opts.signal);
     try {
       const res = await invoke<{ status: number; body: string }>("egress_proxy_fetch", {
         req: {
@@ -45,6 +68,7 @@ export async function fetchTextViaProxy(
           mixedPort: opts.mixedPort ?? null,
           userAgent: opts.userAgent ?? null,
           timeoutMs: opts.timeoutMs ?? 5000,
+          cancelId: cancel.cancelId,
         },
       });
       return {
@@ -54,7 +78,12 @@ export async function fetchTextViaProxy(
         via: "rust",
       };
     } catch {
+      if (opts.signal?.aborted) {
+        return { ok: false, status: 0, text: "", via: "rust" };
+      }
       /* fall through */
+    } finally {
+      cancel.finish();
     }
   }
 
@@ -67,6 +96,9 @@ export async function fetchTextViaProxy(
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 5000);
+  const onAbort = () => controller.abort();
+  if (opts.signal?.aborted) controller.abort();
+  else opts.signal?.addEventListener("abort", onAbort, { once: true });
   try {
     const headers: Record<string, string> = {};
     if (opts.userAgent) headers["User-Agent"] = opts.userAgent;
@@ -77,6 +109,7 @@ export async function fetchTextViaProxy(
     return { ok: false, status: 0, text: "", via: "browser" };
   } finally {
     clearTimeout(timer);
+    opts.signal?.removeEventListener("abort", onAbort);
   }
 }
 
@@ -192,12 +225,24 @@ export async function timedTransferViaProxy(opts: {
   method?: "GET" | "POST";
   uploadBytes?: number;
   timeoutMs?: number;
+  signal?: AbortSignal;
 }): Promise<TimedTransferResult> {
+  if (opts.signal?.aborted) {
+    return {
+      ok: false,
+      status: 0,
+      bytes: 0,
+      elapsedMs: 0,
+      error: "已取消",
+      via: "rust",
+    };
+  }
   const method = opts.method ?? "GET";
   const timeoutMs = opts.timeoutMs ?? 12000;
   const uploadBytes = opts.uploadBytes ?? 0;
 
   if (isTauri()) {
+    const cancel = bindProxyCancel(opts.signal);
     try {
       const res = await invoke<{
         ok: boolean;
@@ -212,6 +257,7 @@ export async function timedTransferViaProxy(opts: {
           method,
           uploadBytes: method === "POST" ? uploadBytes : null,
           timeoutMs,
+          cancelId: cancel.cancelId,
         },
       });
       return {
@@ -223,6 +269,16 @@ export async function timedTransferViaProxy(opts: {
         via: "rust",
       };
     } catch (e) {
+      if (opts.signal?.aborted) {
+        return {
+          ok: false,
+          status: 0,
+          bytes: 0,
+          elapsedMs: 0,
+          error: "已取消",
+          via: "rust",
+        };
+      }
       const msg = e instanceof Error ? e.message : String(e);
       // In a production Tauri build we must NOT silently measure speed with a
       // direct browser fetch — that reports the machine's real bandwidth as if
@@ -243,11 +299,14 @@ export async function timedTransferViaProxy(opts: {
         method,
         uploadBytes,
         timeoutMs,
+        signal: opts.signal,
       });
       if (!browser.ok && !browser.error) {
         browser.error = `Rust 调用失败后浏览器回退仍失败：${msg}`;
       }
       return browser;
+    } finally {
+      cancel.finish();
     }
   }
 
@@ -256,6 +315,7 @@ export async function timedTransferViaProxy(opts: {
     method,
     uploadBytes,
     timeoutMs,
+    signal: opts.signal,
   });
 }
 
@@ -264,9 +324,13 @@ async function timedTransferBrowser(opts: {
   method: "GET" | "POST";
   uploadBytes: number;
   timeoutMs: number;
+  signal?: AbortSignal;
 }): Promise<TimedTransferResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
+  const onAbort = () => controller.abort();
+  if (opts.signal?.aborted) controller.abort();
+  else opts.signal?.addEventListener("abort", onAbort, { once: true });
   const t0 = performance.now();
   try {
     let res: Response;
@@ -318,5 +382,6 @@ async function timedTransferBrowser(opts: {
     };
   } finally {
     clearTimeout(timer);
+    opts.signal?.removeEventListener("abort", onAbort);
   }
 }
