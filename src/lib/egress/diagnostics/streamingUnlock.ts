@@ -325,13 +325,14 @@ async function probeAppleStoreLine(
     return {
       name: "App Store",
       level: "pass",
-      conclusion: sf ? `可用（${sf}）` : "可用",
+      // 商店通了只写「可用」：网页打开的区只是路径线索，不等于账号商店区。
+      conclusion: "可用",
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
         sf
-          ? `storefront / 国家路径线索：${sf}`
+          ? `storefront / 国家路径线索：${sf}（仅供详情，卡片不写区）`
           : "未解析到 /xx/ storefront 路径（跟随重定向后仍可能已是默认区）。",
-        "测了什么：apps.apple.com 是否可达、是否有粗地区路径。",
+        "测了什么：apps.apple.com 是否可达。",
         "没测：App 下载、内购支付、开发者上架审核、账号区。",
       ].join("\n"),
     };
@@ -399,10 +400,10 @@ async function probeGooglePlayLine(
     return {
       name: "Google Play",
       level: "pass",
-      conclusion: gl ? `可用（${gl}）` : "可用",
+      conclusion: "可用",
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
-        gl ? `gl 线索：${gl}` : "未解析到 gl 参数（页仍可达）。",
+        gl ? `gl 线索：${gl}（仅供详情，卡片不写区）` : "未解析到 gl 参数（页仍可达）。",
         "测了什么：play.google.com 是否可达。",
         "没测：APK 下载、付款、Play 账号区、上架审核。",
       ].join("\n"),

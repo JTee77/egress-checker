@@ -31,10 +31,11 @@ import {
 
 type TestMode = "current" | "all";
 
-/** 瀑布流列数：单卡固定 310px + 9px 列距，1–8 列封顶。
- * 余量 ≈ main 左右 padding + tray 左右 pad。 */
+/** 瀑布流列数：单卡固定 298px + 9px 列距，1–8 列封顶。
+ * 余量 ≈ main 左右 padding + tray 左右 pad。
+ * 1920 宽约 6 列；(vw-72)/307。 */
 function colCountFor(vw: number): number {
-  return Math.min(8, Math.max(1, Math.floor((vw - 72) / 319)));
+  return Math.min(8, Math.max(1, Math.floor((vw - 72) / 307)));
 }
 
 /** 进度文案拆成「阶段」+「节点名」。两段都完整显示，不截断。 */
@@ -540,38 +541,44 @@ export function HomePage({
                   ) : null}
                 </div>
                 {running && mode === "all" ? (
-                  <div className="ws-progress-group">
-                    <div className="ws-progress" role="status" aria-live="polite">
-                      <span className="ws-progress-text">
-                        {progressDisplay ? (
-                          <>
-                            <span className="ws-progress-phase">
-                              {progressDisplay.phase}
+                  <div
+                    className="ws-progress-group"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <span className="ws-progress-text">
+                      {progressDisplay ? (
+                        <>
+                          <span className="ws-progress-phase">
+                            {progressDisplay.phase}
+                          </span>
+                          {progressDisplay.node ? (
+                            <span className="ws-progress-node">
+                              （{progressDisplay.node}）
                             </span>
-                            {progressDisplay.node ? (
-                              <span className="ws-progress-node">
-                                （{progressDisplay.node}）
-                              </span>
-                            ) : null}
-                          </>
-                        ) : null}
-                      </span>
-                      {progressPct != null ? (
-                        <span
-                          className="ws-progress-bar"
-                          role="progressbar"
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-valuenow={progressPct}
-                        >
-                          <span
-                            className="ws-progress-fill"
-                            style={{ width: `${progressPct}%` }}
-                          />
-                        </span>
+                          ) : null}
+                        </>
                       ) : null}
-                    </div>
-                    <button type="button" className="btn btn-sm ws-abort-btn" onClick={onAbortAll}>
+                    </span>
+                    {progressPct != null ? (
+                      <span
+                        className="ws-progress-bar"
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={progressPct}
+                      >
+                        <span
+                          className="ws-progress-fill"
+                          style={{ width: `${progressPct}%` }}
+                        />
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="btn btn-sm ws-abort-btn"
+                      onClick={onAbortAll}
+                    >
                       停止并切回
                     </button>
                   </div>
