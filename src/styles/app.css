@@ -598,8 +598,8 @@ select {
 }
 
 /* --- responsive: window fill / narrow / short --- */
-/* 只剩一列卡片时（与 colCountFor 同界：宽 < 686）：取消 --action-x，
-   三个主按钮落到各自标题下一行、左对齐；顶栏允许换行，不再锁死 nowrap。 */
+/* 软件行：窄于一列卡片（宽 < 686）时，下拉与「获取节点」允许换行。
+   环境/节点标题的换行在后面，必须写在 .env-head / .ws-ops 基础规则之后才生效。 */
 @media (max-width: 685px) {
   .picker-group {
     flex: 1 1 100%;
@@ -617,32 +617,6 @@ select {
   }
   .home-ops-controls .action-with-ok {
     width: 100%;
-  }
-  .env-head,
-  .ws-ops {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    grid-template-columns: none;
-  }
-  .env-head .t,
-  .ws-ops .t {
-    width: 100%;
-  }
-  .env-head-actions,
-  .ws-ops-right {
-    width: 100%;
-    justify-content: flex-start;
-  }
-  .ws-expand-link {
-    margin-left: 0;
-  }
-  /* 整簇换行，簇内仍不折、不互相遮挡 */
-  .ws-progress-group {
-    flex-wrap: nowrap;
-    width: max-content;
-    max-width: none;
-    min-width: max-content;
   }
 }
 
@@ -995,6 +969,77 @@ select {
   display: flex;
   flex-direction: column;
   gap: var(--nc-gap);
+}
+
+/* 窄到标题行放不下：左对齐换行，不许画出窗口。
+   约 1200 以下，环境标题与按钮、节点标题与进度不会再挤在一行里被切掉。
+   宽窗（默认 1340）仍保持按钮锁在动作列、进度簇跟在按钮旁。 */
+@media (max-width: 1200px) {
+  .env-head,
+  .ws-ops {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    grid-template-columns: none;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .env-head .t,
+  .ws-ops .t {
+    width: 100%;
+    max-width: 100%;
+  }
+  .env-head .s {
+    white-space: normal;
+  }
+  .env-head-actions {
+    width: 100%;
+    max-width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .ws-ops-right {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .ws-expand-link {
+    margin-left: 0;
+  }
+  .ws-progress-group,
+  .ws-progress {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    flex-wrap: nowrap;
+  }
+  .ws-progress-text {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    white-space: normal;
+  }
+  .ws-progress-phase,
+  .ws-progress-node {
+    white-space: normal;
+  }
+  .ws-abort-btn {
+    flex: none;
+  }
+}
+
+/* 只剩一列卡片（与 colCountFor 同界：宽 < 686）：左缘对齐标题，不在托盘里居中。 */
+@media (max-width: 685px) {
+  .node-flow {
+    justify-content: flex-start;
+  }
 }
 .ncard {
   height: var(--nc-h);
