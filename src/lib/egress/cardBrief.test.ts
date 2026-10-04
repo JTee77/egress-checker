@@ -142,6 +142,22 @@ describe("formatCardBrief", () => {
       "部分",
     );
     expect(formatCardBrief(card("svc-store", "fail", "App Store：不通"))).toBe("全不通");
+    expect(
+      formatCardBrief(
+        card("app-store", "pass", "可用（US）", {
+          unlockSupported: true,
+          unlockRegion: "US",
+        }),
+      ),
+    ).toBe("通");
+    expect(
+      formatCardBrief(
+        card("google-play", "fail", "不可用（地区限制）", {
+          unlockSupported: false,
+          unlockRegion: "US",
+        }),
+      ),
+    ).toBe("不通");
     expect(formatCardBrief(card("svc-streaming", "running", "检测中…"))).toBe("检测中");
     expect(formatCardBrief(card("svc-streaming", "unknown", "Netflix：未测；原因很长"))).toBe("未测");
   });

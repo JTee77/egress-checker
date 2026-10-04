@@ -266,16 +266,6 @@ async function probeYoutubeLine(
   };
 }
 
-function extractAppleStorefront(text: string): string | null {
-  const m1 = text.match(/apps\.apple\.com\/([a-z]{2})\//i);
-  if (m1?.[1] && m1[1].toLowerCase() !== "app") return m1[1].toUpperCase();
-  const m2 = text.match(/itunes\.apple\.com\/([a-z]{2})\//i);
-  if (m2?.[1]) return m2[1].toUpperCase();
-  const m3 = text.match(/storefront[^0-9]*([0-9]{5,6})/i);
-  if (m3?.[1]) return `sf:${m3[1]}`;
-  return null;
-}
-
 async function probeAppleStoreLine(
   mixedPort?: number | null,
   signal?: AbortSignal,
@@ -307,7 +297,6 @@ async function probeAppleStoreLine(
     lower.includes("unavailable in your region") ||
     r.status === 403;
 
-  const sf = extractAppleStorefront(body);
   const reachable =
     isReachableStatus(r.status, r.ok) ||
     (r.status >= 200 && r.status < 400 && body.length > 300);
@@ -325,14 +314,11 @@ async function probeAppleStoreLine(
     return {
       name: "App Store",
       level: "pass",
-      conclusion: sf ? `可用（${sf}）` : "可用",
+      conclusion: "可用",
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
-        sf
-          ? `storefront / 国家路径线索：${sf}（摘要不写区；详情可看）`
-          : "未解析到 /xx/ storefront 路径（跟随重定向后仍可能已是默认区）。",
         "测了什么：apps.apple.com 是否可达。",
-        "没测：App 下载、内购支付、开发者上架审核、账号区。",
+        "没测：App 下载、内购支付、开发者上架审核、账号区。页面国家路径不是节点商店区，结果不写区码。",
       ].join("\n"),
     };
   }
@@ -377,11 +363,6 @@ async function probeGooglePlayLine(
     lower.includes("this item isn't available") ||
     r.status === 403;
 
-  const gl =
-    body.match(/[?&]gl=([a-z]{2})\b/i)?.[1]?.toUpperCase() ??
-    body.match(/"gl"\s*:\s*"([A-Z]{2})"/)?.[1] ??
-    null;
-
   const reachable =
     isReachableStatus(r.status, r.ok) ||
     (r.status >= 200 && r.status < 400 && body.length > 400);
@@ -399,12 +380,11 @@ async function probeGooglePlayLine(
     return {
       name: "Google Play",
       level: "pass",
-      conclusion: gl ? `可用（${gl}）` : "可用",
+      conclusion: "可用",
       process: [
         `${url} → HTTP ${r.status} · ${ms}ms · body≈${body.length}B`,
-        gl ? `gl 线索：${gl}（摘要不写区；详情可看）` : "未解析到 gl 参数（页仍可达）。",
         "测了什么：play.google.com 是否可达。",
-        "没测：APK 下载、付款、Play 账号区、上架审核。",
+        "没测：APK 下载、付款、Play 账号区、上架审核。页面地区参数不是节点商店区，结果不写区码。",
       ].join("\n"),
     };
   }
