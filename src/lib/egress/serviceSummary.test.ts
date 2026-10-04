@@ -29,8 +29,8 @@ describe("summarizeServiceCards", () => {
       card("netflix", "Netflix", "pass", "可用（JP）"),
       card("disney", "Disney+", "fail", "不可用（地区限制）"),
       card("youtube", "YouTube Premium", "pass", "可用"),
-      card("app-store", "App Store", "pass", "可用"),
-      card("google-play", "Google Play", "pass", "可用"),
+      card("app-store", "App Store", "pass", "可用（US）"),
+      card("google-play", "Google Play", "pass", "可用（US）"),
     ];
     const out = summarizeServiceCards(cards);
     expect(out.map((c) => c.id)).toEqual([
@@ -53,8 +53,8 @@ describe("summarizeServiceCards", () => {
 
     const store = out.find((c) => c.id === "svc-store")!;
     expect(store.level).toBe("pass");
-    expect(store.conclusion).toContain("App Store：通");
-    expect(store.conclusion).not.toContain("App Store：通 ·");
+    expect(store.conclusion).toContain("App Store：通 · US");
+    expect(store.conclusion).toContain("Google Play：通 · US");
   });
 
   it("全通 / 全不通 / 检测中", () => {

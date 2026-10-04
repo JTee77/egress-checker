@@ -73,15 +73,10 @@ export function extractUnlockRegion(card: CheckCard): string | null {
   return m?.[1] ?? null;
 }
 
-/** 商店项：通了不写区（路径区 ≠ 账号区）。 */
-function isStoreMember(id: string): boolean {
-  return id === "app-store" || id === "google-play";
-}
-
-/** 外置详情一行：平台通/不通（流媒体/AI 可带区码），不含测法。 */
+/** 外置详情一行：平台通/不通（可带区码）。格子摘要不走这里。 */
 export function formatMemberUnlockLine(card: CheckCard): string {
   const title = card.title || card.id;
-  const region = isStoreMember(card.id) ? null : extractUnlockRegion(card);
+  const region = extractUnlockRegion(card);
   if (card.level === "running") return `${title}：检测中`;
   if (isOpen(card.level)) {
     return region ? `${title}：通 · ${region}` : `${title}：通`;
