@@ -1,6 +1,6 @@
 # Egress Checker CLI（0.1.16）
 
-与图形界面共用 `src/lib/runner`、`egress`、`score`、`mihomo`。通过 **`--cli`** 启动隐藏窗口，在 WebView 内调用同一套 Tauri 能力，结束后把 **一行 JSON（CliEnvelope）** 打到 stdout 并退出。
+与图形界面共用 `src/lib/runner`、`egress`、`score`、`mihomo`。通过 **`--cli`** 启动隐藏窗口，在 WebView 内调用同一套 Tauri 能力。一次性命令结束后把 **一行 JSON（CliEnvelope）** 打到 stdout 并退出；**`serve`** 常驻本机 loopback HTTP，直到 Ctrl+C。
 
 **目前只支持 Clash Verge / Clash Verge Rev（`--client verge`）。** FlClash 即将支持，暂不可用；其它软件不支持。
 
@@ -15,6 +15,7 @@ pnpm tauri dev -- --cli check current --client verge
 pnpm tauri dev -- --cli check node "节点名" --client verge
 pnpm tauri dev -- --cli check all --client verge
 pnpm tauri dev -- --cli env --client verge
+pnpm tauri dev -- --cli serve --mock --port 17890
 
 # 已编译二进制（debug 需要 Vite 在 127.0.0.1:1420；release 自带前端）
 ./src-tauri/target/debug/egress-checker --cli discover --mock
@@ -33,6 +34,7 @@ pnpm tauri dev -- --cli env --client verge
 | `check <名>` | `check node <名>` 的简写（名不是 `current` / `node` / `all` 时） |
 | `check all` | 全部节点 **完整**深测（逐个切换，结束切回；与 `check node` 相同探针集） |
 | `env` | 环境泄漏检查 |
+| `serve` | 本机 **127.0.0.1** HTTP 服务（常驻到 Ctrl+C）。见下方「serve」 |
 
 节点名匹配：先全名精确匹配，再唯一的「包含」匹配；匹配到多个报 `node_ambiguous`，找不到报 `node_not_found`。不会拿不存在的名字去切换。
 
@@ -42,8 +44,9 @@ pnpm tauri dev -- --cli env --client verge
 |------|------|
 | `--client, -c <id>` / `--client=<id>` | 只接受 `verge`。`flclash` 等任何其它值都报 `client_unsupported`（「当前仅支持 Clash Verge」） |
 | `--mock` | 不连真实软件，用演示节点跑通管线；可省略 `--client`（默认 verge）。**给了非法 `--client` 时 `--mock` 也照样报错，不回落** |
+| `--port, -p <N>` / `--port=<N>` | **仅 `serve`**：监听端口。默认 **17890**；`0` = 临时端口（就绪横幅打印实际端口）。配其它命令 → `port_only_for_serve` |
 | `--json` | 输出一行 CliEnvelope JSON（默认） |
-| `--no-json` | 输出人类可读摘要：首行 `✓ <命令> 完成` 或 `✗ <命令> 失败 [code] message`，下面是要点（评分、节点列表、切回报错等）。脚本请用 JSON |
+| `--no-json` | 输出人类可读摘要：首行 `✓ <命令> 完成` 或 `✗ <命令> 失败 [code] message`，下面是要点（评分、节点列表、切回报错等）。脚本请用 JSON。`serve` 仍同时打 stderr 人类就绪文案 + stdout JSON 横幅 |
 | `--help, -h` | 同 `help`（出现在任何位置都显示帮助） |
 | `--` | 之后的词都当位置参数（节点名以 `-` 开头时用） |
 
@@ -97,6 +100,11 @@ pnpm tauri dev -- --cli env --client verge
 | `aborted` | 收到 Ctrl+C / SIGTERM / SIGHUP，已停止（`check node`/`all` 已按需切回） | check 形状；其它命令无 |
 | `dispatch_error` | 调度过程中抛出的未预期异常 | 否 |
 | `boot_error` / `argv_unavailable` | CLI 启动层异常 | 否 |
+| `invalid_port` | `--port` 不是 0–65535 整数 | 否 |
+| `port_only_for_serve` | `--port` 配了非 serve 命令 | 否 |
+| `serve_bind_failed` | serve 无法绑定端口 | 否 |
+| `serve_not_oneshot` | 误把 serve 当一次性 dispatch | 否 |
+| `invalid_body` | POST /v1/check/node 的 JSON 不合法 | 否 |
 
 同时满足多条时的优先级：`restore_failed` > `aborted` > `check_failed`。
 
@@ -202,7 +210,8 @@ pnpm tauri dev -- --cli env --client verge
 ## 自检
 
 ```bash
-pnpm exec vitest run src/lib/cli src/lib/runner   # 单测（参数、闸门、切回、中断、TS/Rust 同步）
+pnpm exec vitest run src/lib/cli src/lib/runner   # 单测（参数、闸门、切回、中断、serve 路由、TS/Rust 同步）
+(cd src-tauri && cargo test cli_serve -- --nocapture)  # serve：鉴权 / 路由 / 只绑 127.0.0.1
 node scripts/simulate-restore-fail.mjs            # 切回文案（直接 import runner 源码；Node ≥ 22.18）
 bash scripts/cli-smoke.sh                         # 上面两项
 EGRESS_CLI_SMOKE=1 bash scripts/cli-smoke.sh      # 再跑真实二进制：help / 报错退出码 / discover / gate / check current（--mock）
@@ -213,4 +222,45 @@ EGRESS_CLI_SMOKE=1 bash scripts/cli-smoke.sh      # 再跑真实二进制：help
 - 需要 macOS 上的应用二进制（或 `pnpm tauri dev`）；**不是**独立的纯 Node CLI。
 - 隐藏窗需关闭 WebView 后台节流才能跑深测（否则 WKWebView 会挂起不在屏幕上的页面，`check` 永远不返回——0.1.15 及以前即如此）。0.1.16 起 CLI 模式下主窗以「隐藏 + 不节流」创建；该开关需 **macOS 14+**，更早的系统上 `check` / `env` 仍可能卡住。GUI 模式不受影响。
 - `check all` 会切换节点并耗时/耗流量，请谨慎。
-- 尚未提供常驻 `serve` / loopback HTTP；后续版本单独做。
+## serve（localhost HTTP）
+
+```bash
+egress-checker --cli serve --client verge [--port 17890]
+egress-checker --cli serve --mock --port 0          # 临时端口，看就绪横幅
+```
+
+- **只绑定 `127.0.0.1`**（绝不 `0.0.0.0`）。默认端口 **17890**；`--port 0` 由内核分配，就绪时打印实际端口。
+- **鉴权**：启动时生成一次性随机 token，打印到 **stderr（人类文案）** 与 **stdout（CliEnvelope `command:"serve"` 的 `data.token`）**。之后每个请求必须带：
+  - `Authorization: Bearer <token>`，或
+  - `X-Egress-Token: <token>`
+  - 缺/错 → **401** `{ok:false,error:{code:"unauthorized",…}}`
+- **路由**（业务结果尽量为 HTTP 200 + CliEnvelope JSON；鉴权/路径错误用 401/404/405）：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/health` | `{ok:true}`（Rust 直接回，不经 WebView） |
+| `POST` | `/v1/discover` | 同 `--cli discover` |
+| `POST` | `/v1/gate` | 同 `--cli gate` |
+| `POST` | `/v1/env` | 同 `--cli env` |
+| `POST` | `/v1/check/current` | 同 `--cli check current` |
+| `POST` | `/v1/check/all` | 同 `--cli check all` |
+| `POST` | `/v1/check/node` | body：`{"name":"节点名"}`，同 `--cli check node` |
+
+- 会话级 `--client` / `--mock` 来自启动 argv（与一次性 CLI 同一闸门：仅 `verge`）。
+- **架构**：隐藏窗 + WebView 跑原来的 `dispatchCli`；Rust 用 std TCP 做 loopback HTTP，鉴权通过后把任务丢进通道，前端 `cli_serve_poll` → `dispatchServeJob` → `cli_serve_respond`。**请求串行**（同一时间只处理一个 WebView 任务；并发连接会排队）。
+- **Ctrl+C**：停止监听，尽量让进行中的 `check node/all` 切回后结束，然后进程退出 0。再按一次 / 超时仍走一次性 CLI 的 130 看门狗。
+- **不是**通用 Web API：无 WebSocket、不为浏览器开 CORS、不提供 GUI。
+
+示例：
+
+```bash
+# 终端 A
+./egress-checker --cli serve --mock --port 17890
+# 记下 token
+
+# 终端 B
+TOKEN=…
+curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:17890/health
+curl -s -H "X-Egress-Token: $TOKEN" -X POST http://127.0.0.1:17890/v1/discover
+curl -s -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'   -d '{"name":"香港"}' -X POST http://127.0.0.1:17890/v1/check/node
+```
