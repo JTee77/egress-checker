@@ -875,6 +875,13 @@ select {
   min-width: max-content;
   overflow: visible;
 }
+/* 换不换行只看窗口宽度 + 最长进度文字；名字变短也不把停止弹回上一行 */
+.ws-progress-group.is-abort-stacked {
+  flex-wrap: wrap;
+}
+.ws-progress-group.is-abort-stacked .ws-abort-btn {
+  flex-basis: 100%;
+}
 .ws-progress-main {
   display: inline-flex;
   align-items: center;
@@ -1028,13 +1035,17 @@ select {
     grid-column: 1 / -1;
     justify-self: start;
   }
-  /* 放得下就一行靠左。只有按钮要超出这一行时，停止才单独换到下一行，左对齐。文字和条不提前换。 */
+  /* 默认不按当前节点名自然换行，避免检测中停止按钮上下跳。
+     只有 .is-abort-stacked（按最长进度文字量过）才让停止单独下一行。 */
   .ws-progress-group {
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-start;
+  }
+  .ws-progress-group.is-abort-stacked {
+    flex-wrap: wrap;
   }
   .ws-progress {
     width: max-content;
