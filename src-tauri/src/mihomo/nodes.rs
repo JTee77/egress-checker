@@ -72,7 +72,7 @@ const GROUP_TYPES: &[&str] = &["Selector", "URLTest", "Fallback", "LoadBalance"]
 /// User-facing selector groups, most authoritative first. `GLOBAL` is the
 /// global-mode pseudo-group and often sits at `DIRECT` while the client is in
 /// rule mode, so it must not be trusted blindly — hence the ordered scan below
-/// that only accepts a group whose `now` resolves to a real leaf node.
+/// that only accepts a chain ending at a real leaf node.
 const PREFER_GROUP_NAMES: &[&str] = &[
     "Proxy",
     "GLOBAL",
@@ -82,6 +82,8 @@ const PREFER_GROUP_NAMES: &[&str] = &[
     "手动选择",
     "自动选择",
 ];
+
+const MAX_HOPS: usize = 8;
 
 /// A name is a real leaf proxy iff it exists, is not a group/pseudo type
 /// (Direct/Reject/Pass/Selector… — i.e. not DIRECT), and is not a junk entry.
@@ -96,41 +98,163 @@ fn is_real_leaf(proxies: &serde_json::Map<String, Value>, name: &str) -> bool {
     !is_junk_name(name)
 }
 
-/// If group `g` exists and its `now` points at a real leaf node, return it.
-fn group_now_leaf(proxies: &serde_json::Map<String, Value>, g: &str) -> Option<String> {
-    let now = proxies.get(g)?.get("now").and_then(|n| n.as_str())?;
-    if is_real_leaf(proxies, now) {
-        Some(now.to_string())
+/// 3 = main picker (节点选择 / proxy / …), 2 = some other「选择」group,
+/// 1 = name mentions 节点 (often a region subgroup), 0 = neither.
+fn name_rank(name: &str) -> u8 {
+    let lower = name.to_lowercase();
+    if name.contains("节点选择")
+        || name.contains("手动选择")
+        || name.contains("选择节点")
+        || name.contains("代理选择")
+        || name.contains("选择代理")
+        || lower.contains("proxy")
+    {
+        3
+    } else if name.contains("选择") {
+        2
+    } else if name.contains("节点") {
+        1
+    } else {
+        0
+    }
+}
+
+/// Walk `now` through nested groups until a real leaf. Cycles and DIRECT stop as None.
+fn follow_to_leaf(proxies: &serde_json::Map<String, Value>, start: &str) -> Option<String> {
+    let mut seen = std::collections::BTreeSet::<String>::new();
+    let mut current = start.to_string();
+    for _ in 0..MAX_HOPS {
+        if !seen.insert(current.clone()) {
+            return None;
+        }
+        if is_real_leaf(proxies, &current) {
+            return Some(current);
+        }
+        let group = proxies.get(&current)?;
+        let t = group.get("type").and_then(|x| x.as_str()).unwrap_or("");
+        if !GROUP_TYPES.contains(&t) {
+            return None;
+        }
+        current = group.get("now").and_then(|n| n.as_str())?.to_string();
+    }
+    None
+}
+
+fn real_leaf_count(proxies: &serde_json::Map<String, Value>, group: &Value) -> usize {
+    group
+        .get("all")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter(|item| item.as_str().is_some_and(|n| is_real_leaf(proxies, n)))
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+struct Cand {
+    leaf: String,
+    leaves: usize,
+    rank: u8,
+    selector: bool,
+}
+
+/// Highest first key, then second. Different leaves at that peak → None.
+fn unique_by(cands: &[Cand], rank_first: bool) -> Option<String> {
+    let key = |c: &Cand| -> (usize, usize) {
+        if rank_first {
+            (c.rank as usize, c.leaves)
+        } else {
+            (c.leaves, c.rank as usize)
+        }
+    };
+    let best = cands.iter().map(key).max()?;
+    let top: Vec<&Cand> = cands.iter().filter(|c| key(c) == best).collect();
+    let leaf = &top[0].leaf;
+    if top.iter().all(|c| &c.leaf == leaf) {
+        Some(leaf.clone())
     } else {
         None
     }
 }
 
 /// Resolve the node the user is actually on. Never surfaces DIRECT/PASS/REJECT
-/// or a group name. Falls back to a single unambiguous selector group; returns
-/// None when several groups disagree (rule mode) so the UI shows "—" honestly.
+/// or a group name.
+///
+/// Exact preferred names are followed through nested selector chains. When a
+/// subscription renames the main picker (「🚀 节点选择」) and policy groups
+/// disagree, that main-picker selector wins. Otherwise the selector with the
+/// most real leaves wins. None when still ambiguous, or when the main picker
+/// itself is on DIRECT.
 pub fn resolve_current_proxy(proxies: &serde_json::Map<String, Value>) -> Option<String> {
     for g in PREFER_GROUP_NAMES {
-        if let Some(n) = group_now_leaf(proxies, g) {
-            return Some(n);
+        if proxies.contains_key(*g) {
+            if let Some(n) = follow_to_leaf(proxies, g) {
+                return Some(n);
+            }
         }
     }
-    let mut distinct: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    for (_name, p) in proxies {
+
+    let mut strong: Vec<Cand> = Vec::new();
+    let mut saw_strong_selector = false;
+    let mut resolved: Vec<Cand> = Vec::new();
+
+    for (name, p) in proxies {
         let t = p.get("type").and_then(|x| x.as_str()).unwrap_or("");
         if !GROUP_TYPES.contains(&t) {
             continue;
         }
-        if let Some(now) = p.get("now").and_then(|x| x.as_str()) {
-            if is_real_leaf(proxies, now) {
-                distinct.insert(now.to_string());
-            }
+        let rank = name_rank(name);
+        let selector = t == "Selector";
+        if selector && rank >= 2 {
+            saw_strong_selector = true;
         }
+        let Some(leaf) = follow_to_leaf(proxies, name) else {
+            continue;
+        };
+        let cand = Cand {
+            leaf,
+            leaves: real_leaf_count(proxies, p),
+            rank,
+            selector,
+        };
+        if selector && rank >= 2 {
+            strong.push(Cand {
+                leaf: cand.leaf.clone(),
+                leaves: cand.leaves,
+                rank: cand.rank,
+                selector: true,
+            });
+        }
+        resolved.push(cand);
     }
-    if distinct.len() == 1 {
-        distinct.into_iter().next()
+
+    if saw_strong_selector {
+        return unique_by(&strong, true);
+    }
+
+    if resolved.is_empty() {
+        return None;
+    }
+    let only = resolved[0].leaf.clone();
+    if resolved.iter().all(|c| c.leaf == only) {
+        return Some(only);
+    }
+
+    let selectors: Vec<Cand> = resolved
+        .iter()
+        .filter(|c| c.selector)
+        .map(|c| Cand {
+            leaf: c.leaf.clone(),
+            leaves: c.leaves,
+            rank: c.rank,
+            selector: c.selector,
+        })
+        .collect();
+    if selectors.is_empty() {
+        unique_by(&resolved, false)
     } else {
-        None
+        unique_by(&selectors, false)
     }
 }
 
@@ -522,6 +646,105 @@ mod tests {
         let body = r#"{
           "proxies": {
             "GLOBAL": {"type":"Selector","now":"DIRECT","all":["DIRECT"]},
+            "DIRECT": {"type":"Direct"}
+          }
+        }"#;
+        let slim = slim_nodes_from_proxies_json(body).unwrap();
+        assert_eq!(slim.current_proxy, None);
+    }
+
+    #[test]
+    fn current_proxy_custom_main_group_beats_policy_groups() {
+        let body = r#"{
+          "proxies": {
+            "GLOBAL": {"type":"Selector","now":"DIRECT","all":["DIRECT","n0","n1","n2","n3","n4","n5"]},
+            "机场": {"type":"Selector","now":"n3","all":["n0","n1","n2","n3","n4","n5"]},
+            "NETFLIX": {"type":"Selector","now":"n1","all":["n1","n2"]},
+            "AI": {"type":"Selector","now":"n2","all":["n2"]},
+            "Telegram": {"type":"Selector","now":"n0","all":["n0","n4"]},
+            "n0": {"type":"Vmess"},
+            "n1": {"type":"Vmess"},
+            "n2": {"type":"Vmess"},
+            "n3": {"type":"Vmess"},
+            "n4": {"type":"Vmess"},
+            "n5": {"type":"Vmess"},
+            "DIRECT": {"type":"Direct"}
+          }
+        }"#;
+        let slim = slim_nodes_from_proxies_json(body).unwrap();
+        assert_eq!(slim.current_proxy.as_deref(), Some("n3"));
+    }
+
+    #[test]
+    fn current_proxy_emoji_node_select_beats_policy_groups() {
+        let body = r#"{
+          "proxies": {
+            "GLOBAL": {"type":"Selector","now":"DIRECT","all":["DIRECT","HK-1"]},
+            "🚀 节点选择": {"type":"Selector","now":"HK-1","all":["♻️ 自动选择","HK-1","JP-1","US-1","SG-1","TW-1","DIRECT"]},
+            "♻️ 自动选择": {"type":"URLTest","now":"JP-1","all":["HK-1","JP-1","US-1","SG-1","TW-1"]},
+            "NETFLIX": {"type":"Selector","now":"US-1","all":["US-1","SG-1"]},
+            "🤖 AI": {"type":"Selector","now":"JP-1","all":["JP-1"]},
+            "Telegram": {"type":"Selector","now":"SG-1","all":["SG-1","HK-1"]},
+            "HK-1": {"type":"Hysteria2"},
+            "JP-1": {"type":"Hysteria2"},
+            "US-1": {"type":"Hysteria2"},
+            "SG-1": {"type":"Hysteria2"},
+            "TW-1": {"type":"Hysteria2"},
+            "DIRECT": {"type":"Direct"}
+          }
+        }"#;
+        let slim = slim_nodes_from_proxies_json(body).unwrap();
+        assert_eq!(slim.current_proxy.as_deref(), Some("HK-1"));
+    }
+
+    #[test]
+    fn current_proxy_nested_preferred_ignores_policy_groups() {
+        let body = r#"{
+          "proxies": {
+            "Proxy": {"type":"Selector","now":"内层","all":["内层"]},
+            "内层": {"type":"Selector","now":"再内层","all":["再内层"]},
+            "再内层": {"type":"Selector","now":"hk-1","all":["hk-1"]},
+            "NETFLIX": {"type":"Selector","now":"sg-9","all":["sg-9"]},
+            "hk-1": {"type":"Vmess"},
+            "sg-9": {"type":"Trojan"},
+            "DIRECT": {"type":"Direct"}
+          }
+        }"#;
+        let slim = slim_nodes_from_proxies_json(body).unwrap();
+        assert_eq!(slim.current_proxy.as_deref(), Some("hk-1"));
+    }
+
+    #[test]
+    fn current_proxy_main_group_follows_region_subgroup() {
+        let body = r#"{
+          "proxies": {
+            "GLOBAL": {"type":"Selector","now":"DIRECT","all":["DIRECT"]},
+            "🚀 节点选择": {"type":"Selector","now":"🇯🇵 日本节点","all":["🇭🇰 香港节点","🇯🇵 日本节点"]},
+            "🇭🇰 香港节点": {"type":"Selector","now":"hk-1","all":["hk-1","hk-2","hk-3"]},
+            "🇯🇵 日本节点": {"type":"Selector","now":"jp-9","all":["jp-9","jp-8"]},
+            "NETFLIX": {"type":"Selector","now":"hk-1","all":["hk-1","jp-9"]},
+            "hk-1": {"type":"Vmess"},
+            "hk-2": {"type":"Vmess"},
+            "hk-3": {"type":"Vmess"},
+            "jp-9": {"type":"Vmess"},
+            "jp-8": {"type":"Vmess"},
+            "DIRECT": {"type":"Direct"}
+          }
+        }"#;
+        let slim = slim_nodes_from_proxies_json(body).unwrap();
+        assert_eq!(slim.current_proxy.as_deref(), Some("jp-9"));
+    }
+
+    #[test]
+    fn current_proxy_main_group_on_direct_does_not_borrow_policy_node() {
+        let body = r#"{
+          "proxies": {
+            "GLOBAL": {"type":"Selector","now":"DIRECT","all":["DIRECT"]},
+            "🚀 节点选择": {"type":"Selector","now":"DIRECT","all":["DIRECT","HK-1","JP-1"]},
+            "NETFLIX": {"type":"Selector","now":"HK-1","all":["HK-1"]},
+            "AI": {"type":"Selector","now":"JP-1","all":["JP-1"]},
+            "HK-1": {"type":"Vmess"},
+            "JP-1": {"type":"Vmess"},
             "DIRECT": {"type":"Direct"}
           }
         }"#;
