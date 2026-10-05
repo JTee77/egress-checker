@@ -164,13 +164,22 @@ async function bootServe(parsed: ParsedCli): Promise<void> {
         };
       }
       try {
+        // Rust 侧参数是结构体 `req: ServeRespondRequest`，必须包一层 `{ req }`
+        // （与 mihomo_http / egress_proxy_fetch 相同）。平铺会反序列化失败，
+        // HTTP 连接永远等不到回包。见 src/lib/tauriInvokeContract.test.ts。
         await invoke("cli_serve_respond", {
-          id: job.id,
-          status: 200,
-          body: JSON.stringify(envelope),
+          req: {
+            id: job.id,
+            status: 200,
+            body: JSON.stringify(envelope),
+          },
         });
       } catch (err) {
         console.error("cli_serve_respond failed", err);
+        const message = err instanceof Error ? err.message : String(err);
+        await emitErr(`cli_serve_respond 失败（请求 ${job.id}）：${message}`).catch(
+          () => {},
+        );
       }
     }
   } finally {

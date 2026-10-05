@@ -211,10 +211,11 @@ pnpm tauri dev -- --cli serve --mock --port 17890
 
 ```bash
 pnpm exec vitest run src/lib/cli src/lib/runner   # 单测（参数、闸门、切回、中断、serve 路由、TS/Rust 同步）
+pnpm exec vitest run src/lib/tauriInvokeContract.test.ts  # 所有 invoke(...) 参数键 == Rust 命令参数名（如 cli_serve_respond 需 { req }）
 (cd src-tauri && cargo test cli_serve -- --nocapture)  # serve：鉴权 / 路由 / 只绑 127.0.0.1
 node scripts/simulate-restore-fail.mjs            # 切回文案（直接 import runner 源码；Node ≥ 22.18）
 bash scripts/cli-smoke.sh                         # 上面两项
-EGRESS_CLI_SMOKE=1 bash scripts/cli-smoke.sh      # 再跑真实二进制：help / 报错退出码 / discover / gate / check current（--mock）
+EGRESS_CLI_SMOKE=1 bash scripts/cli-smoke.sh      # 再跑真实二进制：help / 报错退出码 / discover / gate / check current / serve（--mock：/health、POST /v1/discover×2、401）
 ```
 
 ## 已知限制
@@ -234,11 +235,12 @@ egress-checker --cli serve --mock --port 0          # 临时端口，看就绪�
   - `Authorization: Bearer <token>`，或
   - `X-Egress-Token: <token>`
   - 缺/错 → **401** `{ok:false,error:{code:"unauthorized",…}}`
+  - **包括 `GET /health`**：没有匿名健康检查（与其它路由一致，避免本机其它进程探测/枚举）。
 - **路由**（业务结果尽量为 HTTP 200 + CliEnvelope JSON；鉴权/路径错误用 401/404/405）：
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `GET` | `/health` | `{ok:true}`（Rust 直接回，不经 WebView） |
+| `GET` | `/health` | `{ok:true}`（Rust 直接回，不经 WebView）。**同样需要 token**，无 token → 401 |
 | `POST` | `/v1/discover` | 同 `--cli discover` |
 | `POST` | `/v1/gate` | 同 `--cli gate` |
 | `POST` | `/v1/env` | 同 `--cli env` |

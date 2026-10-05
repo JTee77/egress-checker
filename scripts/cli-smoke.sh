@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 echo "== vitest cli + runner =="
-pnpm exec vitest run src/lib/cli src/lib/runner
+pnpm exec vitest run src/lib/cli src/lib/runner src/lib/tauriInvokeContract.test.ts
 
 echo "== restore 文案自检 =="
 node scripts/simulate-restore-fail.mjs
@@ -127,15 +127,23 @@ if [[ -z "$TOKEN" || -z "$PORT" ]]; then
   exit 1
 fi
 echo "serve ready port=$PORT"
-code=$(curl -s -o /tmp/egress-health.json -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:${PORT}/health")
+code=$(curl -s --max-time 60 -o /tmp/egress-health.json -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:${PORT}/health")
 [[ "$code" == "200" ]] || { echo "FAIL: /health HTTP $code"; cat /tmp/egress-health.json; kill "$SERVE_PID"; exit 1; }
 grep -q '"ok":true' /tmp/egress-health.json || { echo "FAIL: /health body"; cat /tmp/egress-health.json; kill "$SERVE_PID"; exit 1; }
 # 无 token → 401
-code401=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${PORT}/health")
+code401=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" "http://127.0.0.1:${PORT}/health")
 [[ "$code401" == "401" ]] || { echo "FAIL: 期望 401，得到 $code401"; kill "$SERVE_PID"; exit 1; }
-code=$(curl -s -o /tmp/egress-discover.json -w "%{http_code}" -H "X-Egress-Token: $TOKEN" -X POST "http://127.0.0.1:${PORT}/v1/discover")
+code=$(curl -s --max-time 60 -o /tmp/egress-discover.json -w "%{http_code}" -H "X-Egress-Token: $TOKEN" -X POST "http://127.0.0.1:${PORT}/v1/discover")
 [[ "$code" == "200" ]] || { echo "FAIL: /v1/discover HTTP $code"; cat /tmp/egress-discover.json; kill "$SERVE_PID"; exit 1; }
 grep -q '"command":"discover"' /tmp/egress-discover.json || { echo "FAIL: discover envelope"; cat /tmp/egress-discover.json; kill "$SERVE_PID"; exit 1; }
+grep -q '"ok":true' /tmp/egress-discover.json || { echo "FAIL: discover 非 ok"; cat /tmp/egress-discover.json; kill "$SERVE_PID"; exit 1; }
+echo "POST /v1/discover → 200 $(head -c 200 /tmp/egress-discover.json)"
+# 第二个请求：确认串行通道回包后能继续处理（回包坏掉时这里会超时）
+code=$(curl -s --max-time 60 -o /tmp/egress-discover2.json -w "%{http_code}" -H "Authorization: Bearer $TOKEN" -X POST "http://127.0.0.1:${PORT}/v1/discover")
+[[ "$code" == "200" ]] || { echo "FAIL: 第二次 /v1/discover HTTP $code"; cat /tmp/egress-discover2.json; kill "$SERVE_PID"; exit 1; }
+# 错 token → 401
+code401=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" -H "Authorization: Bearer wrong" -X POST "http://127.0.0.1:${PORT}/v1/discover")
+[[ "$code401" == "401" ]] || { echo "FAIL: 错 token 期望 401，得到 $code401"; kill "$SERVE_PID"; exit 1; }
 kill -INT "$SERVE_PID" 2>/dev/null || true
 for _ in $(seq 1 20); do
   kill -0 "$SERVE_PID" 2>/dev/null || break
