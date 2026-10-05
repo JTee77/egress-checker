@@ -1516,6 +1516,8 @@ html.glass .nc-detail {
   padding: 4px var(--content-inset-x);
   box-sizing: border-box;
   min-width: 0;
+  container-type: inline-size;
+  container-name: flowrow;
 }
 .flow-row > .theme-toggle {
   grid-column: 2;
@@ -1592,33 +1594,33 @@ html.glass .nc-detail {
   margin-left: 4px;
 }
 
-/* 写在基础样式后面，否则同权重的网格列会把窄屏规则盖掉。
-   宽：三步一行在左，主题小开关在右。
-   窄：第二步和第三步一起换行。
-   最窄：主题单独一行靠右，三步在下面，一步一行，字不被盖住。 */
-@media (max-width: 980px) {
+/* 按这一行自己的宽度换，不跟窗口宽度绑死。
+   右侧还有空、主题碰不到字时，步骤留在原来的高度，跟主题同一带。
+   第二步第三步一起换行、再把第三步单独换行，都只在再挤就会碰上主题时发生。
+   主题单独占上面一行，只在单步文字要钻进主题下面时才发生。 */
+@container flowrow (max-width: 790px) {
   .fh-rest {
     flex-basis: 100%;
   }
 }
-@media (max-width: 760px) {
-  .flow-row {
-    grid-template-columns: minmax(0, 1fr);
+@container flowrow (max-width: 530px) {
+  .fh-rest .fh-step:last-child {
+    flex-basis: 100%;
   }
+}
+@container flowrow (max-width: 450px) {
   .flow-row > .theme-toggle {
-    grid-column: 1;
+    grid-column: 1 / -1;
     grid-row: 1;
     justify-self: end;
     width: max-content;
     max-width: max-content;
   }
   .flow-hint {
-    grid-column: 1;
+    grid-column: 1 / -1;
     grid-row: 2;
-    width: 100%;
+    width: auto;
   }
-}
-@media (max-width: 480px) {
   .flow-hint > .fh-step,
   .fh-rest,
   .fh-rest .fh-step {
