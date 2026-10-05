@@ -7,7 +7,7 @@
 
 **不提供**任何节点或 VPN 服务。当前仅支持 Clash Verge / Clash Verge Rev。FlClash 的支持即将上线，充分实测后再正式加入。
 
-许可证：**PolyForm Noncommercial 1.0.0**（禁止商用）。
+许可证：**GPL-3.0**（GNU 通用公共许可证第 3 版；可商用，分发改版须同样开源）。
 
 ## 受众
 - 已在用 Clash Verge / Clash Verge Rev 的 Mac 用户（FlClash 即将支持，尚未正式加入）
@@ -36,7 +36,7 @@
 
 **当前版本：0.1.16**（自 0.1.12 起；0.1.15 已发）。
 
-本轮目标：**CLI 收口**（闸门、严格解析、切回、Ctrl+C、文档）+ **最小可用 `serve`**（127.0.0.1 + token 鉴权，映射 discover/gate/env/check）。已挂起、发版时可一并合入：[PR #20](https://github.com/JTee77/egress-checker/pull/20) 许可证改为 GPL-3.0。CLI 收口见 [PR #21](https://github.com/JTee77/egress-checker/pull/21)。
+本轮目标：**CLI 收口**（闸门、严格解析、切回、Ctrl+C、文档）+ **最小可用 `serve`**（127.0.0.1 + token 鉴权，映射 discover/gate/env/check）。许可证已改为 **GPL-3.0**（[PR #20](https://github.com/JTee77/egress-checker/pull/20)）。CLI 收口见 [PR #21](https://github.com/JTee77/egress-checker/pull/21)；`serve` 见 [PR #22](https://github.com/JTee77/egress-checker/pull/22)。
 
 0.1.15 已发：窄窗排版、使用中识别、FlClash 即将支持、商店只写通/不通、取消记录过期清理等。
 
