@@ -860,6 +860,17 @@ select {
   line-height: 1.4;
   min-width: 0;
 }
+/* 切回失败：一句红字跟在「测全部」后面；整句换行，不拆开 */
+.ws-restore-error {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fail);
+  line-height: 1.35;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+}
 
 /* 文字 | 条 | 停止 同级横排：文字按自身宽度，条固定 72，停止不叠条上。
    文字↔条 8px，条↔停止 10px。多出来的空白只在「停止并切回」和「展开全部详情」之间。 */
@@ -1021,6 +1032,7 @@ select {
     grid-column: 1;
     grid-row: 1;
     justify-self: start;
+    max-width: 100%;
   }
   .ws-expand-link {
     grid-column: 2;

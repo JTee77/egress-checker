@@ -610,6 +610,11 @@ export function HomePage({
                       <span className="status-ok-mark">✓</span>成功
                     </span>
                   ) : null}
+                  {restoreError ? (
+                    <span className="ws-restore-error" role="alert">
+                      {restoreError}
+                    </span>
+                  ) : null}
                 </div>
                 {running && mode === "all" ? (
                   <div
@@ -751,12 +756,6 @@ export function HomePage({
         </div>
       ) : null}
 
-      {restoreError ? (
-        <div className="gate-banner gate-banner-block" role="alert">
-          <div className="gate-banner-title">没能切回原先节点</div>
-          <div className="gate-banner-msg">{restoreError}</div>
-        </div>
-      ) : null}
 
       <div className="fold-panel card">
         <button

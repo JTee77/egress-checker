@@ -278,7 +278,7 @@ export async function testAll(
       });
       const restored = await restoreProxy(config, originalSnap);
       if (!restored) {
-        const errMsg = `没法自动切回原先的节点「${originalSnap.now}」。请立刻到VPN软件里手动选回去，否则你可能还停在别的节点上。`;
+        const errMsg = `没能切回原先节点「${originalSnap.now}」。`;
         hooks.onRestoreError?.(errMsg);
         hooks.onHint?.(errMsg);
       } else {
@@ -286,8 +286,7 @@ export async function testAll(
       }
       hooks.onProgress(null);
     } else if (didSwitch && (!originalSnap?.now || !originalSnap.group)) {
-      const errMsg =
-        "测全部时切换过节点，但应用没有记下原先选中的节点，没法自动切回。请到VPN软件里确认当前节点。";
+      const errMsg = "没能切回原先节点。";
       hooks.onRestoreError?.(errMsg);
       hooks.onHint?.(errMsg);
     }
