@@ -956,10 +956,17 @@ select {
   gap: var(--nc-gap);
 }
 
-/* 窄到标题行放不下：左对齐换行，不许画出窗口。
-   约 1200 以下，环境标题与按钮、节点标题与进度不会再挤在一行里被切掉。
-   宽窗（默认 1340）仍保持按钮锁在动作列、进度簇跟在按钮旁。 */
+/* 三个主按钮共用一个换行点（约 1200）：一起到标题下面，不是各自看自己那一行。
+   更宽时三个都留在标题旁边。窄时左对齐，成功或失败不裁切。 */
 @media (max-width: 1200px) {
+  .home-ops-controls .picker-group {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+  .home-ops-controls .action-with-ok {
+    flex: 0 1 auto;
+    max-width: 100%;
+  }
   .env-head,
   .ws-ops {
     display: flex;
@@ -1024,6 +1031,12 @@ select {
 @media (max-width: 685px) {
   .node-flow {
     justify-content: flex-start;
+  }
+}
+
+@media (min-width: 1201px) {
+  .home-ops-controls {
+    flex-wrap: nowrap;
   }
 }
 .ncard {
