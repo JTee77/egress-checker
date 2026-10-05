@@ -5,12 +5,12 @@
 
 一句话：**看看你的代理会不会漏 DNS、关心的服务能不能用、实际够不够快。**
 
-**不提供**任何节点或 VPN 服务。用户自备 Mihomo / Clash Meta 兼容客户端（默认验证目标：Clash Verge Rev）。
+**不提供**任何节点或 VPN 服务。当前仅支持 Clash Verge / Clash Verge Rev。FlClash 的支持即将上线，充分实测后再正式加入。
 
 许可证：**PolyForm Noncommercial 1.0.0**（禁止商用）。
 
 ## 受众
-- 已在用 Clash Verge Rev / FlClash / Clash Party / Nyanpasu 等的 Mac 用户
+- 已在用 Clash Verge / Clash Verge Rev 的 Mac 用户（FlClash 即将支持，尚未正式加入）
 - 需要比「能开 Google」更深的检查
 - 普通用户可直接用 GUI；进阶用户可用 CLI 拿 JSON
 

@@ -19,6 +19,8 @@ export type ClientOption = {
   id: ClientId;
   label: string;
   hint: string;
+  /** Shown but not selectable until support is actually shipped. */
+  disabled?: boolean;
 };
 
 export const CLIENT_OPTIONS: ClientOption[] = [
@@ -29,8 +31,9 @@ export const CLIENT_OPTIONS: ClientOption[] = [
   },
   {
     id: "flclash",
-    label: "FlClash",
-    hint: "选好后点刷新，按该软件自动连接",
+    label: "FlClash（即将支持）",
+    hint: "即将支持，暂不可选",
+    disabled: true,
   },
 ];
 
@@ -111,14 +114,12 @@ export function isClientId(v: unknown): v is ClientId {
 }
 
 /**
- * Map stored clientId. Only currently-supported clients kept; everything else
- * (legacy picks like clashx_meta/mihomo_party/nyanpasu, mihomo/manual/unknown)
- * → null, forcing a fresh pick.
+ * Map stored clientId. Only Clash Verge is selectable today. FlClash is listed
+ * as coming soon and anything else (legacy clashx_meta/mihomo_party/nyanpasu,
+ * a previously stored flclash, mihomo/manual/unknown) → null, forcing a fresh pick.
  */
 export function normalizeClientId(v: unknown): ClientId | null {
-  if (v === "verge" || v === "flclash") {
-    return v;
-  }
+  if (v === "verge") return v;
   return null;
 }
 

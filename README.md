@@ -2,14 +2,14 @@
 
 macOS **Apple Silicon (arm64)** 桌面应用：诊断代理**出口质量**——连通性、DNS / IPv6 / WebRTC 泄漏、出口 IP、Gemini / ChatGPT / 流媒体解锁、节点打分与快速测速。
 
-面向已自备 **Mihomo / Clash Meta** 兼容客户端的用户（默认目标：**Clash Verge Rev**）。**不提供任何节点或 VPN 服务**，也不是翻墙工具。仅支持 **Apple Silicon**，不承诺 Intel Mac。
+面向已自备 **Clash Verge / Clash Verge Rev** 的用户。**当前仅支持 Clash Verge**，FlClash 的支持即将上线，会在充分实测之后再正式加入。**不提供任何节点或 VPN 服务**，也不是翻墙工具。仅支持 **Apple Silicon**，不承诺 Intel Mac。
 
 许可证：**PolyForm Noncommercial 1.0.0**（禁止商用）。
 
 ## 准备：启用 Clash Verge Rev / Mihomo API
 
 1. 保持 **Clash Verge / Verge Rev** 运行（2.5.6+ 常用 Unix 服务套接字，可不开放 TCP external-controller）
-2. 若使用旧版或其它客户端：可开启 **external-controller**（如 `127.0.0.1:9097`）并设置 **secret**
+2. 若使用较旧的 Clash Verge：可开启 **external-controller**（如 `127.0.0.1:9097`）并设置 **secret**
 3. 确认 **mixed-port**（如 `7897`）已开启，供经代理的出口探针使用
 4. 按需开启**系统代理**或 **TUN**
 

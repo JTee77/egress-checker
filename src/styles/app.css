@@ -222,6 +222,9 @@ select {
   background-repeat: no-repeat;
   padding-right: 28px;
 }
+.client-picker-select option:disabled {
+  color: var(--text-muted);
+}
 /* 获取成功：跟在蓝钮后，间距由所在行的 gap:8 承担 */
 .fetch-ok {
   display: inline-flex;

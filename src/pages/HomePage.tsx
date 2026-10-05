@@ -218,6 +218,8 @@ export function HomePage({
   };
 
   const onSelectClient = (raw: string) => {
+    const picked = CLIENT_OPTIONS.find((o) => o.id === raw);
+    if (!picked || picked.disabled) return;
     const id = normalizeClientId(raw);
     if (!id) return;
     onClientIdChange(id);
@@ -513,7 +515,7 @@ export function HomePage({
                 请选择…
               </option>
               {CLIENT_OPTIONS.map((o) => (
-                <option key={o.id} value={o.id}>
+                <option key={o.id} value={o.id} disabled={o.disabled}>
                   {o.label}
                 </option>
               ))}
