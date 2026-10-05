@@ -1012,17 +1012,32 @@ select {
     margin-top: 8px;
   }
   .ws-ops-right {
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: flex-start;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    gap: 8px;
+    column-gap: 12px;
+    row-gap: 8px;
     margin-top: 8px;
   }
+  .ws-ops-right .action-with-ok {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+  }
   .ws-expand-link {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
     margin-left: 0;
+    white-space: nowrap;
+  }
+  .ws-progress-group,
+  .ws-progress,
+  .ws-error {
+    grid-column: 1 / -1;
   }
   .ws-progress-group,
   .ws-progress {
@@ -1046,12 +1061,6 @@ select {
   }
 }
 
-/* 只剩一列卡片（与 colCountFor 同界：宽 < 686）：左缘对齐标题，不在托盘里居中。 */
-@media (max-width: 685px) {
-  .node-flow {
-    justify-content: flex-start;
-  }
-}
 
 @media (min-width: 1201px) {
   .home-ops-controls {
