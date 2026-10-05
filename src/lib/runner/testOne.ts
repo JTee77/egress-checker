@@ -75,6 +75,9 @@ export async function testOne(
       hooks.onRestoreError?.(restoreErrorFor(plan, restored));
     } else if (plan.kind !== "none") {
       hooks.onRestoreError?.(restoreErrorFor(plan, false));
+    } else {
+      // 本轮无需切回：清掉上一轮红字，仍挂在「测全部」旁同一处
+      hooks.onRestoreError?.(null);
     }
     hooks.onProgress(null);
   }
