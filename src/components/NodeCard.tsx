@@ -130,12 +130,9 @@ export function NodeCard({
         onClick={onToggle}
       >
         <div className="nc-sum">
-          {/* 上行：名+使用中左贴紧（名可省略），星级/未测锚定右上 */}
+          {/* 上行：只留节点名 + 星级/未测；「使用中」在第二行协议标签前 */}
           <div className="nc-row nc-row-top">
-            <div className="nc-name">
-              <span className="nc-nm">{node.name}</span>
-              {isCurrent ? <span className="nc-badge">使用中</span> : null}
-            </div>
+            <span className="nc-nm">{node.name}</span>
             {hasResult ? (
               <StarRating stars={score!.stars} size={13} />
             ) : (
@@ -143,6 +140,7 @@ export function NodeCard({
             )}
           </div>
           <div className="nc-row nc-row-bot">
+            {isCurrent ? <span className="nc-badge">使用中</span> : null}
             <div className="nc-tags">
               {node.type}
               {chips.map((c) => (
