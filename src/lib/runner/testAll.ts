@@ -20,6 +20,7 @@ import {
   type NodeScoreResult,
 } from "../score";
 import { DELAY_URL, NODE_PLACEHOLDERS, asRunning } from "./placeholders";
+import { planRestore, restoreErrorFor } from "./restore";
 import type { RunnerHooks, TestAllContext } from "./types";
 
 const CULL_CONCURRENCY = 12;
@@ -271,24 +272,23 @@ export async function testAll(
     hooks.onGate?.({ ok: false, message: `测全部节点时出错：${msg}` });
     return false;
   } finally {
-    if (didSwitch && config && originalSnap?.now && originalSnap.group) {
+    // 切回：决策与文案统一走 ./restore（GUI 红字 / CLI restoreError 同一句）。
+    // restoreError 与 hint 分开：hint 只放过程提示，不再重复切回报错。
+    const plan = planRestore(didSwitch, originalSnap);
+    if (plan.kind === "restore" && config) {
       hooks.onProgress({
-        text: `正在切回原先节点：${originalSnap.now}…`,
+        text: `正在切回原先节点：${plan.now}…`,
         testingNode: undefined,
       });
-      const restored = await restoreProxy(config, originalSnap);
-      if (!restored) {
-        const errMsg = `没能切回原先节点「${originalSnap.now}」。`;
-        hooks.onRestoreError?.(errMsg);
-        hooks.onHint?.(errMsg);
-      } else {
-        hooks.onRestoreError?.(null);
-      }
+      const restored = await restoreProxy(config, {
+        group: plan.group,
+        now: plan.now,
+      });
+      hooks.onRestoreError?.(restoreErrorFor(plan, restored));
       hooks.onProgress(null);
-    } else if (didSwitch && (!originalSnap?.now || !originalSnap.group)) {
-      const errMsg = "没能切回原先节点。";
-      hooks.onRestoreError?.(errMsg);
-      hooks.onHint?.(errMsg);
+    } else if (plan.kind !== "none") {
+      // missing_snapshot，或切过节点却没有 config（canSwitch 要求 config，理论上不可达）：按失败报。
+      hooks.onRestoreError?.(restoreErrorFor(plan, false));
     }
   }
 }

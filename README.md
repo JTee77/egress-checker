@@ -45,7 +45,7 @@ cd egress-checker && pnpm install && pnpm tauri dev
 - **测单个（完整）**：`runNodeDiagnostics` — 延迟、带宽、流媒体/商店/AI 等；节点卡「测 / 再测」走这条
 - **测全部（完整深测）**：与测单个相同探针集（延迟淘汰后临时切换深测）；测完或中止会**强制切回**原节点
 - **环境泄漏检查**：DNS / IPv6 / WebRTC / 分流 / 直连旁路（第二入口，不默认每次强跑）
-- **CLI**：`--cli discover|gate|check|env`，stdout 为 CliEnvelope JSON（与 GUI 共用 runner），见 [docs/CLI.md](./docs/CLI.md)
+- **CLI**：`--cli discover|gate|check|env --client verge`（目前仅支持 Clash Verge），stdout 为一行 CliEnvelope JSON（与 GUI 共用 runner），`--no-json` 为人类摘要；错误码与退出码见 [docs/CLI.md](./docs/CLI.md)
 
 ## 打包（DMG）
 

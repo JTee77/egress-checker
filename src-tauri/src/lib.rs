@@ -1,3 +1,4 @@
+mod cli_serve;
 mod dns;
 mod dns_query;
 mod mihomo;
@@ -390,25 +391,128 @@ fn get_cli_argv() -> Vec<String> {
     std::env::args().collect()
 }
 
-/// True when process was launched with `--cli` (or first meaningful arg is a CLI verb).
+/// CLI 子命令全集。
+/// ⚠️ 必须与 TS `src/lib/cli/parse.ts` 的 `CLI_COMMANDS` 完全一致（cli.test.ts 有同步断言）。
+pub const CLI_VERBS: &[&str] = &["help", "discover", "gate", "check", "env", "serve"];
+
+/// 是否进入 CLI（隐藏主窗）。规则与 TS `parseCliArgv().cliMode` 逐条对齐：
+/// - 选项区出现 `--cli` / `--help` / `-h` → 是
+/// - 否则看第一个位置参数是否为已知子命令
+/// - `--client` / `-c` / `--port` / `-p` 后面的值不算位置参数（值缺失或以 `-` 开头时不吞）
+/// - `--` 之后全部是位置参数（`--cli` 也不再算选项）
+///
+/// 共用用例：`src/lib/cli/cli-mode-cases.json`（Rust 单测 + vitest 都跑）。
+pub fn is_cli_mode_args(args: &[String]) -> bool {
+    let mut flag = false;
+    let mut first_positional: Option<&str> = None;
+    let mut end_of_options = false;
+    let mut i = 1; // args[0] = 二进制路径
+    while i < args.len() {
+        let t = args[i].as_str();
+        if end_of_options || !t.starts_with('-') || t == "-" {
+            if first_positional.is_none() {
+                first_positional = Some(t);
+            }
+            i += 1;
+            continue;
+        }
+        match t {
+            "--" => end_of_options = true,
+            "--cli" | "--help" | "-h" => flag = true,
+            "--client" | "-c" | "--port" | "-p" => {
+                if let Some(v) = args.get(i + 1) {
+                    if !v.is_empty() && !v.starts_with('-') {
+                        i += 2;
+                        continue;
+                    }
+                }
+            }
+            _ => {
+                // --port=N / --client=verge：值贴在选项上，不算位置参数
+            }
+        }
+        i += 1;
+    }
+    flag || first_positional.is_some_and(|p| CLI_VERBS.contains(&p))
+}
+
+/// True when process was launched in CLI mode (see `is_cli_mode_args`).
 #[tauri::command]
 fn is_cli_mode() -> bool {
     let args: Vec<String> = std::env::args().collect();
-    if args.iter().any(|a| a == "--cli" || a == "--help" || a == "-h") {
-        return true;
-    }
-    // bare: egress-checker discover …
-    let skip = |s: &str| s.starts_with('-') || s.contains('/') || s.ends_with(".exe");
-    for a in args.iter().skip(1) {
-        if skip(a) {
-            continue;
+    is_cli_mode_args(&args)
+}
+
+/// CLI 中断（Ctrl+C / SIGTERM / SIGHUP）。
+///
+/// 第一次信号：只置位，由前端轮询 `cli_abort_requested` 后让 `check all`
+/// 在节点间停止并切回原节点，正常输出 envelope（error.code = aborted）后退出 1。
+/// 看门狗：第一次信号后 `CLI_ABORT_GRACE_SECS` 秒仍未退出 → 强制退出 130。
+/// 第二次信号：立即 `_exit(130)`，不切回。
+#[cfg(unix)]
+mod cli_signal {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static SIGNALS: AtomicUsize = AtomicUsize::new(0);
+    pub const CLI_ABORT_GRACE_SECS: u64 = 90;
+    const FORCE_MSG: &str =
+        "\n再次收到中断：立即退出（没有切回原节点，请到代理软件里确认当前节点）。\n";
+
+    extern "C" fn on_signal(_sig: libc::c_int) {
+        let prev = SIGNALS.fetch_add(1, Ordering::SeqCst);
+        if prev >= 1 {
+            // 信号处理函数里只用 async-signal-safe 调用：write + _exit。
+            let b = FORCE_MSG.as_bytes();
+            unsafe {
+                libc::write(2, b.as_ptr() as *const libc::c_void, b.len());
+                libc::_exit(130);
+            }
         }
-        return matches!(
-            a.as_str(),
-            "help" | "discover" | "gate" | "check" | "env"
-        );
     }
-    false
+
+    pub fn requested() -> bool {
+        SIGNALS.load(Ordering::SeqCst) > 0
+    }
+
+    pub fn install() {
+        unsafe {
+            let mut sa: libc::sigaction = std::mem::zeroed();
+            sa.sa_sigaction = on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t;
+            sa.sa_flags = libc::SA_RESTART;
+            libc::sigemptyset(&mut sa.sa_mask);
+            for sig in [libc::SIGINT, libc::SIGTERM, libc::SIGHUP] {
+                if libc::sigaction(sig, &sa, std::ptr::null_mut()) != 0 {
+                    eprintln!("cli: 安装信号处理失败（signal {sig}），Ctrl+C 将直接结束进程");
+                }
+            }
+        }
+        std::thread::spawn(|| {
+            while !requested() {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            eprintln!(
+                "收到中断信号：正在停止（切换过节点的会先切回原节点，最多等 {CLI_ABORT_GRACE_SECS} 秒；再按一次 Ctrl+C 立即退出，不切回）…"
+            );
+            std::thread::sleep(std::time::Duration::from_secs(CLI_ABORT_GRACE_SECS));
+            eprintln!(
+                "等待切回超时（{CLI_ABORT_GRACE_SECS} 秒），强制退出。请到代理软件里确认当前节点。"
+            );
+            std::process::exit(130);
+        });
+    }
+}
+
+/// 前端轮询：是否已收到中断信号。
+#[tauri::command]
+fn cli_abort_requested() -> bool {
+    #[cfg(unix)]
+    {
+        cli_signal::requested()
+    }
+    #[cfg(not(unix))]
+    {
+        false
+    }
 }
 
 /// Print one line to process stdout (JSON envelope or help text).
@@ -419,6 +523,45 @@ fn cli_stdout(line: String) -> Result<(), String> {
     writeln!(out, "{line}").map_err(|e| e.to_string())?;
     out.flush().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+
+/// Print one line (or multi-line) to process stderr (serve 就绪提示等).
+#[tauri::command]
+fn cli_stderr(line: String) -> Result<(), String> {
+    use std::io::Write;
+    let mut out = std::io::stderr().lock();
+    writeln!(out, "{line}").map_err(|e| e.to_string())?;
+    out.flush().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn cli_serve_start(port: u16) -> Result<cli_serve::ServeStartInfo, String> {
+    cli_serve::serve_start(port)
+}
+
+#[tauri::command]
+fn cli_serve_poll(timeout_ms: u64) -> Result<Option<cli_serve::ServeJobView>, String> {
+    cli_serve::serve_poll(timeout_ms)
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ServeRespondRequest {
+    id: u64,
+    status: u16,
+    body: String,
+}
+
+#[tauri::command]
+fn cli_serve_respond(req: ServeRespondRequest) -> Result<(), String> {
+    cli_serve::serve_respond(req.id, req.status, req.body)
+}
+
+#[tauri::command]
+fn cli_serve_stop() -> Result<(), String> {
+    cli_serve::serve_stop()
 }
 
 /// Exit the process after CLI finishes (code 0 = ok envelope, 1 = error).
@@ -445,6 +588,28 @@ pub fn run() {
                 "startup frontend_url={frontend_url} (no data-url navigate)"
             ));
 
+            // 主窗口在这里创建（tauri.conf.json 里 create:false），以便 CLI 模式单独配置：
+            // - visible(false)：一开始就不显示，不再先闪一下再隐藏；
+            // - 关闭后台节流：WKWebView 默认把不在屏幕上的页面「挂起」（setTimeout 等不再触发），
+            //   隐藏窗里的深测会永远卡住（0.1.15 及以前 `--cli check current/all` 不返回）。
+            //   该设置需 macOS 14+（更早系统 wry 会忽略）。
+            // GUI 模式完全按配置创建，行为不变。
+            let cli = is_cli_mode();
+            let win_cfg = app
+                .config()
+                .app
+                .windows
+                .first()
+                .cloned()
+                .ok_or("tauri.conf.json 缺少主窗口配置")?;
+            let mut builder = tauri::WebviewWindowBuilder::from_config(app.handle(), &win_cfg)?;
+            if cli {
+                builder = builder
+                    .visible(false)
+                    .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled);
+            }
+            builder.build()?;
+
             // 原生标题栏：软件名 + 版本（与 Cargo.toml / package.json 对齐）。
             if let Some(win) = app.get_webview_window("main") {
                 let _ = win.set_title(&format!(
@@ -453,17 +618,16 @@ pub fn run() {
                 ));
             }
 
-            // --cli：隐藏主窗，由前端跑完后 cli_exit。
-            if is_cli_mode() {
-                append_app_log("cli_mode=1 hide main window");
-                if let Some(win) = app.get_webview_window("main") {
-                    let _ = win.hide();
-                }
+            // --cli：主窗已隐藏创建，由前端跑完后 cli_exit；接管 Ctrl+C 以便先切回再退出。
+            if cli {
+                append_app_log("cli_mode=1 hidden window, background throttling disabled");
+                #[cfg(unix)]
+                cli_signal::install();
             }
 
             #[cfg(debug_assertions)]
             {
-                if !is_cli_mode() {
+                if !cli {
                 let handle = app.handle().clone();
                 let probe_url = frontend_url.clone();
                 tauri::async_runtime::spawn(async move {
@@ -529,8 +693,37 @@ pub fn run() {
             get_cli_argv,
             is_cli_mode,
             cli_stdout,
-            cli_exit
+            cli_stderr,
+            cli_exit,
+            cli_abort_requested,
+            cli_serve_start,
+            cli_serve_poll,
+            cli_serve_respond,
+            cli_serve_stop
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod cli_mode_tests {
+    use super::is_cli_mode_args;
+
+    /// 与 vitest 共用同一份用例，保证 Rust / TS 判定一致。
+    #[test]
+    fn cli_mode_matches_shared_cases() {
+        let raw = include_str!("../../src/lib/cli/cli-mode-cases.json");
+        let cases: Vec<serde_json::Value> = serde_json::from_str(raw).expect("cases json");
+        assert!(!cases.is_empty());
+        for c in cases {
+            let argv: Vec<String> = c["argv"]
+                .as_array()
+                .expect("argv")
+                .iter()
+                .map(|v| v.as_str().expect("argv str").to_string())
+                .collect();
+            let want = c["cliMode"].as_bool().expect("cliMode");
+            assert_eq!(is_cli_mode_args(&argv), want, "argv={argv:?}");
+        }
+    }
 }

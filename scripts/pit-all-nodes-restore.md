@@ -12,14 +12,15 @@
    - 代理软件里当前选中节点应随进度变化。
 
 3. **Restores original**
-   - 跑完后界面提示「已切回原先节点：…」，客户端选中应与开始前一致。
+   - 跑完后客户端选中应与开始前一致；切回成功时界面不额外提示。
    - 中途点「停止并切回」：应中止深测并切回原节点。
 
 4. **Restore-fail path（可模拟）**
    - 深测进行中，在客户端里关掉 external-controller / 改掉 secret / 退出代理软件，使 PUT select 失败。
-   - 结束后应出现红色「没能切回原先节点」报错（中文），不得静默停在其它节点上不提示。
+   - 结束后「测全部节点」旁应出现红字「没能切回原先节点「X」。」（没记下原节点时为「没能切回原先节点。」），不得静默停在其它节点上不提示。
+   - CLI 同一场景：`--cli check all --client verge` 应 `ok:false`、`error.code = restore_failed`，`data.restoreError` 为同一句。
 
-本地逻辑自检（无 GUI）：
+本地逻辑自检（无 GUI；直接 import `src/lib/runner/restore.ts`，需 Node ≥ 22.18）：
 
 ```bash
 node scripts/simulate-restore-fail.mjs

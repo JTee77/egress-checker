@@ -1,4 +1,4 @@
-# Egress Checker — 产品说明（v0.1.15）
+# Egress Checker — 产品说明（v0.1.16）
 
 ## 定位
 **Egress Checker** 是 macOS（Apple Silicon）桌面应用，诊断代理**出口质量**——不只是「能不能打开国外网站」。
@@ -32,23 +32,19 @@
 - 对无开放 API 的客户端假装「全节点扫遍」
 - 宣称「翻墙 / 突破防火墙」
 
-## 当前版本（0.1.15）
+## 当前版本与本轮目标（0.1.16）
 
-**当前版本：0.1.15**（自 0.1.12 起）。
+**当前版本：0.1.16**（自 0.1.12 起；0.1.15 已发）。
 
-相对 0.1.14 已收进本版：
-- **商店**：商店格子和详情只写「通」或「不通」，不再带区码。
-- **窄窗排版**：标题行、获取节点、三个主按钮和步骤条按同一套逻辑左对齐换行；最窄时主题单独一行靠右，步骤在下面完整留在窗口里。1920 宽约六列。
-- **测全部进度**：进度文字、进度条和「停止并切回」靠左成一组，放不下时「停止并切回」单独换行；按最长进度文字决定换行，检测中不上下跳。切回失败改为一句话，跟在「测全部」后面。
-- **使用中**：标记移到第二行协议标签后面，名字行不再挤长名。换订阅后主组改名（带表情、嵌套组）也能认出使用中的节点。
-- **客户端**：当前只支持 Clash Verge；FlClash 标为「即将支持」，灰色不可选。
-- **清理**：删掉未用的旧连接口函数；已取消请求的记录改为 60 秒过期，不再满 512 条全清。
+本轮目标：**CLI 收口**（闸门、严格解析、切回、Ctrl+C、文档）+ **最小可用 `serve`**（127.0.0.1 + token 鉴权，映射 discover/gate/env/check）。许可证已改为 **GPL-3.0**（[PR #20](https://github.com/JTee77/egress-checker/pull/20)）。CLI 收口见 [PR #21](https://github.com/JTee77/egress-checker/pull/21)；`serve` 见 [PR #22](https://github.com/JTee77/egress-checker/pull/22)。
 
-图标本版不动。CLI 的 localhost HTTP 服务继续延后，不阻塞本版。
+0.1.15 已发：窄窗排版、使用中识别、FlClash 即将支持、商店只写通/不通、取消记录过期清理等。
+
+图标本版不动。
 
 「明确不做」见上文，本版不变。
 
-## 当前产品形态（0.1.12 基线 → 0.1.15）
+## 当前产品形态（0.1.12 基线 → 0.1.16）
 
 ### 单页 GUI（无侧栏多模式）
 - **无**「首页 | 节点 | 设置 | 关于」侧栏多页；工作区是一条渐进流程：选软件 → 获取节点 → 环境检查 / 测节点
@@ -67,19 +63,27 @@
 ### 轻量门槛
 获取节点后先 `runLightGate`：客户端是否连上、海外是否大致通、是否像未走代理直连。不过则口语提示，不进入节点测评。
 
-### CLI（0.1.12 骨架；0.1.15 仍延后 HTTP）
-与 GUI **共用** `lib/runner` + `egress` + `score` + `mihomo`。
+### CLI（0.1.12 骨架；0.1.16 收口 + 最小 serve）
+与 GUI **共用** `lib/runner` + `egress` + `score` + `mihomo`。**目前只支持 `--client verge`**（Clash Verge / Clash Verge Rev）；FlClash 即将支持，暂不可用。
 
 ```text
-egress-checker --cli discover --client verge --json
+egress-checker --cli discover --client verge
 egress-checker --cli gate --client verge
-egress-checker --cli check current|node <名>|all …
+egress-checker --cli check current|node <名>|all --client verge
 egress-checker --cli env --client verge
+egress-checker --cli check all --mock --no-json
+egress-checker --cli serve --client verge [--port 17890]
+egress-checker --cli serve --mock
 ```
 
-stdout 为 **CliEnvelope** JSON（`ok/version/command/ranAt/data|error`）。详见 [docs/CLI.md](./docs/CLI.md)。
+- 一次性命令：stdout 为一行 **CliEnvelope** JSON（`ok/version/command/ranAt/data|error`）；`--no-json` 输出人类摘要。
+- **`serve`**：只绑 `127.0.0.1`（默认端口 17890）；启动打印一次性 token；请求需 `Authorization: Bearer` 或 `X-Egress-Token`；路由映射到上述命令（`GET /health` + `POST /v1/…`）。隐藏窗 + WebView 调度，**请求串行**。Ctrl+C 停服。不是通用 Web API（无 CORS / WebSocket / 浏览器 GUI）。
+- 退出码：`0` = ok:true（serve 正常停服亦为 0），`1` = ok:false；强制中断（第二次 Ctrl+C / 等待切回超时）为 `130`。
+- 严格解析：未知命令 / 未知选项 / 多余参数 / 非法 `--client` 都是 ok:false，不静默变成 help、不回落。
+- `check node` / `check all` 切回失败 → `restore_failed`，`data.restoreError` 与 GUI 红字同一句。
+- Ctrl+C：`check all` 在当前节点测完后停止并切回（同 GUI「停止并切回」）。
 
-> 仍是一次性 CLI（隐藏窗跑完退出）。**localhost HTTP serve 继续延后**，不阻塞 0.1.15。
+错误码、三种 `check` 数据形状、`discover` 节点截断、serve 鉴权与路由等细节见 [docs/CLI.md](./docs/CLI.md)。
 
 ## 非目标回顾（仍成立）
 见上文「明确不做」。深度测速可能耗流量；DNS/WebRTC 在桌面 WebView 下为启发式结论。

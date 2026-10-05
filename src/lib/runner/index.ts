@@ -10,3 +10,9 @@ export type {
 export { testAll } from "./testAll";
 export { testOne } from "./testOne";
 export { runEnv } from "./env";
+export {
+  planRestore,
+  restoreErrorFor,
+  restoreFailedMessage,
+  type RestorePlan,
+} from "./restore";

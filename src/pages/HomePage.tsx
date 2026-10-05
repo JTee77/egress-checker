@@ -447,6 +447,7 @@ export function HomePage({
   const testOneNode = async (node: ProxyNode) => {
     if (running) return;
     setNodeTestOk(false);
+    setRestoreError(null);
     setRunning(true);
     setTestingNode(node.name);
     try {

@@ -4,6 +4,10 @@ export type CliError = {
   message: string;
 };
 
+/**
+ * 一行 JSON。ok:false 时必有 error；部分失败（如 aborted / check_failed）
+ * 还会带 data（已测到的结果、restoreError 等），便于脚本收尾。
+ */
 export type CliEnvelope<T = unknown> = {
   ok: boolean;
   version: string;
@@ -18,7 +22,8 @@ export type CliCommandName =
   | "discover"
   | "gate"
   | "check"
-  | "env";
+  | "env"
+  | "serve";
 
 export type CheckTarget =
   | { kind: "current" }
@@ -26,15 +31,27 @@ export type CheckTarget =
   | { kind: "all" };
 
 export type ParsedCli = {
-  /** true when argv contains --cli or a known subcommand as first token after binary */
+  /** 与 Rust `is_cli_mode` 同规则：含 --cli / --help / -h，或首个位置参数是已知子命令 */
   cliMode: boolean;
+  /** 解析出的子命令；parseError 非空时不可信（调度直接报错） */
   command: CliCommandName;
+  /** 用户写的第一个位置参数（未知命令时用于报错/回显） */
+  commandToken: string | null;
   /** check 子命令目标 */
   checkTarget?: CheckTarget;
+  /** --client 原值（未校验；校验在 dispatch 的 resolveCliClient） */
   clientId: string | null;
+  /** 是否显式给了 --client（即使值非法） */
+  clientGiven: boolean;
   mock: boolean;
   json: boolean;
-  /** leftover / unknown flags for diagnostics */
+  /** serve 的 --port；未给则为 null（serve 时用默认 17890） */
+  port: number | null;
+  /** 是否显式给了 --port（含非法值，非法时 parseError） */
+  portGiven: boolean;
+  /** 未知命令 / 未知选项 / 缺值 / 多余参数；非空时 dispatch 返回 ok:false */
+  parseError: CliError | null;
+  /** 原始 argv（诊断用） */
   raw: string[];
 };
 
@@ -52,17 +69,28 @@ export function okEnvelope<T>(
   };
 }
 
-export function errEnvelope(
+export function errEnvelope<T = never>(
   command: string,
   code: string,
   message: string,
   version: string,
-): CliEnvelope<never> {
-  return {
+  data?: T,
+): CliEnvelope<T> {
+  const env: CliEnvelope<T> = {
     ok: false,
     version,
     command,
     ranAt: new Date().toISOString(),
     error: { code, message },
   };
+  if (data !== undefined) env.data = data;
+  return env;
+}
+
+/**
+ * 进程退出码契约：envelope 正常输出时 0 = ok:true，1 = ok:false。
+ * （强制中断——第二次 Ctrl+C 或切回等待超时——由 Rust 直接退出 130，且不输出 envelope。）
+ */
+export function cliExitCode(env: Pick<CliEnvelope, "ok">): 0 | 1 {
+  return env.ok ? 0 : 1;
 }
