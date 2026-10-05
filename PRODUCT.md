@@ -1,4 +1,4 @@
-# Egress Checker — 产品说明（v0.1.15）
+# Egress Checker — 产品说明（v0.1.16）
 
 ## 定位
 **Egress Checker** 是 macOS（Apple Silicon）桌面应用，诊断代理**出口质量**——不只是「能不能打开国外网站」。
@@ -36,7 +36,7 @@
 
 **当前版本：0.1.16**（自 0.1.12 起；0.1.15 已发）。
 
-本轮刚开，目标待定。已挂起、发版时可一并合入：[PR #20](https://github.com/JTee77/egress-checker/pull/20) 许可证改为 GPL-3.0。
+本轮目标：**CLI 收口**——只推广 Clash Verge（`--client` 闸门与 GUI 一致，FlClash 等一律报「当前仅支持 Clash Verge」，`--mock` 也不回落）；未知命令 / 未知选项明确报错；`check` 切回失败单独给 `restoreError`；Ctrl+C 尽力先切回再退出；`--no-json` 输出人类摘要；文档写清错误码、数据形状与退出码。已挂起、发版时可一并合入：[PR #20](https://github.com/JTee77/egress-checker/pull/20) 许可证改为 GPL-3.0。
 
 0.1.15 已发：窄窗排版、使用中识别、FlClash 即将支持、商店只写通/不通、取消记录过期清理等。
 
@@ -44,7 +44,7 @@
 
 「明确不做」见上文，本版不变。
 
-## 当前产品形态（0.1.12 基线 → 0.1.15）
+## 当前产品形态（0.1.12 基线 → 0.1.16）
 
 ### 单页 GUI（无侧栏多模式）
 - **无**「首页 | 节点 | 设置 | 关于」侧栏多页；工作区是一条渐进流程：选软件 → 获取节点 → 环境检查 / 测节点
@@ -63,19 +63,26 @@
 ### 轻量门槛
 获取节点后先 `runLightGate`：客户端是否连上、海外是否大致通、是否像未走代理直连。不过则口语提示，不进入节点测评。
 
-### CLI（0.1.12 骨架；0.1.15 仍延后 HTTP）
-与 GUI **共用** `lib/runner` + `egress` + `score` + `mihomo`。
+### CLI（0.1.12 骨架；0.1.16 收口，HTTP 仍延后）
+与 GUI **共用** `lib/runner` + `egress` + `score` + `mihomo`。**目前只支持 `--client verge`**（Clash Verge / Clash Verge Rev）；FlClash 即将支持，暂不可用。
 
 ```text
-egress-checker --cli discover --client verge --json
+egress-checker --cli discover --client verge
 egress-checker --cli gate --client verge
-egress-checker --cli check current|node <名>|all …
+egress-checker --cli check current|node <名>|all --client verge
 egress-checker --cli env --client verge
+egress-checker --cli check all --mock --no-json
 ```
 
-stdout 为 **CliEnvelope** JSON（`ok/version/command/ranAt/data|error`）。详见 [docs/CLI.md](./docs/CLI.md)。
+- stdout 为一行 **CliEnvelope** JSON（`ok/version/command/ranAt/data|error`）；`--no-json` 输出人类摘要。
+- 退出码：`0` = ok:true，`1` = ok:false；强制中断（第二次 Ctrl+C / 等待切回超时）为 `130`。
+- 严格解析：未知命令 / 未知选项 / 多余参数 / 非法 `--client` 都是 ok:false，不静默变成 help、不回落。
+- `check node` / `check all` 切回失败 → `restore_failed`，`data.restoreError` 与 GUI 红字同一句。
+- Ctrl+C：`check all` 在当前节点测完后停止并切回（同 GUI「停止并切回」）。
 
-> 仍是一次性 CLI（隐藏窗跑完退出）。**localhost HTTP serve 继续延后**，不阻塞 0.1.15。
+错误码、三种 `check` 数据形状、`discover` 节点截断到 50 个等细节见 [docs/CLI.md](./docs/CLI.md)。
+
+> 仍是一次性 CLI（隐藏窗跑完退出）。**localhost HTTP serve 继续延后**，单独做。
 
 ## 非目标回顾（仍成立）
 见上文「明确不做」。深度测速可能耗流量；DNS/WebRTC 在桌面 WebView 下为启发式结论。
