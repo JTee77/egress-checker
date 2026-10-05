@@ -168,14 +168,14 @@ select {
 .home-ops-controls {
   display: flex;
   align-items: center;
-  /* dropdown → 12–16 → 获取节点 */
+  /* dropdown → 14 → 获取节点。放得下就同一行；放不下时按钮和成功/失败整组换到下一行 */
   gap: 14px;
-  /* 禁止收缩：否则盒子缩窄后按钮溢出，后面的状态标会按盒子边缘排布而贴进按钮 */
-  flex: 0 0 auto;
-  flex-shrink: 0;
-  min-width: max-content;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow: visible;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 .home-ops-controls > * {
   box-sizing: border-box;
@@ -194,6 +194,7 @@ select {
      content-inset 14 + 348 + controls gap 14 = --action-x(376)
      title → 8–12 → dropdown 在本 group；dropdown → 14 → 获取节点 在 controls */
   flex: 0 0 348px;
+  max-width: 100%;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -271,13 +272,16 @@ select {
   font-weight: 700;
   flex: none;
 }
-/* 失败原因紧跟「失败」标：宽窗同行排下，窄窗自动折行（header 本身 flex-wrap） */
+/* 失败原因跟在「失败」后面：能排下就同一行，排不下就在按钮组里换行，不裁切 */
 .fetch-fail-msg {
   font-size: 12px;
   color: var(--fail);
   line-height: 1.4;
   min-width: 0;
+  max-width: 100%;
   flex: 1 1 160px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .btn-sm {
@@ -598,27 +602,7 @@ select {
 }
 
 /* --- responsive: window fill / narrow / short --- */
-/* 软件行：窄于一列卡片（宽 < 686）时，下拉与「获取节点」允许换行。
-   环境/节点标题的换行在后面，必须写在 .env-head / .ws-ops 基础规则之后才生效。 */
-@media (max-width: 685px) {
-  .picker-group {
-    flex: 1 1 100%;
-    width: auto;
-    max-width: 100%;
-    min-width: 0;
-  }
-  .app-header {
-    align-items: stretch;
-  }
-  .home-ops-controls {
-    flex-wrap: wrap;
-    width: 100%;
-    min-width: 0;
-  }
-  .home-ops-controls .action-with-ok {
-    width: 100%;
-  }
-}
+/* 软件行的换行不锁宽度：放得下就跟下拉同一行，放不下由 .home-ops-controls 把按钮组整组换走。 */
 
 @media (max-width: 720px) {
   .main{
@@ -840,9 +824,10 @@ select {
 .action-with-ok {
   display: inline-flex;
   align-items: center;
-  flex: none;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 8px;
+  max-width: 100%;
   min-width: 0;
 }
 /* 「展开/收起全部详情」：弱化三级链，推到节点检测行最右 */
