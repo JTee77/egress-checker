@@ -79,6 +79,13 @@ export function formatCardBrief(card: CheckCard): string {
     return "未测";
   }
 
+  // 商店：页面区码不是节点商店区，格子只写通或不通。
+  if (id === "app-store" || id === "google-play") {
+    if (card.level === "pass" || card.level === "warn") return "通";
+    if (card.level === "fail") return "不通";
+    return shortConclusion(card);
+  }
+
   // 解锁 / 服务类：区码优先，其次开/锁
   if (m && (m.unlockSupported != null || m.unlockRegion || m.unlockLevel)) {
     const region = m.unlockRegion?.trim();

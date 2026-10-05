@@ -117,16 +117,6 @@ pub fn verge_sock_candidates(yaml_unix_paths: &[String], extras: &[String]) -> V
     out
 }
 
-/// Legacy helper: historical single Verge sock path (unix only).
-/// Prefer `verge_sock_candidates` for discovery.
-pub fn default_controller_sock() -> Option<&'static str> {
-    if cfg!(unix) {
-        Some(VERGE_SOCK_PATH)
-    } else {
-        None
-    }
-}
-
 #[cfg(target_os = "macos")]
 pub fn app_log_dir() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join("Library/Logs/EgressChecker"))
@@ -241,14 +231,6 @@ mod tests {
                 home.join("Library/Application Support").join(VERGE_REL_CONFIG),
                 "macOS Verge config path must be byte-identical to pre-seam code"
             );
-        }
-    }
-
-    #[test]
-    fn unix_socks_only_on_unix_targets() {
-        assert_eq!(default_controller_sock().is_some(), cfg!(unix));
-        if cfg!(unix) {
-            assert_eq!(default_controller_sock(), Some(VERGE_SOCK_PATH));
         }
     }
 

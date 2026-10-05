@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { CheckCardView } from "../components/CheckCardView";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { NodeCard } from "../components/NodeCard";
@@ -31,10 +37,37 @@ import {
 
 type TestMode = "current" | "all";
 
-/** 瀑布流列数：单卡固定 310px + 9px 列距，1–8 列封顶。
- * 余量 ≈ main 左右 padding + tray 左右 pad。 */
+/** 瀑布流列数：单卡固定 298px + 9px 列距，1–8 列封顶。
+ * 余量 ≈ main 左右 padding + tray 左右 pad。
+ * 1920 宽约 6 列；(vw-72)/307。 */
 function colCountFor(vw: number): number {
-  return Math.min(8, Math.max(1, Math.floor((vw - 72) / 319)));
+  return Math.min(8, Math.max(1, Math.floor((vw - 72) / 307)));
+}
+
+const PROGRESS_TEXT_FONT =
+  '600 12px -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif';
+
+function measureProgressTextWidth(text: string): number {
+  if (typeof document === "undefined" || !text) return 0;
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return text.length * 12;
+  ctx.font = PROGRESS_TEXT_FONT;
+  return ctx.measureText(text).width;
+}
+
+function widestNodeName(names: string[]): string {
+  if (names.length === 0) return "";
+  let best = names[0]!;
+  let bestW = -1;
+  for (const name of names) {
+    const w = measureProgressTextWidth(name);
+    if (w > bestW) {
+      bestW = w;
+      best = name;
+    }
+  }
+  return best;
 }
 
 /** 进度文案拆成「阶段」+「节点名」。两段都完整显示，不截断。 */
@@ -99,6 +132,10 @@ export function HomePage({
   const [switchHint, setSwitchHint] = useState<string | null>(null);
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const abortAllRef = useRef(false);
+  const progressGroupRef = useRef<HTMLDivElement | null>(null);
+  const abortBtnRef = useRef<HTMLButtonElement | null>(null);
+  /** 「停止并切回」是否单独换行：只看窗口宽度 + 最长进度文字，不看当前节点名 */
+  const [abortStacked, setAbortStacked] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [testingNode, setTestingNode] = useState<string | null>(null);
@@ -181,6 +218,8 @@ export function HomePage({
   };
 
   const onSelectClient = (raw: string) => {
+    const picked = CLIENT_OPTIONS.find((o) => o.id === raw);
+    if (!picked || picked.disabled) return;
     const id = normalizeClientId(raw);
     if (!id) return;
     onClientIdChange(id);
@@ -362,6 +401,39 @@ export function HomePage({
       : null;
   const progressDisplay = splitProgressDisplay(progress);
 
+  const progressReserveLabel = useMemo(() => {
+    const total = progress?.total ?? nodes.length;
+    if (total <= 0 || nodes.length === 0) return "";
+    const widest = widestNodeName(nodes.map((n) => n.name));
+    if (!widest) return `检测 ${total}/${total}`;
+    return `检测 ${total}/${total}（${widest}）`;
+  }, [nodes, progress?.total]);
+
+  useLayoutEffect(() => {
+    if (!(running && mode === "all")) {
+      setAbortStacked(false);
+      return;
+    }
+    const el = progressGroupRef.current;
+    if (!el || !progressReserveLabel) {
+      setAbortStacked(false);
+      return;
+    }
+    const update = () => {
+      const btnW = abortBtnRef.current?.offsetWidth ?? 88;
+      const textW = measureProgressTextWidth(progressReserveLabel);
+      const barW = 72;
+      const gaps = 8 + 10; // 文字↔条、条↔停止
+      const need = textW + gaps + barW + btnW;
+      setAbortStacked(el.clientWidth + 0.5 < need);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [running, mode, progressReserveLabel]);
+
+
   const allExpanded =
     orderedNodes.length > 0 && orderedNodes.every((n) => expanded.has(n.name));
 
@@ -405,16 +477,18 @@ export function HomePage({
         <div className="flow-hint" aria-label="使用步骤">
           <span className={`fh-step ${gate?.ok ? "done" : "cur"}`}>
             <i>{gate?.ok ? "✓" : "1"}</i>打开你的VPN软件并连上一个可用节点
+            <span className="fh-arrow" aria-hidden="true">→</span>
           </span>
-          <span className="fh-arrow">→</span>
-          <span className={`fh-step ${gate?.ok ? "done" : "todo"}`}>
-            <i>{gate?.ok ? "✓" : "2"}</i>在下方选择你使用的VPN软件 · 获取节点
-          </span>
-          <span className="fh-arrow">→</span>
-          <span
-            className={`fh-step ${!gate?.ok ? "todo" : detectionDone ? "done" : "cur"}`}
-          >
-            <i>{!gate?.ok ? "3" : detectionDone ? "✓" : "3"}</i>进行检测
+          <span className="fh-rest">
+            <span className={`fh-step ${gate?.ok ? "done" : "todo"}`}>
+              <i>{gate?.ok ? "✓" : "2"}</i>在下方选择你使用的VPN软件 · 获取节点
+              <span className="fh-arrow" aria-hidden="true">→</span>
+            </span>
+            <span
+              className={`fh-step ${!gate?.ok ? "todo" : detectionDone ? "done" : "cur"}`}
+            >
+              <i>{!gate?.ok ? "3" : detectionDone ? "✓" : "3"}</i>进行检测
+            </span>
           </span>
         </div>
         <ThemeToggle />
@@ -441,7 +515,7 @@ export function HomePage({
                 请选择…
               </option>
               {CLIENT_OPTIONS.map((o) => (
-                <option key={o.id} value={o.id}>
+                <option key={o.id} value={o.id} disabled={o.disabled}>
                   {o.label}
                 </option>
               ))}
@@ -538,10 +612,20 @@ export function HomePage({
                       <span className="status-ok-mark">✓</span>成功
                     </span>
                   ) : null}
+                  {restoreError ? (
+                    <span className="ws-restore-error" role="alert">
+                      {restoreError}
+                    </span>
+                  ) : null}
                 </div>
                 {running && mode === "all" ? (
-                  <div className="ws-progress-group">
-                    <div className="ws-progress" role="status" aria-live="polite">
+                  <div
+                    ref={progressGroupRef}
+                    className={`ws-progress-group${abortStacked ? " is-abort-stacked" : ""}`}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <span className="ws-progress-main">
                       <span className="ws-progress-text">
                         {progressDisplay ? (
                           <>
@@ -570,8 +654,13 @@ export function HomePage({
                           />
                         </span>
                       ) : null}
-                    </div>
-                    <button type="button" className="btn btn-sm ws-abort-btn" onClick={onAbortAll}>
+                    </span>
+                    <button
+                      ref={abortBtnRef}
+                      type="button"
+                      className="btn btn-sm ws-abort-btn"
+                      onClick={onAbortAll}
+                    >
                       停止并切回
                     </button>
                   </div>
@@ -669,12 +758,6 @@ export function HomePage({
         </div>
       ) : null}
 
-      {restoreError ? (
-        <div className="gate-banner gate-banner-block" role="alert">
-          <div className="gate-banner-title">没能切回原先节点</div>
-          <div className="gate-banner-msg">{restoreError}</div>
-        </div>
-      ) : null}
 
       <div className="fold-panel card">
         <button

@@ -53,7 +53,10 @@ describe("summarizeServiceCards", () => {
 
     const store = out.find((c) => c.id === "svc-store")!;
     expect(store.level).toBe("pass");
-    expect(store.conclusion).toContain("App Store：通 · US");
+    expect(store.conclusion).toContain("App Store：通");
+    expect(store.conclusion).toContain("Google Play：通");
+    expect(store.conclusion).not.toContain("·");
+    expect(store.conclusion).not.toContain("US");
   });
 
   it("全通 / 全不通 / 检测中", () => {

@@ -1,4 +1,4 @@
-# Egress Checker CLI（0.1.14）
+# Egress Checker CLI（0.1.15）
 
 与图形界面共用 `src/lib/runner`、`egress`、`score`、`mihomo`。通过 **`--cli`** 启动隐藏窗口，在 WebView 内调用同一套 Tauri 能力，结束后把 **一行 JSON（CliEnvelope）** 打到 stdout 并退出。
 
@@ -42,7 +42,7 @@ pnpm tauri dev -- --cli env --client verge
 ```json
 {
   "ok": true,
-  "version": "0.1.14",
+  "version": "0.1.15",
   "command": "discover",
   "ranAt": "2026-09-27T00:00:00.000Z",
   "data": { }

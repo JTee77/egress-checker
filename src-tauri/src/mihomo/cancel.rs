@@ -2,11 +2,15 @@
 //! 取消可能比请求登记更早到，所以先到的 id 先记下来，请求一开始就能看见。
 //! 不用单独依赖 tokio：现有运行时能把这个等待唤醒即可。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
+use std::time::{Duration, Instant};
+
+/// 先到的取消只留这么久；请求通常几毫秒内就会登记，过期的说明请求不会来了。
+const EARLY_TTL: Duration = Duration::from_secs(60);
 
 struct Slot {
     cancelled: bool,
@@ -15,7 +19,8 @@ struct Slot {
 
 struct Reg {
     live: HashMap<String, Arc<Mutex<Slot>>>,
-    early: HashSet<String>,
+    /// 取消号 → 记下的时间。
+    early: HashMap<String, Instant>,
 }
 
 fn reg() -> &'static Mutex<Reg> {
@@ -23,7 +28,7 @@ fn reg() -> &'static Mutex<Reg> {
     REG.get_or_init(|| {
         Mutex::new(Reg {
             live: HashMap::new(),
-            early: HashSet::new(),
+            early: HashMap::new(),
         })
     })
 }
@@ -60,8 +65,10 @@ impl Future for CancelWait {
 /// 登记一个取消号。已经取消过则返回 None，调用方不要再发请求。
 pub fn arm_cancel(id: &str) -> Option<CancelWait> {
     let mut g = reg().lock().unwrap_or_else(|e| e.into_inner());
-    if g.early.remove(id) {
-        return None;
+    if let Some(at) = g.early.remove(id) {
+        if at.elapsed() < EARLY_TTL {
+            return None;
+        }
     }
     let slot = Arc::new(Mutex::new(Slot {
         cancelled: false,
@@ -94,11 +101,15 @@ pub fn fire_cancel(id: &str) -> bool {
         }
         return true;
     }
-    if g.early.len() > 512 {
-        g.early.clear();
-    }
-    g.early.insert(id.to_string());
+    let now = Instant::now();
+    prune_early(&mut g.early, now);
+    g.early.insert(id.to_string(), now);
     false
+}
+
+/// 只清过期的，不会误删还在等的取消。
+fn prune_early(early: &mut HashMap<String, Instant>, now: Instant) {
+    early.retain(|_, at| now.duration_since(*at) < EARLY_TTL);
 }
 
 #[cfg(test)]
@@ -110,6 +121,24 @@ mod tests {
         let id = format!("early-{}-{}", std::process::id(), line!());
         assert!(!fire_cancel(&id));
         assert!(arm_cancel(&id).is_none());
+    }
+
+    #[test]
+    fn prune_keeps_fresh_drops_expired() {
+        let now = Instant::now();
+        let mut m = HashMap::new();
+        m.insert("fresh".to_string(), now);
+        if let Some(old) = now.checked_sub(EARLY_TTL + Duration::from_secs(1)) {
+            m.insert("stale".to_string(), old);
+        }
+        // 很多条也不会整批清空
+        for i in 0..1000 {
+            m.insert(format!("n{i}"), now);
+        }
+        prune_early(&mut m, now);
+        assert!(m.contains_key("fresh"));
+        assert!(!m.contains_key("stale"));
+        assert_eq!(m.len(), 1001);
     }
 
     #[test]

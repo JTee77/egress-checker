@@ -68,7 +68,7 @@ export async function testOne(
       const restored = await restoreProxy(config, snap);
       if (!restored) {
         hooks.onRestoreError?.(
-          `没能自动切回原先节点「${snap.now}」，请到VPN软件里手动选回。`,
+          `没能切回原先节点「${snap.now}」。`,
         );
       }
     }

@@ -12,6 +12,8 @@
   --pass-bg: #dcfce7;
   --warn: #a16207;
   --warn-bg: #fef3c7;
+  --star: #f5b301;
+  --star-stroke: #a16207;
   --fail: #b91c1c;
   --fail-bg: #fee2e2;
   --unknown: #64748b;
@@ -42,6 +44,8 @@
   --pass-bg: #052e16;
   --warn: #fbbf24;
   --warn-bg: #422006;
+  --star: #fbbf24;
+  --star-stroke: color-mix(in srgb, #fbbf24 55%, #2a303b);
   --fail: #f87171;
   --fail-bg: #450a0a;
   --unknown: #94a3b8;
@@ -65,6 +69,8 @@
     --pass-bg: #052e16;
     --warn: #fbbf24;
     --warn-bg: #422006;
+    --star: #fbbf24;
+    --star-stroke: color-mix(in srgb, #fbbf24 55%, #2a303b);
     --fail: #f87171;
     --fail-bg: #450a0a;
     --unknown: #94a3b8;
@@ -162,14 +168,14 @@ select {
 .home-ops-controls {
   display: flex;
   align-items: center;
-  /* dropdown → 12–16 → 获取节点 */
+  /* dropdown → 14 → 获取节点。放得下就同一行；放不下时按钮和成功/失败整组换到下一行 */
   gap: 14px;
-  /* 禁止收缩：否则盒子缩窄后按钮溢出，后面的状态标会按盒子边缘排布而贴进按钮 */
-  flex: 0 0 auto;
-  flex-shrink: 0;
-  min-width: max-content;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow: visible;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 .home-ops-controls > * {
   box-sizing: border-box;
@@ -188,6 +194,7 @@ select {
      content-inset 14 + 348 + controls gap 14 = --action-x(376)
      title → 8–12 → dropdown 在本 group；dropdown → 14 → 获取节点 在 controls */
   flex: 0 0 348px;
+  max-width: 100%;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -214,6 +221,9 @@ select {
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
   padding-right: 28px;
+}
+.client-picker-select option:disabled {
+  color: var(--text-muted);
 }
 /* 获取成功：跟在蓝钮后，间距由所在行的 gap:8 承担 */
 .fetch-ok {
@@ -265,13 +275,16 @@ select {
   font-weight: 700;
   flex: none;
 }
-/* 失败原因紧跟「失败」标：宽窗同行排下，窄窗自动折行（header 本身 flex-wrap） */
+/* 失败原因跟在「失败」后面：能排下就同一行，排不下就在按钮组里换行，不裁切 */
 .fetch-fail-msg {
   font-size: 12px;
   color: var(--fail);
   line-height: 1.4;
   min-width: 0;
+  max-width: 100%;
   flex: 1 1 160px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .btn-sm {
@@ -592,51 +605,15 @@ select {
 }
 
 /* --- responsive: window fill / narrow / short --- */
-/* 只剩一列卡片时（与 colCountFor 同界：宽 < 710）：取消 --action-x，
-   三个主按钮落到各自标题下一行、左对齐。 */
-@media (max-width: 709px) {
-  .picker-group {
-    flex: 1 1 100%;
-    width: auto;
-    max-width: 100%;
-  }
-  .home-ops-controls {
-    flex-wrap: wrap;
-    width: 100%;
-    min-width: 0;
-  }
-  .env-head,
-  .ws-ops {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .env-head .t,
-  .ws-ops .t {
-    width: 100%;
-  }
-  .env-head-actions,
-  .ws-ops-right {
-    width: 100%;
-    justify-content: flex-start;
-  }
-}
+/* 软件行的换行不锁宽度：放得下就跟下拉同一行，放不下由 .home-ops-controls 把按钮组整组换走。 */
 
 @media (max-width: 720px) {
   .main{
     padding: 8px 12px 12px;
   }
-  .home-ops{
-    align-items: center;
-  }
-  .home-ops-controls{
-    flex-wrap: nowrap;
-  }
   .home-ops-refresh{
     width: auto;
   }
-  
-  
   .card-grid-home{
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   }
@@ -683,11 +660,11 @@ select {
   flex-shrink: 0;
 }
 .star-full {
-  fill: var(--warn);
+  fill: var(--star);
 }
 .star-empty {
   fill: none;
-  stroke: color-mix(in srgb, var(--warn) 55%, var(--border));
+  stroke: var(--star-stroke);
   stroke-width: 1.4;
 }
 
@@ -697,7 +674,7 @@ select {
    ============================================================ */
 :root {
   /* 节点卡固定宽度；窗口变宽只增加列数，不拉伸卡片 */
-  --nc-w: 310px;
+  --nc-w: 298px;
   /* 收起卡高度（摘要内容 ~52px + 上下 padding） */
   --nc-h: 68px;
   /* 卡片纵向间距（瀑布流列内 gap） */
@@ -850,9 +827,10 @@ select {
 .action-with-ok {
   display: inline-flex;
   align-items: center;
-  flex: none;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 8px;
+  max-width: 100%;
   min-width: 0;
 }
 /* 「展开/收起全部详情」：弱化三级链，推到节点检测行最右 */
@@ -885,37 +863,65 @@ select {
   line-height: 1.4;
   min-width: 0;
 }
+/* 切回失败：一句红字跟在「测全部」后面；整句换行，不拆开 */
+.ws-restore-error {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fail);
+  line-height: 1.35;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+}
 
-/* 文字按自身宽度一行排开。进度条紧贴文字右侧 8px，「停止并切回」紧贴进度条 10px。
-   这段不收缩、不提前折行。多出来的空白只在「停止并切回」和「展开全部详情」之间。 */
+/* 文字 | 条 | 停止 同级横排：文字按自身宽度，条固定 72，停止不叠条上。
+   文字↔条 8px，条↔停止 10px。多出来的空白只在「停止并切回」和「展开全部详情」之间。 */
 .ws-progress-group {
   display: inline-flex;
   align-items: center;
   flex-wrap: nowrap;
-  flex: none;
-  gap: 10px;
+  /* 不许被压扁：放不下时由 .ws-ops-right 整簇换到按钮下一行 */
+  flex: 0 0 auto;
+  gap: 8px 10px;
   width: max-content;
   max-width: none;
   min-width: max-content;
+  overflow: visible;
+}
+/* 换不换行只看窗口宽度 + 最长进度文字；名字变短也不把停止弹回上一行 */
+.ws-progress-group.is-abort-stacked {
+  flex-wrap: wrap;
+}
+.ws-progress-group.is-abort-stacked .ws-abort-btn {
+  flex-basis: 100%;
+}
+.ws-progress-main {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
+  max-width: 100%;
 }
 .ws-progress {
   display: inline-flex;
   align-items: center;
   flex-wrap: nowrap;
-  flex: none;
+  flex: 0 0 auto;
   gap: 8px;
   width: max-content;
   max-width: none;
   min-width: max-content;
 }
 .ws-abort-btn {
-  flex: none;
+  flex: 0 0 auto;
   white-space: nowrap;
+  margin-left: 0;
 }
 .ws-progress-text {
   font-size: 12px;
   font-weight: 600;
-  flex: none;
+  flex: 0 0 auto;
   width: max-content;
   min-width: max-content;
   white-space: nowrap;
@@ -925,8 +931,10 @@ select {
   white-space: nowrap;
 }
 .ws-progress-bar {
-  /* 固定 ~72，永不收缩，永不叠到停止按钮下 */
   flex: 0 0 72px;
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
   height: 6px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--border) 70%, var(--bg));
@@ -975,6 +983,115 @@ select {
   flex-direction: column;
   gap: var(--nc-gap);
 }
+
+/* 三个主按钮共用一个换行点（约 1200）：一起到标题下面，不是各自看自己那一行。
+   更宽时三个都留在标题旁边。窄时左对齐，成功或失败不裁切。 */
+@media (max-width: 1200px) {
+  .home-ops-controls .picker-group {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+  .home-ops-controls .action-with-ok {
+    flex: 0 1 auto;
+    max-width: 100%;
+  }
+  .env-head,
+  .ws-ops {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    grid-template-columns: none;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .env-head .t,
+  .ws-ops .t {
+    width: 100%;
+    max-width: 100%;
+  }
+  .env-head .s {
+    white-space: normal;
+  }
+  .env-head-actions {
+    width: 100%;
+    max-width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .ws-ops-right {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    column-gap: 12px;
+    row-gap: 8px;
+    margin-top: 8px;
+  }
+  .ws-ops-right .action-with-ok {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+    max-width: 100%;
+  }
+  .ws-expand-link {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    margin-left: 0;
+    white-space: nowrap;
+  }
+  .ws-progress-group,
+  .ws-progress,
+  .ws-error {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+  /* 默认不按当前节点名自然换行，避免检测中停止按钮上下跳。
+     只有 .is-abort-stacked（按最长进度文字量过）才让停止单独下一行。 */
+  .ws-progress-group {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+  }
+  .ws-progress-group.is-abort-stacked {
+    flex-wrap: wrap;
+  }
+  .ws-progress {
+    width: max-content;
+    max-width: 100%;
+    min-width: max-content;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+  }
+  .ws-progress-text {
+    flex: 0 0 auto;
+    width: max-content;
+    min-width: max-content;
+    white-space: nowrap;
+  }
+  .ws-progress-phase,
+  .ws-progress-node {
+    white-space: nowrap;
+  }
+  .ws-abort-btn {
+    flex: 0 0 auto;
+    margin-left: 0;
+  }
+}
+
+
+@media (min-width: 1201px) {
+  .home-ops-controls {
+    flex-wrap: nowrap;
+  }
+}
+
 .ncard {
   height: var(--nc-h);
   overflow: hidden;
@@ -1011,7 +1128,7 @@ select {
   height: var(--nc-h);
   box-sizing: border-box;
 }
-/* 摘要两行：上行名+使用中（左贴紧，名可省略）+ 星级/未测（右上），下行 tags+操作 */
+/* 摘要两行：上行只名+星级/未测；下行「使用中」+协议标签+操作 */
 .nc-row {
   display: flex;
   align-items: center;
@@ -1025,19 +1142,11 @@ select {
   gap: 6px;
   justify-content: space-between;
 }
-.nc-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  /* 占满星级左侧余宽，内部名+徽章左贴紧 */
-  flex: 1 1 auto;
-  min-width: 0;
-}
 .nc-nm {
   font-size: 13px;
   font-weight: 600;
-  /* 按内容宽；过长才收缩省略，徽章紧跟名称而非贴右 */
-  flex: 0 1 auto;
+  /* 占满星级左侧余宽；长名可省略，不再给「使用中」让位 */
+  flex: 1 1 auto;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -1051,6 +1160,8 @@ select {
   border-radius: 5px;
   padding: 1px 4px;
   flex: none;
+  /* 跟在协议/UDP/UoT 后：标签 gap 4 + 2 = 6px */
+  margin-left: 2px;
 }
 .nc-row-top .star-rating,
 .nc-row-top .nc-untested {
@@ -1129,7 +1240,7 @@ select {
   overflow: hidden;
 }
 .nc-grid {
-  /* 固定卡宽 ~310：上行 4（连通/出口/延迟/带宽）下行 3（流媒体/AI/商店），末项不单吊 */
+  /* 固定卡宽 ~298：上行 4（连通/出口/延迟/带宽）下行 3（流媒体/AI/商店），末项不单吊 */
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   /* 行距略收（原 2px → 1px），第二行略上提；上行锁单行，带宽可侵入下行空位 */
@@ -1217,13 +1328,19 @@ select {
 /* 内容行：metrics 极简值，缩进到标题文字起点，放不下单行省略 */
 .nc-cv {
   margin-top: 3px;
-  padding-left: 10px; /* 圆点 6px + 标题间距 4px */
+  padding-left: 4px;
   font-size: 11px;
   font-weight: 600;
   line-height: 1.1;
-  /* 默认裁切；抽样带宽格另设 overflow:visible 以侵入下行空位 */
+  /* 单行完整显示，不换行、不省略 */
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+}
+/* 抽样带宽：↓↑ 两行，仍可侵入下行空位 */
+.nc-cell:nth-child(4) .nc-cv {
   white-space: pre-line;
-  overflow: hidden;
+  text-overflow: clip;
 }
 .nc-cv.ok {
   color: var(--pass);
@@ -1427,20 +1544,35 @@ html.glass .nc-detail {
 
 /* Row 0 — stepper 左 + 主题 右（浅色/深色/跟随系统）同排；无托盘；gap→软件行 */
 .flow-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: start;
+  column-gap: 12px;
+  row-gap: 6px;
   margin: 0 0 18px;
   padding: 4px var(--content-inset-x);
   box-sizing: border-box;
   min-width: 0;
+  container-type: inline-size;
+  container-name: flowrow;
+}
+.flow-row > .theme-toggle {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  align-self: start;
+  width: max-content;
+  max-width: max-content;
+  margin-left: 0;
+  flex: none;
 }
 .flow-hint {
+  grid-column: 1;
+  grid-row: 1;
   display: flex;
   align-items: center;
-  gap: 9px;
+  justify-content: flex-start;
+  gap: 6px 9px;
   margin: 0;
   padding: 0;
   border: none;
@@ -1449,15 +1581,25 @@ html.glass .nc-detail {
   font-size: 12px; /* 块标题 .home-block-title 为 13/700；步进更小更淡 */
   font-weight: 400;
   color: var(--text-muted);
-  flex: 1 1 auto;
   min-width: 0;
   flex-wrap: wrap;
+}
+.fh-rest {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 6px 9px;
+  max-width: 100%;
 }
 .fh-step {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   font-weight: 500;
+  flex: none;
+  white-space: nowrap;
 }
 .fh-step i {
   font-style: normal;
@@ -1486,6 +1628,41 @@ html.glass .nc-detail {
 }
 .fh-arrow {
   opacity: 0.45;
+  margin-left: 4px;
+}
+
+/* 按这一行自己的宽度换，不跟窗口宽度绑死。
+   右侧还有空、主题碰不到字时，步骤留在原来的高度，跟主题同一带。
+   第二步第三步一起换行、再把第三步单独换行，都只在再挤就会碰上主题时发生。
+   主题单独占上面一行，只在单步文字要钻进主题下面时才发生。 */
+@container flowrow (max-width: 790px) {
+  .fh-rest {
+    flex-basis: 100%;
+  }
+}
+@container flowrow (max-width: 530px) {
+  .fh-rest .fh-step:last-child {
+    flex-basis: 100%;
+  }
+}
+@container flowrow (max-width: 450px) {
+  .flow-row > .theme-toggle {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    justify-self: end;
+    width: max-content;
+    max-width: max-content;
+  }
+  .flow-hint {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: auto;
+  }
+  .flow-hint > .fh-step,
+  .fh-rest,
+  .fh-rest .fh-step {
+    flex-basis: 100%;
+  }
 }
 
 /* 测全部确认：模态居中，避免沉在长列表底部看不到 */
