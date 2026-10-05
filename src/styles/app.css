@@ -1049,32 +1049,6 @@ select {
   }
 }
 
-/* 步骤条按窗口宽度分两段，左对齐。主题始终是原来的小开关，靠右上，不拉宽。 */
-@media (max-width: 980px) {
-  .fh-rest {
-    flex-basis: 100%;
-  }
-}
-@media (max-width: 760px) {
-  .flow-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .flow-row > .theme-toggle {
-    grid-column: 1;
-    grid-row: 1;
-    justify-self: end;
-    width: max-content;
-  }
-  .flow-hint {
-    grid-column: 1;
-    grid-row: 2;
-  }
-}
-@media (max-width: 480px) {
-  .fh-rest .fh-step:last-child {
-    flex-basis: 100%;
-  }
-}
 .ncard {
   height: var(--nc-h);
   overflow: hidden;
@@ -1616,6 +1590,40 @@ html.glass .nc-detail {
 .fh-arrow {
   opacity: 0.45;
   margin-left: 4px;
+}
+
+/* 写在基础样式后面，否则同权重的网格列会把窄屏规则盖掉。
+   宽：三步一行在左，主题小开关在右。
+   窄：第二步和第三步一起换行。
+   最窄：主题单独一行靠右，三步在下面，一步一行，字不被盖住。 */
+@media (max-width: 980px) {
+  .fh-rest {
+    flex-basis: 100%;
+  }
+}
+@media (max-width: 760px) {
+  .flow-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .flow-row > .theme-toggle {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: end;
+    width: max-content;
+    max-width: max-content;
+  }
+  .flow-hint {
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+  }
+}
+@media (max-width: 480px) {
+  .flow-hint > .fh-step,
+  .fh-rest,
+  .fh-rest .fh-step {
+    flex-basis: 100%;
+  }
 }
 
 /* 测全部确认：模态居中，避免沉在长列表底部看不到 */
