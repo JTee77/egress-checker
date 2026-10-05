@@ -7,7 +7,7 @@
 
 **不提供**任何节点或 VPN 服务。当前仅支持 Clash Verge / Clash Verge Rev。FlClash 的支持即将上线，充分实测后再正式加入。
 
-许可证：**PolyForm Noncommercial 1.0.0**（禁止商用）。
+许可证：**GPL-3.0**（GNU 通用公共许可证第 3 版；可商用，分发改版须同样开源）。
 
 ## 受众
 - 已在用 Clash Verge / Clash Verge Rev 的 Mac 用户（FlClash 即将支持，尚未正式加入）
