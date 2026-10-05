@@ -4,7 +4,7 @@ macOS **Apple Silicon (arm64)** 桌面应用：诊断代理**出口质量**—�
 
 面向已自备 **Clash Verge / Clash Verge Rev** 的用户。**当前仅支持 Clash Verge**，FlClash 的支持即将上线，会在充分实测之后再正式加入。**不提供任何节点或 VPN 服务**，也不是翻墙工具。仅支持 **Apple Silicon**，不承诺 Intel Mac。
 
-许可证：**PolyForm Noncommercial 1.0.0**（禁止商用）。
+许可证：**GPL-3.0**（GNU 通用公共许可证第 3 版）。
 
 ## 准备：启用 Clash Verge Rev / Mihomo API
 
@@ -61,4 +61,4 @@ Apple Silicon 上跑 `pnpm tauri build`，产物在 `src-tauri/target/release/bu
 
 欢迎提 Issue / PR，合入由维护者决定，详见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
-本项目采用 [PolyForm Noncommercial License 1.0.0](./LICENSE)：允许个人学习、研究与非商业使用，**不允许商用**。
+本项目采用 [GNU GPL-3.0](./LICENSE)（GNU 通用公共许可证第 3 版）：可以自由使用、修改和分发，包括商用；但分发修改后的版本时，必须同样以 GPL-3.0 公开源码。
