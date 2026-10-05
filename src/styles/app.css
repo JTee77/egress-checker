@@ -959,25 +959,6 @@ select {
 /* 三个主按钮共用一个换行点（约 1200）：一起到标题下面，不是各自看自己那一行。
    更宽时三个都留在标题旁边。窄时左对齐，成功或失败不裁切。 */
 @media (max-width: 1200px) {
-  .flow-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .theme-toggle {
-    order: -1;
-    align-self: flex-end;
-    margin-left: 0;
-  }
-  .flow-hint {
-    flex-direction: column;
-    align-items: flex-start;
-    flex-wrap: nowrap;
-    width: 100%;
-    gap: 6px;
-  }
-  .fh-step {
-    white-space: nowrap;
-  }
   .home-ops-controls .picker-group {
     flex: 1 1 100%;
     max-width: 100%;
@@ -1066,8 +1047,32 @@ select {
   .home-ops-controls {
     flex-wrap: nowrap;
   }
+}
+
+/* 步骤条按自己的宽度分两段，不跟按钮换行点绑在一起。全部左对齐。
+   主题在右上，窄到会压住第一步时改到单独一行靠右。 */
+@container steps (max-width: 620px) {
+  .fh-rest {
+    flex-basis: 100%;
+  }
+}
+@container steps (max-width: 360px) {
+  .fh-rest .fh-step:last-child {
+    flex-basis: 100%;
+  }
+}
+@media (max-width: 540px) {
+  .flow-row {
+    flex-wrap: wrap;
+  }
+  .theme-toggle {
+    order: -1;
+    flex: 1 0 100%;
+    justify-content: flex-end;
+    margin-left: 0;
+  }
   .flow-hint {
-    flex-wrap: nowrap;
+    flex: 1 0 100%;
   }
 }
 .ncard {
@@ -1529,9 +1534,9 @@ html.glass .nc-detail {
 /* Row 0 — stepper 左 + 主题 右（浅色/深色/跟随系统）同排；无托盘；gap→软件行 */
 .flow-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
   gap: 12px;
   margin: 0 0 18px;
   padding: 4px var(--content-inset-x);
@@ -1539,9 +1544,12 @@ html.glass .nc-detail {
   min-width: 0;
 }
 .flow-hint {
+  container-type: inline-size;
+  container-name: steps;
   display: flex;
   align-items: center;
-  gap: 9px;
+  justify-content: flex-start;
+  gap: 6px 9px;
   margin: 0;
   padding: 0;
   border: none;
@@ -1554,11 +1562,22 @@ html.glass .nc-detail {
   min-width: 0;
   flex-wrap: wrap;
 }
+.fh-rest {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex: none;
+  flex-wrap: nowrap;
+  gap: 9px;
+  max-width: 100%;
+}
 .fh-step {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   font-weight: 500;
+  flex: none;
+  white-space: nowrap;
 }
 .fh-step i {
   font-style: normal;
