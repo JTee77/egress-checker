@@ -406,12 +406,12 @@ export function HomePage({
         <div className="flow-hint" aria-label="使用步骤">
           <span className={`fh-step ${gate?.ok ? "done" : "cur"}`}>
             <i>{gate?.ok ? "✓" : "1"}</i>打开你的VPN软件并连上一个可用节点
+            <span className="fh-arrow" aria-hidden="true">→</span>
           </span>
-          <span className="fh-arrow">→</span>
           <span className={`fh-step ${gate?.ok ? "done" : "todo"}`}>
             <i>{gate?.ok ? "✓" : "2"}</i>在下方选择你使用的VPN软件 · 获取节点
+            <span className="fh-arrow" aria-hidden="true">→</span>
           </span>
-          <span className="fh-arrow">→</span>
           <span
             className={`fh-step ${!gate?.ok ? "todo" : detectionDone ? "done" : "cur"}`}
           >

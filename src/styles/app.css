@@ -959,6 +959,25 @@ select {
 /* 三个主按钮共用一个换行点（约 1200）：一起到标题下面，不是各自看自己那一行。
    更宽时三个都留在标题旁边。窄时左对齐，成功或失败不裁切。 */
 @media (max-width: 1200px) {
+  .flow-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .theme-toggle {
+    order: -1;
+    align-self: flex-end;
+    margin-left: 0;
+  }
+  .flow-hint {
+    flex-direction: column;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+    width: 100%;
+    gap: 6px;
+  }
+  .fh-step {
+    white-space: nowrap;
+  }
   .home-ops-controls .picker-group {
     flex: 1 1 100%;
     max-width: 100%;
@@ -1036,6 +1055,9 @@ select {
 
 @media (min-width: 1201px) {
   .home-ops-controls {
+    flex-wrap: nowrap;
+  }
+  .flow-hint {
     flex-wrap: nowrap;
   }
 }
@@ -1556,6 +1578,7 @@ html.glass .nc-detail {
 }
 .fh-arrow {
   opacity: 0.45;
+  margin-left: 4px;
 }
 
 /* 测全部确认：模态居中，避免沉在长列表底部看不到 */
