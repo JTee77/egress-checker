@@ -36,11 +36,11 @@
 
 **当前版本：0.1.16**（自 0.1.12 起；0.1.15 已发）。
 
-本轮目标：**CLI 收口**——只推广 Clash Verge（`--client` 闸门与 GUI 一致，FlClash 等一律报「当前仅支持 Clash Verge」，`--mock` 也不回落）；未知命令 / 未知选项明确报错；`check` 切回失败单独给 `restoreError`；Ctrl+C 尽力先切回再退出；`--no-json` 输出人类摘要；文档写清错误码、数据形状与退出码。已挂起、发版时可一并合入：[PR #20](https://github.com/JTee77/egress-checker/pull/20) 许可证改为 GPL-3.0。
+本轮目标：**CLI 收口**（闸门、严格解析、切回、Ctrl+C、文档）+ **最小可用 `serve`**（127.0.0.1 + token 鉴权，映射 discover/gate/env/check）。已挂起、发版时可一并合入：[PR #20](https://github.com/JTee77/egress-checker/pull/20) 许可证改为 GPL-3.0。CLI 收口见 [PR #21](https://github.com/JTee77/egress-checker/pull/21)。
 
 0.1.15 已发：窄窗排版、使用中识别、FlClash 即将支持、商店只写通/不通、取消记录过期清理等。
 
-图标本版不动。CLI 的 localhost HTTP 服务继续延后，不阻塞本版。
+图标本版不动。
 
 「明确不做」见上文，本版不变。
 
@@ -63,7 +63,7 @@
 ### 轻量门槛
 获取节点后先 `runLightGate`：客户端是否连上、海外是否大致通、是否像未走代理直连。不过则口语提示，不进入节点测评。
 
-### CLI（0.1.12 骨架；0.1.16 收口，HTTP 仍延后）
+### CLI（0.1.12 骨架；0.1.16 收口 + 最小 serve）
 与 GUI **共用** `lib/runner` + `egress` + `score` + `mihomo`。**目前只支持 `--client verge`**（Clash Verge / Clash Verge Rev）；FlClash 即将支持，暂不可用。
 
 ```text
@@ -72,17 +72,18 @@ egress-checker --cli gate --client verge
 egress-checker --cli check current|node <名>|all --client verge
 egress-checker --cli env --client verge
 egress-checker --cli check all --mock --no-json
+egress-checker --cli serve --client verge [--port 17890]
+egress-checker --cli serve --mock
 ```
 
-- stdout 为一行 **CliEnvelope** JSON（`ok/version/command/ranAt/data|error`）；`--no-json` 输出人类摘要。
-- 退出码：`0` = ok:true，`1` = ok:false；强制中断（第二次 Ctrl+C / 等待切回超时）为 `130`。
+- 一次性命令：stdout 为一行 **CliEnvelope** JSON（`ok/version/command/ranAt/data|error`）；`--no-json` 输出人类摘要。
+- **`serve`**：只绑 `127.0.0.1`（默认端口 17890）；启动打印一次性 token；请求需 `Authorization: Bearer` 或 `X-Egress-Token`；路由映射到上述命令（`GET /health` + `POST /v1/…`）。隐藏窗 + WebView 调度，**请求串行**。Ctrl+C 停服。不是通用 Web API（无 CORS / WebSocket / 浏览器 GUI）。
+- 退出码：`0` = ok:true（serve 正常停服亦为 0），`1` = ok:false；强制中断（第二次 Ctrl+C / 等待切回超时）为 `130`。
 - 严格解析：未知命令 / 未知选项 / 多余参数 / 非法 `--client` 都是 ok:false，不静默变成 help、不回落。
 - `check node` / `check all` 切回失败 → `restore_failed`，`data.restoreError` 与 GUI 红字同一句。
 - Ctrl+C：`check all` 在当前节点测完后停止并切回（同 GUI「停止并切回」）。
 
-错误码、三种 `check` 数据形状、`discover` 节点截断到 50 个等细节见 [docs/CLI.md](./docs/CLI.md)。
-
-> 仍是一次性 CLI（隐藏窗跑完退出）。**localhost HTTP serve 继续延后**，单独做。
+错误码、三种 `check` 数据形状、`discover` 节点截断、serve 鉴权与路由等细节见 [docs/CLI.md](./docs/CLI.md)。
 
 ## 非目标回顾（仍成立）
 见上文「明确不做」。深度测速可能耗流量；DNS/WebRTC 在桌面 WebView 下为启发式结论。

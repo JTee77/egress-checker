@@ -1,3 +1,4 @@
+mod cli_serve;
 mod dns;
 mod dns_query;
 mod mihomo;
@@ -392,12 +393,12 @@ fn get_cli_argv() -> Vec<String> {
 
 /// CLI 子命令全集。
 /// ⚠️ 必须与 TS `src/lib/cli/parse.ts` 的 `CLI_COMMANDS` 完全一致（cli.test.ts 有同步断言）。
-pub const CLI_VERBS: &[&str] = &["help", "discover", "gate", "check", "env"];
+pub const CLI_VERBS: &[&str] = &["help", "discover", "gate", "check", "env", "serve"];
 
 /// 是否进入 CLI（隐藏主窗）。规则与 TS `parseCliArgv().cliMode` 逐条对齐：
 /// - 选项区出现 `--cli` / `--help` / `-h` → 是
 /// - 否则看第一个位置参数是否为已知子命令
-/// - `--client` / `-c` 后面的值不算位置参数（值缺失或以 `-` 开头时不吞）
+/// - `--client` / `-c` / `--port` / `-p` 后面的值不算位置参数（值缺失或以 `-` 开头时不吞）
 /// - `--` 之后全部是位置参数（`--cli` 也不再算选项）
 ///
 /// 共用用例：`src/lib/cli/cli-mode-cases.json`（Rust 单测 + vitest 都跑）。
@@ -418,7 +419,7 @@ pub fn is_cli_mode_args(args: &[String]) -> bool {
         match t {
             "--" => end_of_options = true,
             "--cli" | "--help" | "-h" => flag = true,
-            "--client" | "-c" => {
+            "--client" | "-c" | "--port" | "-p" => {
                 if let Some(v) = args.get(i + 1) {
                     if !v.is_empty() && !v.starts_with('-') {
                         i += 2;
@@ -426,7 +427,9 @@ pub fn is_cli_mode_args(args: &[String]) -> bool {
                     }
                 }
             }
-            _ => {}
+            _ => {
+                // --port=N / --client=verge：值贴在选项上，不算位置参数
+            }
         }
         i += 1;
     }
@@ -520,6 +523,45 @@ fn cli_stdout(line: String) -> Result<(), String> {
     writeln!(out, "{line}").map_err(|e| e.to_string())?;
     out.flush().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+
+/// Print one line (or multi-line) to process stderr (serve 就绪提示等).
+#[tauri::command]
+fn cli_stderr(line: String) -> Result<(), String> {
+    use std::io::Write;
+    let mut out = std::io::stderr().lock();
+    writeln!(out, "{line}").map_err(|e| e.to_string())?;
+    out.flush().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn cli_serve_start(port: u16) -> Result<cli_serve::ServeStartInfo, String> {
+    cli_serve::serve_start(port)
+}
+
+#[tauri::command]
+fn cli_serve_poll(timeout_ms: u64) -> Result<Option<cli_serve::ServeJobView>, String> {
+    cli_serve::serve_poll(timeout_ms)
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ServeRespondRequest {
+    id: u64,
+    status: u16,
+    body: String,
+}
+
+#[tauri::command]
+fn cli_serve_respond(req: ServeRespondRequest) -> Result<(), String> {
+    cli_serve::serve_respond(req.id, req.status, req.body)
+}
+
+#[tauri::command]
+fn cli_serve_stop() -> Result<(), String> {
+    cli_serve::serve_stop()
 }
 
 /// Exit the process after CLI finishes (code 0 = ok envelope, 1 = error).
@@ -651,8 +693,13 @@ pub fn run() {
             get_cli_argv,
             is_cli_mode,
             cli_stdout,
+            cli_stderr,
             cli_exit,
-            cli_abort_requested
+            cli_abort_requested,
+            cli_serve_start,
+            cli_serve_poll,
+            cli_serve_respond,
+            cli_serve_stop
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

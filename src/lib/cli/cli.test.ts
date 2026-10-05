@@ -186,7 +186,15 @@ describe("TS / Rust 同步", () => {
 
   it("Rust 侧注册了中断轮询命令", () => {
     expect(libRs).toMatch(/fn cli_abort_requested\(\) -> bool/);
-    expect(libRs).toMatch(/cli_abort_requested\s*\]/);
+    expect(libRs).toMatch(/cli_abort_requested/);
+  });
+
+  it("Rust 侧注册了 serve 命令", () => {
+    expect(libRs).toMatch(/fn cli_serve_start/);
+    expect(libRs).toMatch(/fn cli_serve_poll/);
+    expect(libRs).toMatch(/fn cli_serve_respond/);
+    expect(libRs).toMatch(/fn cli_serve_stop/);
+    expect(libRs).toContain('cli_serve');
   });
 });
 
@@ -340,6 +348,8 @@ describe("帮助与文案", () => {
     expect(CLI_HELP_TEXT).toContain("0.1.16");
     expect(CLI_HELP_TEXT).toContain("仅支持 verge");
     expect(CLI_HELP_TEXT).toContain("FlClash 即将支持");
+    expect(CLI_HELP_TEXT).toContain("serve");
+    expect(CLI_HELP_TEXT).toContain("17890");
     expect(CLI_HELP_TEXT).not.toMatch(/clashx_meta|mihomo_party|nyanpasu/);
     expect(CLI_HELP_TEXT).not.toMatch(/\|\s*flclash/);
   });

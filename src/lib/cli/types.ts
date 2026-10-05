@@ -22,7 +22,8 @@ export type CliCommandName =
   | "discover"
   | "gate"
   | "check"
-  | "env";
+  | "env"
+  | "serve";
 
 export type CheckTarget =
   | { kind: "current" }
@@ -44,6 +45,10 @@ export type ParsedCli = {
   clientGiven: boolean;
   mock: boolean;
   json: boolean;
+  /** serve 的 --port；未给则为 null（serve 时用默认 17890） */
+  port: number | null;
+  /** 是否显式给了 --port（含非法值，非法时 parseError） */
+  portGiven: boolean;
   /** 未知命令 / 未知选项 / 缺值 / 多余参数；非空时 dispatch 返回 ok:false */
   parseError: CliError | null;
   /** 原始 argv（诊断用） */
