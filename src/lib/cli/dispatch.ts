@@ -389,6 +389,16 @@ export async function dispatchCli(
     return okEnvelope("help", { text: CLI_HELP_TEXT }, ver);
   }
 
+  if (cmd === "serve") {
+    // 长驻由 bootCli → bootServe；若误入 dispatch 则明确报错（不静默）。
+    return errEnvelope(
+      "serve",
+      "serve_not_oneshot",
+      "serve 是常驻 HTTP 服务，应由 CLI 启动路径接管，不能当一次性命令调度。",
+      ver,
+    );
+  }
+
   const client = resolveCliClient(parsed);
   if (!client.ok) {
     return errEnvelope(cmd, client.error.code, client.error.message, ver);

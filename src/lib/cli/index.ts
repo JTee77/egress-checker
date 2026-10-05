@@ -6,7 +6,7 @@ export type {
   ParsedCli,
 } from "./types";
 export { okEnvelope, errEnvelope, cliExitCode } from "./types";
-export { parseCliArgv, CLI_HELP_TEXT, CLI_COMMANDS } from "./parse";
+export { parseCliArgv, CLI_HELP_TEXT, CLI_COMMANDS, CLI_SERVE_DEFAULT_PORT } from "./parse";
 export {
   dispatchCli,
   formatCliHuman,
@@ -29,3 +29,13 @@ export {
   type CheckAllData,
   type CliScore,
 } from "./dispatch";
+
+export {
+  resolveServePort,
+  parsedFromServeJob,
+  dispatchServeJob,
+  serveReadyEnvelope,
+  type ServeJob,
+  type ServeStartInfo,
+} from "./serve";
+
