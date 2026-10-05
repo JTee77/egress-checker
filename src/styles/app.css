@@ -869,11 +869,18 @@ select {
   flex-wrap: nowrap;
   /* 不许被压扁：放不下时由 .ws-ops-right 整簇换到按钮下一行 */
   flex: 0 0 auto;
-  gap: 8px;
+  gap: 8px 10px;
   width: max-content;
   max-width: none;
   min-width: max-content;
   overflow: visible;
+}
+.ws-progress-main {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
+  max-width: 100%;
 }
 .ws-progress {
   display: inline-flex;
@@ -888,7 +895,7 @@ select {
 .ws-abort-btn {
   flex: 0 0 auto;
   white-space: nowrap;
-  margin-left: 2px; /* 条→停止合计 10px */
+  margin-left: 0;
 }
 .ws-progress-text {
   font-size: 12px;
@@ -1021,8 +1028,14 @@ select {
     grid-column: 1 / -1;
     justify-self: start;
   }
-  /* 文字、条、停止是一组，靠左不拆。条保持 72，不跟着这一行拉长。空白只留在停止右边。 */
-  .ws-progress-group,
+  /* 放得下就一行靠左。只有按钮要超出这一行时，停止才单独换到下一行，左对齐。文字和条不提前换。 */
+  .ws-progress-group {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
   .ws-progress {
     width: max-content;
     max-width: 100%;
@@ -1041,8 +1054,8 @@ select {
     white-space: nowrap;
   }
   .ws-abort-btn {
-    flex: none;
-    margin-left: 2px;
+    flex: 0 0 auto;
+    margin-left: 0;
   }
 }
 

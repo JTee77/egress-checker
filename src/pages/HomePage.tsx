@@ -548,34 +548,36 @@ export function HomePage({
                     role="status"
                     aria-live="polite"
                   >
-                    <span className="ws-progress-text">
-                      {progressDisplay ? (
-                        <>
-                          <span className="ws-progress-phase">
-                            {progressDisplay.phase}
-                          </span>
-                          {progressDisplay.node ? (
-                            <span className="ws-progress-node">
-                              （{progressDisplay.node}）
+                    <span className="ws-progress-main">
+                      <span className="ws-progress-text">
+                        {progressDisplay ? (
+                          <>
+                            <span className="ws-progress-phase">
+                              {progressDisplay.phase}
                             </span>
-                          ) : null}
-                        </>
+                            {progressDisplay.node ? (
+                              <span className="ws-progress-node">
+                                （{progressDisplay.node}）
+                              </span>
+                            ) : null}
+                          </>
+                        ) : null}
+                      </span>
+                      {progressPct != null ? (
+                        <span
+                          className="ws-progress-bar"
+                          role="progressbar"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={progressPct}
+                        >
+                          <span
+                            className="ws-progress-fill"
+                            style={{ width: `${progressPct}%` }}
+                          />
+                        </span>
                       ) : null}
                     </span>
-                    {progressPct != null ? (
-                      <span
-                        className="ws-progress-bar"
-                        role="progressbar"
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={progressPct}
-                      >
-                        <span
-                          className="ws-progress-fill"
-                          style={{ width: `${progressPct}%` }}
-                        />
-                      </span>
-                    ) : null}
                     <button
                       type="button"
                       className="btn btn-sm ws-abort-btn"
