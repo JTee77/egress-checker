@@ -12,6 +12,7 @@ import {
 } from "../mihomo";
 import { scoreNodeFromCards } from "../score";
 import { NODE_PLACEHOLDERS, asRunning } from "./placeholders";
+import { planRestore, restoreErrorFor } from "./restore";
 import type { RunnerHooks, TestOneContext } from "./types";
 
 export async function testOne(
@@ -64,13 +65,16 @@ export async function testOne(
     hooks.onHint?.(err instanceof Error ? err.message : String(err));
     return false;
   } finally {
-    if (didSwitch && config && snap?.now && snap.group) {
-      const restored = await restoreProxy(config, snap);
-      if (!restored) {
-        hooks.onRestoreError?.(
-          `没能切回原先节点「${snap.now}」。`,
-        );
-      }
+    // 与 testAll 同一套切回决策/文案。切过但没记下原节点时也必须报错，不可静默。
+    const plan = planRestore(didSwitch, snap);
+    if (plan.kind === "restore" && config) {
+      const restored = await restoreProxy(config, {
+        group: plan.group,
+        now: plan.now,
+      });
+      hooks.onRestoreError?.(restoreErrorFor(plan, restored));
+    } else if (plan.kind !== "none") {
+      hooks.onRestoreError?.(restoreErrorFor(plan, false));
     }
     hooks.onProgress(null);
   }
