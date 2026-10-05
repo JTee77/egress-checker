@@ -54,11 +54,11 @@ Apple Silicon 上跑 `pnpm tauri build`，产物在 `src-tauri/target/release/bu
 ## 免责声明
 
 - 不提供节点、不运营 VPN
-- 深度测速可能产生可观流量，请自行注意费用
+- 深度测速会产生一定流量，请自行注意费用
 - DNS / WebRTC 检测在桌面 WebView 环境有诚实限制，结果为启发式，非实验室级证明
 
 ## 贡献 & License
 
 欢迎提 Issue / PR，合入由维护者决定，详见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
-本项目采用 [PolyForm Noncommercial License 1.0.0](./LICENSE)：允许个人学习、研究与非商业使用，**不允许商用**。早期以 MIT 发布的历史 tag 仍按当时许可理解。
+本项目采用 [PolyForm Noncommercial License 1.0.0](./LICENSE)：允许个人学习、研究与非商业使用，**不允许商用**。
