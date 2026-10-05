@@ -1160,6 +1160,8 @@ select {
   border-radius: 5px;
   padding: 1px 4px;
   flex: none;
+  /* 跟在协议/UDP/UoT 后：标签 gap 4 + 2 = 6px */
+  margin-left: 2px;
 }
 .nc-row-top .star-rating,
 .nc-row-top .nc-untested {

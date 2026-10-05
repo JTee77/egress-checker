@@ -130,7 +130,7 @@ export function NodeCard({
         onClick={onToggle}
       >
         <div className="nc-sum">
-          {/* 上行：只留节点名 + 星级/未测；「使用中」在第二行协议标签前 */}
+          {/* 上行：只留节点名 + 星级/未测；「使用中」在第二行协议标签后 */}
           <div className="nc-row nc-row-top">
             <span className="nc-nm">{node.name}</span>
             {hasResult ? (
@@ -140,7 +140,6 @@ export function NodeCard({
             )}
           </div>
           <div className="nc-row nc-row-bot">
-            {isCurrent ? <span className="nc-badge">使用中</span> : null}
             <div className="nc-tags">
               {node.type}
               {chips.map((c) => (
@@ -148,6 +147,7 @@ export function NodeCard({
                   {c}
                 </span>
               ))}
+              {isCurrent ? <span className="nc-badge">使用中</span> : null}
             </div>
             <div className="nc-side">{action}</div>
           </div>
