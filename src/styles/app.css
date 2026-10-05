@@ -1019,26 +1019,30 @@ select {
   .ws-progress,
   .ws-error {
     grid-column: 1 / -1;
+    justify-self: start;
   }
+  /* 文字、条、停止是一组，靠左不拆。条保持 72，不跟着这一行拉长。空白只留在停止右边。 */
   .ws-progress-group,
   .ws-progress {
-    width: 100%;
+    width: max-content;
     max-width: 100%;
-    min-width: 0;
+    min-width: max-content;
     flex-wrap: nowrap;
+    justify-content: flex-start;
   }
   .ws-progress-text {
-    flex: 1 1 auto;
-    width: auto;
-    min-width: 0;
-    white-space: normal;
+    flex: 0 0 auto;
+    width: max-content;
+    min-width: max-content;
+    white-space: nowrap;
   }
   .ws-progress-phase,
   .ws-progress-node {
-    white-space: normal;
+    white-space: nowrap;
   }
   .ws-abort-btn {
     flex: none;
+    margin-left: 2px;
   }
 }
 
