@@ -1049,30 +1049,30 @@ select {
   }
 }
 
-/* 步骤条按自己的宽度分两段，不跟按钮换行点绑在一起。全部左对齐。
-   主题在右上，窄到会压住第一步时改到单独一行靠右。 */
-@container steps (max-width: 620px) {
+/* 步骤条按窗口宽度分两段，左对齐。主题始终是原来的小开关，靠右上，不拉宽。 */
+@media (max-width: 980px) {
   .fh-rest {
     flex-basis: 100%;
   }
 }
-@container steps (max-width: 360px) {
-  .fh-rest .fh-step:last-child {
-    flex-basis: 100%;
-  }
-}
-@media (max-width: 540px) {
+@media (max-width: 760px) {
   .flow-row {
-    flex-wrap: wrap;
+    grid-template-columns: minmax(0, 1fr);
   }
-  .theme-toggle {
-    order: -1;
-    flex: 1 0 100%;
-    justify-content: flex-end;
-    margin-left: 0;
+  .flow-row > .theme-toggle {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: end;
+    width: max-content;
   }
   .flow-hint {
-    flex: 1 0 100%;
+    grid-column: 1;
+    grid-row: 2;
+  }
+}
+@media (max-width: 480px) {
+  .fh-rest .fh-step:last-child {
+    flex-basis: 100%;
   }
 }
 .ncard {
@@ -1533,19 +1533,29 @@ html.glass .nc-detail {
 
 /* Row 0 — stepper 左 + 主题 右（浅色/深色/跟随系统）同排；无托盘；gap→软件行 */
 .flow-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  flex-wrap: nowrap;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: start;
+  column-gap: 12px;
+  row-gap: 6px;
   margin: 0 0 18px;
   padding: 4px var(--content-inset-x);
   box-sizing: border-box;
   min-width: 0;
 }
+.flow-row > .theme-toggle {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  align-self: start;
+  width: max-content;
+  max-width: max-content;
+  margin-left: 0;
+  flex: none;
+}
 .flow-hint {
-  container-type: inline-size;
-  container-name: steps;
+  grid-column: 1;
+  grid-row: 1;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -1558,7 +1568,6 @@ html.glass .nc-detail {
   font-size: 12px; /* 块标题 .home-block-title 为 13/700；步进更小更淡 */
   font-weight: 400;
   color: var(--text-muted);
-  flex: 1 1 auto;
   min-width: 0;
   flex-wrap: wrap;
 }
@@ -1567,8 +1576,8 @@ html.glass .nc-detail {
   align-items: center;
   justify-content: flex-start;
   flex: none;
-  flex-wrap: nowrap;
-  gap: 9px;
+  flex-wrap: wrap;
+  gap: 6px 9px;
   max-width: 100%;
 }
 .fh-step {
