@@ -1,16 +1,23 @@
-import type { CheckTarget, CliCommandName, ParsedCli } from "./types";
+import type { CheckTarget, CliCommandName, CliError, ParsedCli } from "./types";
 export type { ParsedCli } from "./types";
 
-const COMMANDS = new Set<CliCommandName>([
+/**
+ * CLI 子命令全集。
+ * ⚠️ 必须与 Rust `src-tauri/src/lib.rs` 的 `CLI_VERBS` 完全一致
+ * （`is_cli_mode` 靠它决定是否隐藏主窗走 CLI）。cli.test.ts 有同步断言。
+ */
+export const CLI_COMMANDS: readonly CliCommandName[] = [
   "help",
   "discover",
   "gate",
   "check",
   "env",
-]);
+] as const;
+
+const COMMANDS = new Set<string>(CLI_COMMANDS);
 
 function isCommand(s: string): s is CliCommandName {
-  return COMMANDS.has(s as CliCommandName);
+  return COMMANDS.has(s);
 }
 
 function dropBinaryName(argv: string[]): string[] {
@@ -18,28 +25,28 @@ function dropBinaryName(argv: string[]): string[] {
   if (!tokens[0]) return tokens;
   const head = tokens[0]!;
   if (isCommand(head)) return tokens;
-  const looksBinary =
-    /[/\\]/.test(head) ||
-    head.endsWith(".exe") ||
-    head === "node" ||
-    head === "bin" ||
-    head.includes("egress-checker") ||
-    head.startsWith("egress");
-  // Always drop a non-command first token (binary name / junk).
-  if (looksBinary || !head.startsWith("-")) {
+  // argv[0] 是二进制路径/名字（或垃圾）：只要不是 flag 就丢掉。
+  if (!head.startsWith("-")) {
     tokens.shift();
   }
   return tokens;
 }
 
+function err(code: string, message: string): CliError {
+  return { code, message };
+}
+
 /**
- * 解析进程 argv（可含二进制名）。
- * 支持：
- *   … --cli discover --client verge --json
- *   … --cli check node "香港 01"
- *   … --cli check current|all
- *   … --cli help
- * 也接受首个非 flag 即为子命令（仍建议带 --cli，便于 GUI 区分）。
+ * 解析进程 argv（可含二进制名）。严格模式：
+ * - 未知子命令 → parseError `unknown_command`（不会静默变成 help）
+ * - 未知选项 → `unknown_option`
+ * - `--client` 缺值 → `missing_option_value`
+ * - 子命令多余参数 → `unexpected_argument`
+ * - `check node` 不带名字 → `node_name_required`
+ * `--` 之后的所有词都按位置参数处理（节点名以 - 开头时用）。
+ *
+ * 是否进入 CLI（cliMode）与 Rust `is_cli_mode` 同一规则：
+ * 含 `--cli` / `--help` / `-h`，或第一个位置参数是已知子命令。
  */
 export function parseCliArgv(argv: string[]): ParsedCli {
   const tokens = dropBinaryName(argv);
@@ -48,90 +55,164 @@ export function parseCliArgv(argv: string[]): ParsedCli {
   const raw = [...argv];
   const positional: string[] = [];
   let clientId: string | null = null;
+  let clientGiven = false;
   let mock = false;
   let json = true; // CLI 默认 JSON；--no-json 关闭
-  let i = 0;
+  let helpFlag = false;
+  let parseError: CliError | null = null;
+  const fail = (e: CliError) => {
+    if (!parseError) parseError = e; // 只报第一处错误（按出现顺序）
+  };
 
+  let i = 0;
+  let endOfOptions = false;
   while (i < tokens.length) {
     const t = tokens[i]!;
+    if (endOfOptions || !t.startsWith("-") || t === "-") {
+      positional.push(t);
+      i += 1;
+      continue;
+    }
+    if (t === "--") {
+      endOfOptions = true;
+      i += 1;
+      continue;
+    }
     if (t === "--cli") {
       cliMode = true;
-      i += 1;
-      continue;
-    }
-    if (t === "--mock") {
+    } else if (t === "--mock") {
       mock = true;
-      i += 1;
-      continue;
-    }
-    if (t === "--json") {
+    } else if (t === "--json") {
       json = true;
-      i += 1;
-      continue;
-    }
-    if (t === "--no-json") {
+    } else if (t === "--no-json") {
       json = false;
-      i += 1;
-      continue;
-    }
-    if (t === "--client" || t === "-c") {
-      clientId = tokens[i + 1] ?? null;
+    } else if (t === "--help" || t === "-h") {
+      cliMode = true;
+      helpFlag = true;
+    } else if (t === "--client" || t === "-c") {
+      const v = tokens[i + 1];
+      clientGiven = true;
+      if (v === undefined || v === "" || v.startsWith("-")) {
+        fail(
+          err(
+            "missing_option_value",
+            `${t} 需要一个值，例如：${t} verge`,
+          ),
+        );
+        clientId = null;
+        i += 1;
+        continue;
+      }
+      clientId = v;
       i += 2;
       continue;
+    } else if (t.startsWith("--client=")) {
+      clientGiven = true;
+      const v = t.slice("--client=".length);
+      if (!v) {
+        fail(err("missing_option_value", "--client= 需要一个值，例如：--client=verge"));
+        clientId = null;
+      } else {
+        clientId = v;
+      }
+    } else {
+      fail(
+        err(
+          "unknown_option",
+          `未知选项：${t}。可用选项见 egress-checker --cli help`,
+        ),
+      );
     }
-    if (t.startsWith("--client=")) {
-      clientId = t.slice("--client=".length) || null;
-      i += 1;
-      continue;
-    }
-    if (t === "--help" || t === "-h") {
-      positional.push("help");
-      i += 1;
-      continue;
-    }
-    if (t.startsWith("-")) {
-      i += 1;
-      continue;
-    }
-    positional.push(t);
     i += 1;
   }
 
   let command: CliCommandName = "help";
+  let commandToken: string | null = null;
   let checkTarget: CheckTarget | undefined;
 
-  if (positional.length === 0) {
-    if (cliMode) command = "help";
-  } else if (isCommand(positional[0]!)) {
-    cliMode = true;
-    command = positional[0]!;
-    if (command === "check") {
-      const sub = positional[1];
-      if (!sub || sub === "current") {
-        checkTarget = { kind: "current" };
-      } else if (sub === "all") {
-        checkTarget = { kind: "all" };
-      } else if (sub === "node") {
-        const name = positional.slice(2).join(" ").trim();
-        checkTarget = { kind: "node", name };
-      } else {
-        checkTarget = { kind: "node", name: positional.slice(1).join(" ") };
-      }
+  const head = positional[0];
+  if (head !== undefined) {
+    commandToken = head;
+    if (isCommand(head)) {
+      cliMode = true;
+      command = head;
+    } else if (cliMode) {
+      fail(
+        err(
+          "unknown_command",
+          `未知命令：${head}。可用命令：${CLI_COMMANDS.join(" / ")}`,
+        ),
+      );
     }
+    // 非 cliMode 且首词不是子命令：交给 GUI（Rust 侧同样不会进 CLI）。
+  }
+
+  const rest = positional.slice(1);
+  const noExtra = (what: string) => {
+    if (rest.length) {
+      fail(
+        err(
+          "unexpected_argument",
+          `${what} 不接受参数：${rest.join(" ")}`,
+        ),
+      );
+    }
+  };
+
+  if (head !== undefined && isCommand(head)) {
+    if (command === "check") {
+      const sub = rest[0];
+      const after = rest.slice(1);
+      if (sub === undefined || sub === "current" || sub === "all") {
+        checkTarget = { kind: sub === "all" ? "all" : "current" };
+        if (after.length) {
+          fail(
+            err(
+              "unexpected_argument",
+              `check ${sub ?? "current"} 不接受参数：${after.join(" ")}`,
+            ),
+          );
+        }
+      } else if (sub === "node") {
+        const name = after.join(" ").trim();
+        checkTarget = { kind: "node", name };
+        if (!name) {
+          fail(
+            err(
+              "node_name_required",
+              'check node 需要节点名称，例如：--cli check node "香港"',
+            ),
+          );
+        }
+      } else {
+        // 简写：check <节点名>（不是 current/node/all 时）
+        checkTarget = { kind: "node", name: rest.join(" ").trim() };
+      }
+    } else {
+      noExtra(command);
+    }
+  }
+
+  if (helpFlag && !parseError) {
+    command = "help";
+    checkTarget = undefined;
   }
 
   return {
     cliMode,
     command,
+    commandToken,
     checkTarget,
     clientId,
+    clientGiven,
     mock,
     json,
+    parseError,
     raw,
   };
 }
 
-export const CLI_HELP_TEXT = `Egress Checker CLI（与 GUI 共用 runner / egress / score）
+export const CLI_HELP_TEXT = `Egress Checker CLI 0.1.16（与 GUI 共用 runner / egress / score）
 
 用法：
   egress-checker --cli <command> [options]
@@ -141,23 +222,29 @@ export const CLI_HELP_TEXT = `Egress Checker CLI（与 GUI 共用 runner / egres
   discover                     发现控制器并探测连接
   gate                         轻量门槛（连通 / 是否像未走代理）
   check current                测当前出口（完整深测）
-  check node <名称>            测指定节点（完整深测，可临时切换）
-  check all                    测全部节点（完整深测，与测单个相同探针集）
+  check node <名称>            测指定节点（完整深测，可临时切换后切回）
+  check all                    测全部节点（完整深测，会逐个切换节点并切回）
   env                          环境泄漏检查
 
 选项：
-  --client, -c <id>            verge | clashx_meta | flclash | mihomo_party | nyanpasu
-  --mock                       不连真实软件，用演示数据跑通管线
-  --json                       stdout 输出 CliEnvelope JSON（默认）
-  --no-json                    人类可读摘要（仍建议脚本用 JSON）
+  --client, -c <id>            目前仅支持 verge（Clash Verge / Clash Verge Rev）
+                               FlClash 即将支持，暂不可用
+  --mock                       不连真实软件，用演示节点跑通管线（--client 可省略，默认 verge）
+  --json                       stdout 输出一行 CliEnvelope JSON（默认）
+  --no-json                    输出人类可读摘要（脚本请用 JSON）
   --help, -h                   同 help
+  --                           之后的词都当作位置参数（节点名以 - 开头时用）
+
+退出码：0 = ok:true；1 = ok:false（含未知命令/选项、参数错误、中断）。
+中断：check all 收到 Ctrl+C / SIGTERM 时会在当前节点测完后停止并切回原节点；
+      再按一次 Ctrl+C 立即退出（不切回，退出码 130）。
 
 示例：
-  egress-checker --cli discover --client verge --json
+  egress-checker --cli discover --client verge
   egress-checker --cli gate --client verge
   egress-checker --cli check current --client verge
   egress-checker --cli check node "香港" --client verge
-  egress-checker --cli check all --mock
+  egress-checker --cli check all --mock --no-json
   egress-checker --cli env --client verge
 
 说明：CLI 走隐藏窗 + WebView 调用与 GUI 相同的 Tauri 能力；需在 macOS 上运行本应用二进制（或 pnpm tauri dev -- --cli …）。

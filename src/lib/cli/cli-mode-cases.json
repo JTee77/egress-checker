@@ -1,0 +1,21 @@
+[
+  { "argv": ["/Applications/Egress Checker.app/Contents/MacOS/egress-checker"], "cliMode": false },
+  { "argv": ["egress-checker", "--cli"], "cliMode": true },
+  { "argv": ["egress-checker", "--cli", "help"], "cliMode": true },
+  { "argv": ["egress-checker", "--help"], "cliMode": true },
+  { "argv": ["egress-checker", "-h"], "cliMode": true },
+  { "argv": ["egress-checker", "discover", "--client", "verge"], "cliMode": true },
+  { "argv": ["egress-checker", "--client", "verge", "discover"], "cliMode": true },
+  { "argv": ["egress-checker", "-c", "verge", "check", "all"], "cliMode": true },
+  { "argv": ["egress-checker", "--client=verge", "gate"], "cliMode": true },
+  { "argv": ["egress-checker", "--mock", "env"], "cliMode": true },
+  { "argv": ["egress-checker", "--cli", "frobnicate"], "cliMode": true },
+  { "argv": ["egress-checker", "frobnicate", "--cli"], "cliMode": true },
+  { "argv": ["egress-checker", "frobnicate"], "cliMode": false },
+  { "argv": ["egress-checker", "--client", "discover"], "cliMode": false },
+  { "argv": ["egress-checker", "--client", "--cli"], "cliMode": true },
+  { "argv": ["egress-checker", "--", "--cli"], "cliMode": false },
+  { "argv": ["egress-checker", "--", "check"], "cliMode": true },
+  { "argv": ["egress-checker", "-psn_0_12345"], "cliMode": false },
+  { "argv": ["egress-checker", "-", "check"], "cliMode": false }
+]
